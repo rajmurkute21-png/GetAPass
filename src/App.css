@@ -1,0 +1,79 @@
+/* ==========================================================================
+   GetApass Application Component Styles
+   ========================================================================== */
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.getapass-spin,
+.gateapass-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Transitions and interactive hover feedback */
+.getapass-btn:hover:not(:disabled),
+.gateapass-btn:hover:not(:disabled) {
+  filter: brightness(0.95);
+}
+
+.getapass-btn-outline:hover:not(:disabled),
+.gateapass-btn-outline:hover:not(:disabled) {
+  background-color: var(--color-off-white) !important;
+}
+
+.getapass-btn-secondary:hover:not(:disabled),
+.gateapass-btn-secondary:hover:not(:disabled) {
+  background-color: var(--color-violet) !important;
+  color: var(--color-white) !important;
+}
+
+.getapass-btn-violet:hover:not(:disabled),
+.gateapass-btn-violet:hover:not(:disabled) {
+  background-color: var(--color-deep-violet) !important;
+}
+
+.getapass-btn-danger:hover:not(:disabled),
+.gateapass-btn-danger:hover:not(:disabled) {
+  background-color: #b5251a !important;
+}
+
+/* Card hover subtle outline reinforcement (flat geometry) */
+.getapass-card,
+.gateapass-card {
+  transition: border-color 0.15s ease;
+}
+
+.getapass-card:hover,
+.gateapass-card:hover {
+  border-color: #cccccc;
+}
+
+/* Input focus ring */
+input:focus, select:focus {
+  border-color: var(--color-deep-violet) !important;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-white);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-gray);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #bbb;
+}

@@ -1,0 +1,215 @@
+/* ==========================================================================
+   GetApass Design System & Global Tokens
+   V1.0 - October 2026
+   ========================================================================== */
+
+:root {
+  /* Color Tokens */
+  --color-black: #000000;
+  --color-near-black: #0A0A0D;
+  --color-violet: #AC58E9;
+  --color-brand-violet: #8E2CFC;
+  --color-deep-violet: #7C2CCB;
+  --color-light-violet: #EBDDFA;
+  --color-white: #FFFFFF;
+  --color-off-white: #F7F7F7;
+  --color-gray: #E8E8E8;
+  --color-dark-text: #111111;
+  --color-muted-text: #666666;
+  --color-light-muted: #888888;
+  --color-success: #168A55;
+  --color-error: #D92D20;
+  --color-warning: #D9822B;
+
+  /* Typography */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* Spacing Scale (4px base unit) */
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-48: 48px;
+  --space-64: 64px;
+
+  /* Border Radii */
+  --radius-control: 4px;
+  --radius-card: 8px;
+  --radius-modal: 8px;
+  --radius-badge: 4px;
+
+  /* Border Widths */
+  --border-width: 1px;
+  --border-default: 1px solid var(--color-gray);
+
+  /* Component Dimensions */
+  --height-control: 44px;
+  --header-desktop-height: 80px;
+  --header-mobile-height: 64px;
+  --sidebar-admin-width: 264px;
+  --page-margin-desktop: 64px;
+}
+
+/* Global Reset & Base */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  min-height: 100%;
+  background-color: var(--color-white);
+  color: var(--color-dark-text);
+  font-family: var(--font-family);
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Headings & Text Classes */
+.text-display {
+  font-size: 64px;
+  line-height: 72px;
+  font-weight: 700;
+  letter-spacing: -2px;
+}
+
+.text-h1 {
+  font-size: 48px;
+  line-height: 56px;
+  font-weight: 700;
+  letter-spacing: -1.5px;
+}
+
+.text-h2 {
+  font-size: 36px;
+  line-height: 44px;
+  font-weight: 600;
+  letter-spacing: -1px;
+}
+
+.text-h3 {
+  font-size: 28px;
+  line-height: 36px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+
+.text-h4 {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+
+.text-body {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.text-small {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.text-caption {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.text-button {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.text-nav {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+/* Base button reset - strictly rectangular (4px radius, NO PILL) */
+button {
+  font-family: var(--font-family);
+  cursor: pointer;
+  border: none;
+  background: none;
+  border-radius: var(--radius-control);
+}
+
+/* Links */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Form inputs & selects */
+input, select, textarea {
+  font-family: var(--font-family);
+  font-size: 14px;
+  color: var(--color-dark-text);
+  border-radius: var(--radius-control);
+}
+
+/* Utility Containers */
+.container-desktop {
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 0 var(--space-32);
+}
+
+@media (min-width: 1024px) {
+  .container-desktop {
+    padding: 0 var(--space-64);
+  }
+}
+
+/* Responsive mobile typography adjustments */
+@media (max-width: 768px) {
+  .text-display {
+    font-size: 38px;
+    line-height: 46px;
+    letter-spacing: -1.2px;
+  }
+  .text-h1 {
+    font-size: 32px;
+    line-height: 40px;
+    letter-spacing: -1px;
+  }
+  .text-h2 {
+    font-size: 26px;
+    line-height: 34px;
+    letter-spacing: -0.8px;
+  }
+  .text-h3 {
+    font-size: 22px;
+    line-height: 30px;
+    letter-spacing: -0.4px;
+  }
+  .container-desktop {
+    padding: 0 var(--space-16);
+  }
+}
