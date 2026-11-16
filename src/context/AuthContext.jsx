@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth, isFirebaseConfigured } from '../config/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { auth, db, isFirebaseConfigured } from '../config/firebase';
 import {
   signupUserWithEmail,
   loginUserWithEmail,
@@ -33,7 +34,7 @@ function getInitials(name, email) {
  * Maps raw Firebase User to clean GateApass user entity.
  * Uses Firebase UID as the primary stable identifier.
  */
-function mapFirebaseUser(rawUser) {
+function mapFirebaseUser(rawUser, role = 'participant') {
   if (!rawUser) return null;
 
   const displayName = rawUser.displayName || rawUser.email?.split('@')[0] || 'GateApass User';
@@ -53,6 +54,9 @@ function mapFirebaseUser(rawUser) {
     photoURL,
     emailVerified,
     providerId,
+    role, // Server-enforced role ('admin' | 'organizer' | 'participant')
+    isAdmin: role === 'admin',
+    isOrganizer: role === 'organizer' || role === 'admin',
     avatarInitials: getInitials(displayName, email),
     college: 'Campus Participant' // Default profile field for GateApass
   };
@@ -70,16 +74,87 @@ export function AuthProvider({ children }) {
     postLoginCallback: null
   });
 
-  // Listen to Firebase auth state changes
+  // Listen to Firebase auth state changes with server-verified role resolution
   useEffect(() => {
     if (!auth) {
       return;
     }
 
     const unsubscribe = onAuthStateChanged(auth, (rawUser) => {
+      if (!rawUser) {
+        setFirebaseUser(null);
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
       setFirebaseUser(rawUser);
-      setUser(mapFirebaseUser(rawUser));
+
+      // 1. Immediately set initial authenticated participant state (0ms delay).
+      // This unblocks the entire application, UI, and event subscription immediately.
+      setUser(mapFirebaseUser(rawUser, 'participant'));
       setLoading(false);
+
+      // 2. Non-blocking background role resolution and user profile initialization
+      (async () => {
+        let serverRole = 'participant';
+
+        // Check cryptographically signed JWT Custom Claims (Fastest & most secure)
+        try {
+          const tokenResult = await rawUser.getIdTokenResult();
+          if (tokenResult.claims?.role) {
+            serverRole = tokenResult.claims.role;
+          } else if (tokenResult.claims?.admin) {
+            serverRole = 'admin';
+          } else if (tokenResult.claims?.organizer) {
+            serverRole = 'organizer';
+          }
+        } catch (err) {
+          console.warn('[GateApass Auth] Could not inspect ID token claims:', err);
+        }
+
+        // Check trusted Firestore /users/{uid} document if not an admin/organizer claim
+        if (db && serverRole === 'participant') {
+          try {
+            const userDocRef = doc(db, 'users', rawUser.uid);
+            const userDocSnap = await getDoc(userDocRef);
+
+            if (userDocSnap.exists()) {
+              const data = userDocSnap.data();
+              if (data?.role) {
+                serverRole = data.role;
+              }
+            } else {
+              // First time login - initialize user document
+              // Server security rules ensure clients can only initialize role as 'participant'
+              const initialProfile = {
+                uid: rawUser.uid,
+                email: rawUser.email || '',
+                displayName: rawUser.displayName || rawUser.email?.split('@')[0] || 'User',
+                role: 'participant',
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+              };
+              await setDoc(userDocRef, initialProfile);
+            }
+          } catch (err) {
+            console.warn('[GateApass Auth] User profile document lookup notice:', err);
+          }
+        }
+
+        // Update user state if an elevated role was resolved
+        if (serverRole !== 'participant') {
+          setUser(mapFirebaseUser(rawUser, serverRole));
+        }
+
+        // Diagnostic log (Requirement 5)
+        console.log('[GateApass Auth] Verified auth state:', {
+          uid: rawUser.uid,
+          role: serverRole
+        });
+      })().catch((err) => {
+        console.warn('[GateApass Auth] Background role resolution error:', err);
+      });
     });
 
     return () => unsubscribe();

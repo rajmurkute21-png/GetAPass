@@ -1,12 +1,15 @@
 /**
- * GetApass — Pass Permission & Authority Service
- * Enforces security boundaries for Pass Studio, Template Editing,
- * and Pass Type management.
+ * GetApass — Pass & Event Authorization Service
  *
- * Rules:
- * - Participants must NEVER access Pass Studio or edit templates.
- * - Optical Gate Verifiers cannot modify pass templates or pricing.
- * - Event Administrators & Organizers hold pass creation & assignment permissions.
+ * Enforces role-based security boundaries for Pass Studio, Event Management,
+ * and Administrative Operations.
+ *
+ * Security Principles:
+ * - Server-enforced roles ('admin', 'organizer', 'participant').
+ * - Regular participants cannot create, edit, or delete events or templates.
+ * - Turnstile verifiers only hold check-in permissions.
+ * - Event organizers can only manage events they own.
+ * - Global administrators can manage any event or template.
  */
 
 export const PASS_PERMISSIONS = {
@@ -21,22 +24,64 @@ export const PASS_PERMISSIONS = {
   MANAGE_PASS_PERMISSIONS: 'manage_pass_permissions'
 };
 
+export const EVENT_PERMISSIONS = {
+  CREATE_EVENT: 'create_event',
+  EDIT_EVENT: 'edit_event',
+  DELETE_EVENT: 'delete_event',
+  PUBLISH_EVENT: 'publish_event'
+};
+
+/**
+ * Checks whether an actor is authorized to create campus events.
+ */
+export function canCreateEvents(user) {
+  if (!user) return false;
+  return Boolean(user.role === 'admin' || user.role === 'organizer' || user.isAdmin || user.isOrganizer);
+}
+
+/**
+ * Checks whether an actor is authorized to manage (edit/delete/publish) a specific event.
+ */
+export function canManageEvents(user, event = null) {
+  if (!user) return false;
+
+  // Administrators have full access
+  if (user.role === 'admin' || user.isAdmin) {
+    return true;
+  }
+
+  // Organizers can only manage events they own
+  if (user.role === 'organizer' || user.isOrganizer) {
+    if (!event) return true;
+    if (event.organizerUid && user.uid) {
+      return event.organizerUid === user.uid;
+    }
+    if (event.organizerEmail && user.email) {
+      return event.organizerEmail.toLowerCase() === user.email.toLowerCase();
+    }
+    return !event.organizerUid;
+  }
+
+  return false;
+}
+
 /**
  * Checks whether an actor is authorized to perform a pass management action.
  */
 export function checkPassPermission(user, permission, _context = {}) {
-  // If user explicitly has 'participant' role, deny administrative actions
-  if (user?.role === 'participant') {
-    return false;
+  if (!user) return false;
+
+  // Administrators and Organizers hold full pass template management rights
+  if (user.role === 'admin' || user.isAdmin) return true;
+  if (user.role === 'organizer' || user.isOrganizer) return true;
+
+  // Optical turnstile verifiers can change check-in authority only if explicitly assigned
+  if (user.role === 'verifier' && permission === PASS_PERMISSIONS.CHANGE_PASS_AUTHORITY) {
+    return true;
   }
 
-  // Pure optical turnstile verifiers cannot edit pass layouts or prices
-  if (user?.role === 'verifier' && permission !== PASS_PERMISSIONS.CHANGE_PASS_AUTHORITY) {
-    return false;
-  }
-
-  // Authorized event admins or organizers hold pass creation permissions
-  return true;
+  // Regular participants are denied
+  return false;
 }
 
 export function canAccessPassStudio(user) {

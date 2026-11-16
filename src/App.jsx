@@ -81,7 +81,8 @@ export default function App() {
         console.warn('[GateApass] Event subscription notice:', error);
         setEventsSyncError(error);
         setEventsLoading(false);
-      }
+      },
+      currentUser
     );
 
     // Non-destructive safe migration for any unsynced local events
@@ -94,7 +95,7 @@ export default function App() {
     return () => {
       unsubscribe();
     };
-  }, [currentUser?.uid, currentUser?.email]);
+  }, [currentUser?.uid, currentUser?.email, currentUser?.role]);
 
   // Listen to local persistent event changes across windows/components
   useEffect(() => {
@@ -275,6 +276,7 @@ export default function App() {
             key={organizerInitialTab}
             initialTab={organizerInitialTab}
             events={events}
+            currentUser={currentUser}
             onCreateEvent={(newEvent) => {
               const saved = saveEvent(newEvent, currentUser);
               setSelectedEvent(saved);

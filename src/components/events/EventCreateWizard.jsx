@@ -20,7 +20,7 @@ import Modal from '../common/Modal';
 import PassCanvas from '../studio/PassCanvas';
 import { getAllTemplates, SAMPLE_PASS_DATA } from '../../data/passTemplates';
 import { savePassType } from '../../data/passTypes';
-import { createEventInFirestore } from '../../services/eventService';
+import { createEventInFirestore, normalizeEventStatus } from '../../services/eventService';
 import { useAuth } from '../../context/AuthContext';
 import {
   CATEGORIES,
@@ -245,7 +245,7 @@ export default function EventCreateWizard({
         organizerPhone,
         organizerUid: currentUser?.uid || '',
         website,
-        status: status || 'Active',
+        status: normalizeEventStatus(status),
         date: startDate === endDate || !endDate ? startDate : `${startDate} – ${endDate}`,
         startDate,
         endDate,
@@ -507,7 +507,7 @@ export default function EventCreateWizard({
                   style={{ width: '100%', height: '42px', border: '1px solid var(--color-gray)', borderRadius: 'var(--radius-control)', padding: '0 12px', fontSize: '14px' }}
                 >
                   <option value="Active">Active (Registration Open)</option>
-                  <option value="Upcoming">Upcoming (Coming Soon)</option>
+                  <option value="Draft">Draft (Save as Private Draft)</option>
                 </select>
               </div>
             </div>

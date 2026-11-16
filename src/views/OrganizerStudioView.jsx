@@ -33,6 +33,7 @@ import { getPassTypesByEvent } from '../data/passTypes';
 export default function OrganizerStudioView({
   initialTab = 'dashboard',
   events = [],
+  currentUser = null,
   onCreateEvent,
   onUpdateEvent,
   onDeleteEvent,
@@ -168,10 +169,11 @@ export default function OrganizerStudioView({
                   backgroundColor: 'var(--color-light-violet)',
                   color: 'var(--color-deep-violet)',
                   padding: '2px 8px',
-                  borderRadius: '4px'
+                  borderRadius: '4px',
+                  textTransform: 'capitalize'
                 }}
               >
-                Admin Mode · {events.length} Events Active
+                {currentUser?.role ? `${currentUser.role} Mode` : 'Organizer Studio'} · {events.length} Events Active
               </span>
             </div>
             <p style={{ fontSize: '12px', color: 'var(--color-muted-text)', marginTop: '2px' }}>
@@ -916,11 +918,27 @@ export default function OrganizerStudioView({
               />
             </div>
 
-            <Input
-              label="Venue"
-              value={editEventData.venue}
-              onChange={(e) => setEditEventData({ ...editEventData, venue: e.target.value })}
-            />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <Input
+                label="Venue"
+                value={editEventData.venue}
+                onChange={(e) => setEditEventData({ ...editEventData, venue: e.target.value })}
+              />
+
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
+                  Event Status
+                </label>
+                <select
+                  value={editEventData.status || 'Active'}
+                  onChange={(e) => setEditEventData({ ...editEventData, status: e.target.value })}
+                  style={{ width: '100%', height: '40px', border: '1px solid var(--color-gray)', borderRadius: 'var(--radius-control)', padding: '0 8px', fontSize: '13px' }}
+                >
+                  <option value="Active">Active (Published to Attendees)</option>
+                  <option value="Draft">Draft (Private / Hidden)</option>
+                </select>
+              </div>
+            </div>
 
             <Input
               label="Cover Image URL"

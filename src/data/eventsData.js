@@ -11,11 +11,17 @@ import {
   saveStoredLocalEvents,
   subscribeToEvents,
   fetchPublishedEvents,
-  createEventInFirestore,
-  updateEventInFirestore,
-  deleteEventFromFirestore,
+  fetchEventById,
+  createEvent,
+  updateEvent as updateEventService,
+  deleteEvent as deleteEventService,
+  publishEvent,
+  unpublishEvent,
   migrateLocalEventsToFirestore,
-  canManageEvent
+  canManageEvent,
+  canCreateEvents,
+  PUBLISHED_STATUSES,
+  normalizeEventStatus
 } from '../services/eventService';
 import { INITIAL_EVENTS } from './mockData';
 
@@ -23,11 +29,15 @@ export {
   EVENTS_STORAGE_KEY,
   subscribeToEvents,
   fetchPublishedEvents,
-  createEventInFirestore,
-  updateEventInFirestore,
-  deleteEventFromFirestore,
+  fetchEventById,
+  createEvent,
+  publishEvent,
+  unpublishEvent,
   migrateLocalEventsToFirestore,
-  canManageEvent
+  canManageEvent,
+  canCreateEvents,
+  PUBLISHED_STATUSES,
+  normalizeEventStatus
 };
 
 /**
@@ -62,7 +72,7 @@ export function saveEvent(eventData, currentUser = null) {
     id: uniqueId,
     title,
     name: title,
-    status: eventData.status || 'Active',
+    status: normalizeEventStatus(eventData.status),
     organizerUid: currentUser?.uid || eventData.organizerUid || '',
     organizerEmail: currentUser?.email || eventData.organizerEmail || '',
     createdAt: eventData.createdAt || Date.now(),
@@ -75,7 +85,7 @@ export function saveEvent(eventData, currentUser = null) {
   saveStoredLocalEvents(updatedEvents);
 
   // 2. Persist to Firestore in the background
-  createEventInFirestore(newEvent, currentUser).catch((err) => {
+  createEvent(newEvent, currentUser).catch((err) => {
     console.error('[GateApass] Background Firestore sync failed for saveEvent:', err);
   });
 
@@ -108,7 +118,7 @@ export function updateEvent(id, updates, currentUser = null) {
   saveStoredLocalEvents(updatedEvents);
 
   // Background Firestore update
-  updateEventInFirestore(id, updates, currentUser).catch((err) => {
+  updateEventService(id, updates, currentUser).catch((err) => {
     console.error('[GateApass] Background Firestore update failed for updateEvent:', err);
   });
 
@@ -125,7 +135,7 @@ export function deleteEvent(id, currentUser = null) {
   saveStoredLocalEvents(filtered);
 
   // Background Firestore deletion
-  deleteEventFromFirestore(id, currentUser).catch((err) => {
+  deleteEventService(id, currentUser).catch((err) => {
     console.error('[GateApass] Background Firestore delete failed for deleteEvent:', err);
   });
 
