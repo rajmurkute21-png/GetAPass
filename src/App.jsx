@@ -21,7 +21,14 @@ import {
   INITIAL_CHECKINS,
   INITIAL_USER
 } from './data/mockData';
-import { getAllEvents, saveEvent, updateEvent } from './data/eventsData';
+import {
+  getAllEvents,
+  saveEvent,
+  updateEvent,
+  deleteEvent,
+  subscribeToEvents,
+  migrateLocalEventsToFirestore
+} from './data/eventsData';
 
 export default function App() {
   // Navigation & Mode states
@@ -39,6 +46,8 @@ export default function App() {
   // App Data Stores
   const [user, setUser] = useState(INITIAL_USER);
   const [events, setEvents] = useState(getAllEvents);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsSyncError, setEventsSyncError] = useState(null);
   const [passes, setPasses] = useState(INITIAL_PASSES);
   const [bookings, setBookings] = useState(INITIAL_BOOKINGS);
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
@@ -52,7 +61,42 @@ export default function App() {
   const { user: authUser, logout } = useAuth();
   const currentUser = authUser || user;
 
-  // Listen to persistent event changes across windows/components
+  // Real-time Firestore sync & cross-device event synchronization
+  useEffect(() => {
+    setEventsLoading(true);
+
+    const unsubscribe = subscribeToEvents(
+      (syncedEvents) => {
+        setEvents(syncedEvents);
+        setEventsLoading(false);
+        setEventsSyncError(null);
+
+        setSelectedEvent((prevSelected) => {
+          if (!prevSelected) return syncedEvents[0] || null;
+          const stillExists = syncedEvents.find((e) => e.id === prevSelected.id);
+          return stillExists || syncedEvents[0] || null;
+        });
+      },
+      (error) => {
+        console.warn('[GateApass] Event subscription notice:', error);
+        setEventsSyncError(error);
+        setEventsLoading(false);
+      }
+    );
+
+    // Non-destructive safe migration for any unsynced local events
+    if (currentUser) {
+      migrateLocalEventsToFirestore(currentUser).catch((err) => {
+        console.warn('[GateApass] Event migration check:', err);
+      });
+    }
+
+    return () => {
+      unsubscribe();
+    };
+  }, [currentUser?.uid, currentUser?.email]);
+
+  // Listen to local persistent event changes across windows/components
   useEffect(() => {
     const handleEventsChanged = (e) => {
       if (e.detail && Array.isArray(e.detail)) {
@@ -232,15 +276,19 @@ export default function App() {
             initialTab={organizerInitialTab}
             events={events}
             onCreateEvent={(newEvent) => {
-              const saved = saveEvent(newEvent);
-              setEvents(getAllEvents());
+              const saved = saveEvent(newEvent, currentUser);
               setSelectedEvent(saved);
             }}
             onUpdateEvent={(updatedEvent) => {
-              const updated = updateEvent(updatedEvent.id, updatedEvent);
-              setEvents(getAllEvents());
+              const updated = updateEvent(updatedEvent.id, updatedEvent, currentUser);
               if (selectedEvent?.id === updatedEvent.id) {
                 setSelectedEvent(updated);
+              }
+            }}
+            onDeleteEvent={(eventId) => {
+              deleteEvent(eventId, currentUser);
+              if (selectedEvent?.id === eventId) {
+                setSelectedEvent(null);
               }
             }}
             participants={participants}
@@ -301,6 +349,8 @@ export default function App() {
             {activeView === 'events' && (
               <EventsView
                 events={events}
+                loading={eventsLoading}
+                syncError={eventsSyncError}
                 selectedCategory={selectedCategory}
                 onSelectCategory={setSelectedCategory}
                 onBookEvent={handleBookEvent}

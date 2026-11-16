@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { auth, isFirebaseConfigured } from '../config/firebase';
 import {
   signupUserWithEmail,
   loginUserWithEmail,
@@ -169,6 +169,7 @@ export function AuthProvider({ children }) {
     user,
     firebaseUser,
     loading,
+    isFirebaseConfigured,
     isAuthenticated: Boolean(user),
     authModal,
     openAuthModal,

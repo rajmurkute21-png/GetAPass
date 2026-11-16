@@ -8,6 +8,8 @@ import { CATEGORIES } from '../data/mockData';
 export default function EventsView({
   events = [],
   selectedCategory = 'All',
+  loading = false,
+  syncError = null,
   onSelectCategory,
   onBookEvent,
   onViewEventDetails,
@@ -127,8 +129,56 @@ export default function EventsView({
           </div>
         </div>
 
+        {/* Sync Error Notice if applicable */}
+        {syncError && (
+          <div
+            role="alert"
+            style={{
+              padding: '12px 16px',
+              backgroundColor: '#FEF3F2',
+              border: '1px solid #FECDCA',
+              borderRadius: 'var(--radius-control)',
+              color: '#B42318',
+              fontSize: '13px',
+              marginBottom: '20px'
+            }}
+          >
+            <strong>Database Notice:</strong> {syncError.message || 'Live database sync is currently unreachable. Displaying cached events.'}
+          </div>
+        )}
+
         {/* Events Grid */}
-        {events.length === 0 ? (
+        {loading && events.length === 0 ? (
+          <div
+            style={{
+              padding: '64px 20px',
+              textAlign: 'center',
+              backgroundColor: 'var(--color-white)',
+              border: '1px solid var(--color-gray)',
+              borderRadius: 'var(--radius-card)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '12px',
+              maxWidth: '600px',
+              margin: '0 auto'
+            }}
+          >
+            <RefreshCw
+              size={28}
+              style={{
+                color: 'var(--color-deep-violet)',
+                animation: 'spin 1.2s linear infinite'
+              }}
+            />
+            <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-dark-text)', margin: 0 }}>
+              Syncing Campus Events...
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--color-muted-text)', margin: 0 }}>
+              Connecting to live database and loading published events.
+            </p>
+          </div>
+        ) : events.length === 0 ? (
           <div
             style={{
               padding: '64px 20px',

@@ -13,6 +13,7 @@ import {
   Filter
 } from 'lucide-react';
 import Button from '../common/Button';
+import Input from '../common/Input';
 import Modal from '../common/Modal';
 import PassCanvas from './PassCanvas';
 import {

@@ -34,8 +34,18 @@ export function mapAuthError(error) {
   if (!error) return 'An unexpected error occurred. Please try again.';
 
   const code = error.code || '';
+  const message = error.message || '';
+
+  if (
+    message.includes('Firebase Auth is not initialized') ||
+    message.includes('Firebase Authentication is not initialized')
+  ) {
+    return 'Firebase Authentication is not initialized on this deployment. Please configure your VITE_FIREBASE_* environment variables in Vercel Project Settings and redeploy.';
+  }
 
   switch (code) {
+    case 'auth/unauthorized-domain':
+      return 'This deployment domain is not authorized in Firebase. In the Firebase Console, go to Authentication > Settings > Authorized Domains and add your Vercel domain (e.g. get-a-pass-sooty.vercel.app).';
     case 'auth/invalid-credential':
     case 'auth/wrong-password':
     case 'auth/user-not-found':
@@ -55,7 +65,7 @@ export function mapAuthError(error) {
     case 'auth/too-many-requests':
       return 'Too many attempts. Access is temporarily disabled; please try again later.';
     case 'auth/operation-not-allowed':
-      return 'This sign-in method is currently disabled. Please contact support.';
+      return 'This sign-in method is currently disabled in your Firebase Console. Please enable Email/Password and Google in Authentication > Sign-in method.';
     case 'auth/user-disabled':
       return 'This account has been disabled. Please contact support.';
     case 'auth/requires-recent-login':
@@ -65,12 +75,20 @@ export function mapAuthError(error) {
   }
 }
 
+function ensureAuthInitialized() {
+  if (!auth) {
+    throw new Error(
+      'Firebase Authentication is not initialized on this deployment. Please configure your VITE_FIREBASE_* environment variables in Vercel Project Settings and redeploy.'
+    );
+  }
+}
+
 /**
  * Sign up with Email and Password.
  * Updates profile display name and sends email verification.
  */
 export async function signupUserWithEmail(email, password, displayName) {
-  if (!auth) throw new Error('Firebase Auth is not initialized. Check .env.local configuration.');
+  ensureAuthInitialized();
 
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
   const user = userCredential.user;
@@ -100,7 +118,7 @@ export async function signupUserWithEmail(email, password, displayName) {
  * Sign in with Email and Password.
  */
 export async function loginUserWithEmail(email, password) {
-  if (!auth) throw new Error('Firebase Auth is not initialized. Check .env.local configuration.');
+  ensureAuthInitialized();
   const userCredential = await signInWithEmailAndPassword(auth, email, password);
   return userCredential.user;
 }
@@ -109,7 +127,7 @@ export async function loginUserWithEmail(email, password) {
  * Sign in with Google Popup.
  */
 export async function loginUserWithGoogle() {
-  if (!auth) throw new Error('Firebase Auth is not initialized. Check .env.local configuration.');
+  ensureAuthInitialized();
   const userCredential = await signInWithPopup(auth, googleProvider);
   return userCredential.user;
 }
@@ -126,7 +144,7 @@ export async function logoutUser() {
  * Send password reset email.
  */
 export async function sendUserPasswordReset(email) {
-  if (!auth) throw new Error('Firebase Auth is not initialized. Check .env.local configuration.');
+  ensureAuthInitialized();
   await sendPasswordResetEmail(auth, email);
 }
 

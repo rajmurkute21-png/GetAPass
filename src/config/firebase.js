@@ -1,14 +1,16 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
 /**
  * GateApass — Firebase Client Configuration
  *
  * Values are read strictly from Vite environment variables (import.meta.env.VITE_*).
+ * Direct member access ensures static replacement by Vite during production builds.
  * No configuration values are hard-coded in source code.
  */
 
-const REQUIRED_CONFIG_KEYS = [
+export const REQUIRED_CONFIG_KEYS = [
   "VITE_FIREBASE_API_KEY",
   "VITE_FIREBASE_AUTH_DOMAIN",
   "VITE_FIREBASE_PROJECT_ID",
@@ -17,11 +19,23 @@ const REQUIRED_CONFIG_KEYS = [
   "VITE_FIREBASE_APP_ID",
 ];
 
-const getEnv = () => {
-  if (typeof import.meta !== "undefined" && import.meta.env) {
-    return import.meta.env;
-  }
-  return {};
+// Direct static property access for robust bundler variable replacement
+export const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "",
+};
+
+const keyMapping = {
+  VITE_FIREBASE_API_KEY: firebaseConfig.apiKey,
+  VITE_FIREBASE_AUTH_DOMAIN: firebaseConfig.authDomain,
+  VITE_FIREBASE_PROJECT_ID: firebaseConfig.projectId,
+  VITE_FIREBASE_STORAGE_BUCKET: firebaseConfig.storageBucket,
+  VITE_FIREBASE_MESSAGING_SENDER_ID: firebaseConfig.messagingSenderId,
+  VITE_FIREBASE_APP_ID: firebaseConfig.appId,
 };
 
 /**
@@ -29,13 +43,17 @@ const getEnv = () => {
  * Never logs or returns variable values to protect sensitive secrets.
  */
 export function validateFirebaseConfig() {
-  const env = getEnv();
   const missing = [];
   const detected = [];
 
-  for (const key of REQUIRED_CONFIG_KEYS) {
-    const val = env[key];
-    if (!val || typeof val !== "string" || val.trim() === "") {
+  for (const [key, val] of Object.entries(keyMapping)) {
+    if (
+      !val ||
+      typeof val !== "string" ||
+      val.trim() === "" ||
+      val.includes("your_") ||
+      val.includes("your-project-id")
+    ) {
       missing.push(key);
     } else {
       detected.push(key);
@@ -49,33 +67,26 @@ export function validateFirebaseConfig() {
   };
 }
 
-const env = getEnv();
-
-export const firebaseConfig = {
-  apiKey: env.VITE_FIREBASE_API_KEY,
-  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: env.VITE_FIREBASE_APP_ID,
-};
-
 const validation = validateFirebaseConfig();
 
 let app = null;
 let auth = null;
+let db = null;
 
 if (!validation.isValid) {
-  // Clear development warning showing ONLY missing variable names
-  console.error(
-    `[GateApass Firebase Configuration Warning]: Missing required environment variables:\n` +
+  // Clear warning showing missing variable names and exact environment instructions
+  console.warn(
+    `[GateApass Firebase Initialization Warning]: Missing required environment variables:\n` +
       validation.missing.map((key) => `  - ${key}`).join("\n") +
-      `\nPlease ensure .env.local in the project root defines all required VITE_FIREBASE_* variables.`
+      `\n\nSetup Instructions:` +
+      `\n• Local Development: Ensure .env.local defines these keys.` +
+      `\n• Production (Vercel): Add these keys in Vercel Dashboard > Project Settings > Environment Variables, then redeploy.`
   );
 } else {
   try {
     app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
     auth = getAuth(app);
+    db = getFirestore(app);
   } catch (error) {
     console.error(
       `[GateApass Firebase Initialization Error]: Failed to initialize Firebase app: ${error?.message || error}`
@@ -83,5 +94,6 @@ if (!validation.isValid) {
   }
 }
 
-export { app, auth };
+export const isFirebaseConfigured = Boolean(auth && db);
+export { app, auth, db };
 export default app;

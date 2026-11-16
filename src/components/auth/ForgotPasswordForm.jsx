@@ -8,7 +8,7 @@ import Logo from '../common/Logo';
 import AuthError from './AuthError';
 
 export default function ForgotPasswordForm({ onBackToLogin }) {
-  const { sendPasswordReset } = useAuth();
+  const { sendPasswordReset, isFirebaseConfigured } = useAuth();
 
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
@@ -55,6 +55,23 @@ export default function ForgotPasswordForm({ onBackToLogin }) {
           Enter your registered email and we&apos;ll send a password reset link.
         </p>
       </div>
+
+      {!isFirebaseConfigured && (
+        <div
+          role="alert"
+          style={{
+            padding: '12px 14px',
+            backgroundColor: '#FEF0C7',
+            border: '1px solid #FDB022',
+            borderRadius: 'var(--radius-control)',
+            fontSize: '13px',
+            color: '#B54708',
+            lineHeight: '19px'
+          }}
+        >
+          <strong>Configuration Required:</strong> Firebase environment variables are not detected on this deployment. Please configure <code>VITE_FIREBASE_*</code> keys in Vercel Project Settings and redeploy.
+        </div>
+      )}
 
       <AuthError message={error} />
 

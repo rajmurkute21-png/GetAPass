@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check authentication
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user owns the event
+    function isEventOrganizer(eventData) {
+      return isAuthenticated() && (
+        request.auth.uid == eventData.organizerUid ||
+        request.auth.token.email == eventData.organizerEmail ||
+        !('organizerUid' in eventData) ||
+        eventData.organizerUid == ''
+      );
+    }
+
+    // Events Collection Rules
+    match /events/{eventId} {
+      // 1. All users (authenticated and public) can browse published/active events
+      // Drafts can only be read by their creator
+      allow read: if resource == null ||
+                     resource.data.status != 'Draft' ||
+                     isEventOrganizer(resource.data);
+
+      // 2. Only authenticated organizers/users can create events
+      allow create: if isAuthenticated();
+
+      // 3. Only the event creator or organizer can modify or delete their event
+      allow update: if isAuthenticated() && (
+        isEventOrganizer(resource.data) ||
+        request.auth.uid == request.resource.data.organizerUid
+      );
+
+      allow delete: if isAuthenticated() && isEventOrganizer(resource.data);
+    }
+
+    // Default catch-all rule: require authentication for other collections
+    match /{document=**} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}
+

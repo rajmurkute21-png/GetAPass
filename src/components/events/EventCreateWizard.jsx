@@ -20,7 +20,8 @@ import Modal from '../common/Modal';
 import PassCanvas from '../studio/PassCanvas';
 import { getAllTemplates, SAMPLE_PASS_DATA } from '../../data/passTemplates';
 import { savePassType } from '../../data/passTypes';
-import { saveEvent } from '../../data/eventsData';
+import { createEventInFirestore } from '../../services/eventService';
+import { useAuth } from '../../context/AuthContext';
 import {
   CATEGORIES,
   AUTHORITIES,
@@ -59,8 +60,11 @@ export default function EventCreateWizard({
   onCancel,
   onEventCreated
 }) {
+  const { user: currentUser } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const [templates] = useState(getAllTemplates());
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [publishError, setPublishError] = useState('');
 
   // Step 1: Basic Information
   const [name, setName] = useState('');
@@ -193,68 +197,23 @@ export default function EventCreateWizard({
   };
 
   // Final Publish Event Action
-  const handlePublishEvent = () => {
+  const handlePublishEvent = async () => {
     if (!name.trim()) {
       alert('Event Name is required.');
       setCurrentStep(1);
       return;
     }
 
-    const uniqueEventId = `evt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const startingPrice = Math.min(...configuredPasses.map((p) => Number(p.price) || 0));
+    setIsSubmitting(true);
+    setPublishError('');
 
-    // 1. Construct Event Object
-    const newEvent = {
-      id: uniqueEventId,
-      title: name.trim(),
-      name: name.trim(),
-      category,
-      shortDescription,
-      description: fullDescription || shortDescription || 'Campus event hosted with GateApass admission.',
-      organizerName,
-      organizerEmail,
-      organizerPhone,
-      website,
-      status,
-      date: startDate === endDate || !endDate ? startDate : `${startDate} – ${endDate}`,
-      startDate,
-      endDate,
-      time: `${startTime} – ${endTime}`,
-      startTime,
-      endTime,
-      venue: `${venueName}, ${city}`,
-      venueDetails: {
-        name: venueName,
-        address,
-        city,
-        state,
-        pincode,
-        landmark,
-        mapsUrl
-      },
-      bannerImage: coverImage,
-      logoImage,
-      themeColor,
-      secondaryColor,
-      startingPrice,
-      rules,
-      terms,
-      highlights: highlights.split('\n').filter(Boolean),
-      whatYouGet: whatYouGet.split('\n').filter(Boolean),
-      passes: configuredPasses.map((p, idx) => ({
-        id: `p-${uniqueEventId}-${idx + 1}`,
-        name: p.name,
-        price: Number(p.price),
-        description: p.description
-      }))
-    };
+    try {
+      const uniqueEventId = `evt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const startingPrice = configuredPasses.length > 0
+        ? Math.min(...configuredPasses.map((p) => Number(p.price) || 0))
+        : 0;
 
-    // Save event into persistent collection
-    saveEvent(newEvent);
-
-    // 2. Persist each Pass Type mapped to this event and assigned templates
-    configuredPasses.forEach((cp, idx) => {
-      savePassType({
+      const passTypesData = configuredPasses.map((cp, idx) => ({
         id: `pt-${uniqueEventId}-${cp.typeKey || idx}`,
         eventId: uniqueEventId,
         name: cp.name,
@@ -271,11 +230,78 @@ export default function EventCreateWizard({
         entries: cp.entries || 1,
         minGroupSize: cp.minSize || null,
         maxGroupSize: cp.maxSize || null
-      });
-    });
+      }));
 
-    if (onEventCreated) {
-      onEventCreated(newEvent);
+      // 1. Construct Event Object
+      const newEvent = {
+        id: uniqueEventId,
+        title: name.trim(),
+        name: name.trim(),
+        category,
+        shortDescription,
+        description: fullDescription || shortDescription || 'Campus event hosted with GateApass admission.',
+        organizerName: organizerName || currentUser?.displayName || 'Event Organizer',
+        organizerEmail: organizerEmail || currentUser?.email || '',
+        organizerPhone,
+        organizerUid: currentUser?.uid || '',
+        website,
+        status: status || 'Active',
+        date: startDate === endDate || !endDate ? startDate : `${startDate} – ${endDate}`,
+        startDate,
+        endDate,
+        time: `${startTime} – ${endTime}`,
+        startTime,
+        endTime,
+        venue: `${venueName}, ${city}`,
+        venueDetails: {
+          name: venueName,
+          address,
+          city,
+          state,
+          pincode,
+          landmark,
+          mapsUrl
+        },
+        bannerImage: coverImage,
+        logoImage,
+        themeColor,
+        secondaryColor,
+        startingPrice,
+        rules,
+        terms,
+        highlights: highlights.split('\n').filter(Boolean),
+        whatYouGet: whatYouGet.split('\n').filter(Boolean),
+        passes: configuredPasses.map((p, idx) => ({
+          id: `p-${uniqueEventId}-${idx + 1}`,
+          name: p.name,
+          price: Number(p.price),
+          description: p.description
+        })),
+        passTypes: passTypesData,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+
+      // 2. Persist to Firestore and local cache
+      await createEventInFirestore(newEvent, currentUser);
+
+      // 3. Persist each Pass Type mapped to this event and assigned templates
+      passTypesData.forEach((pt) => {
+        try {
+          savePassType(pt);
+        } catch {
+          // ignore cache warnings
+        }
+      });
+
+      if (onEventCreated) {
+        onEventCreated(newEvent);
+      }
+    } catch (err) {
+      console.error('[GateApass] Failed to publish event:', err);
+      setPublishError(err?.message || 'Failed to publish event to database. Please check your connection and Firestore rules.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1136,11 +1162,28 @@ export default function EventCreateWizard({
           </div>
         )}
 
+        {publishError && (
+          <div
+            role="alert"
+            style={{
+              padding: '12px 16px',
+              backgroundColor: '#FEF3F2',
+              border: '1px solid #FECDCA',
+              borderRadius: 'var(--radius-control)',
+              color: '#B42318',
+              fontSize: '13px',
+              marginTop: '20px'
+            }}
+          >
+            <strong>Publish Error:</strong> {publishError}
+          </div>
+        )}
+
         {/* Wizard Footer Navigation Controls */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '32px', paddingTop: '20px', borderTop: '1px solid var(--color-gray)' }}>
           <button
             type="button"
-            disabled={currentStep === 1}
+            disabled={currentStep === 1 || isSubmitting}
             onClick={() => setCurrentStep((prev) => Math.max(1, prev - 1))}
             style={{
               padding: '10px 18px',
@@ -1148,9 +1191,9 @@ export default function EventCreateWizard({
               fontWeight: 600,
               border: '1px solid var(--color-gray)',
               borderRadius: 'var(--radius-control)',
-              backgroundColor: currentStep === 1 ? 'var(--color-off-white)' : 'var(--color-white)',
-              color: currentStep === 1 ? 'var(--color-muted-text)' : 'var(--color-dark-text)',
-              cursor: currentStep === 1 ? 'not-allowed' : 'pointer',
+              backgroundColor: currentStep === 1 || isSubmitting ? 'var(--color-off-white)' : 'var(--color-white)',
+              color: currentStep === 1 || isSubmitting ? 'var(--color-muted-text)' : 'var(--color-dark-text)',
+              cursor: currentStep === 1 || isSubmitting ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '6px'
@@ -1173,9 +1216,10 @@ export default function EventCreateWizard({
                 variant="primary"
                 icon={CheckCircle}
                 size="large"
+                disabled={isSubmitting}
                 onClick={handlePublishEvent}
               >
-                Publish Event & Assign Passes
+                {isSubmitting ? 'Publishing to Firestore...' : 'Publish Event & Assign Passes'}
               </Button>
             )}
           </div>

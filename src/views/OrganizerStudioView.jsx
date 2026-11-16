@@ -8,7 +8,8 @@ import {
   ShieldAlert,
   ArrowLeft,
   Sparkles,
-  Edit2
+  Edit2,
+  Trash2
 } from 'lucide-react';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
@@ -34,6 +35,7 @@ export default function OrganizerStudioView({
   events = [],
   onCreateEvent,
   onUpdateEvent,
+  onDeleteEvent,
   participants = [],
   onUpdateParticipants,
   checkinHistory = [],
@@ -80,6 +82,16 @@ export default function OrganizerStudioView({
       onUpdateEvent(editEventData);
     }
     setEditingEventModalOpen(false);
+  };
+
+  const handleDeleteEvent = (ev) => {
+    if (!ev) return;
+    const title = ev.title || ev.name || 'this event';
+    if (window.confirm(`Are you sure you want to delete "${title}"? This will remove the event across all devices.`)) {
+      if (onDeleteEvent) {
+        onDeleteEvent(ev.id);
+      }
+    }
   };
 
   const handleSaveAuthority = () => {
@@ -525,6 +537,29 @@ export default function OrganizerStudioView({
                               >
                                 <Edit2 size={12} /> Edit
                               </button>
+
+                              {onDeleteEvent && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteEvent(ev)}
+                                  title="Delete Event from Database"
+                                  style={{
+                                    padding: '6px 10px',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    borderRadius: 'var(--radius-control)',
+                                    border: '1px solid #FECDCA',
+                                    backgroundColor: '#FEF3F2',
+                                    color: '#B42318',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                >
+                                  <Trash2 size={12} /> Delete
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
