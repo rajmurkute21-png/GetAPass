@@ -428,6 +428,127 @@ export async function fetchPublishedEvents() {
 }
 
 /**
+ * Real-time subscription to events created exclusively by a specific organizer.
+ * Query constraint `where('organizerUid', '==', organizerUid)` satisfies Firestore ownership rules.
+ * Never leaks events created by other organizers.
+ */
+export function subscribeToOrganizerEvents(organizerUid, onEventsUpdate, onError) {
+  if (!organizerUid) {
+    if (onEventsUpdate) onEventsUpdate([]);
+    return () => {};
+  }
+
+  if (!db) {
+    const local = getStoredLocalEvents().filter((e) => e.organizerUid === organizerUid);
+    if (onEventsUpdate) onEventsUpdate(local);
+    return () => {};
+  }
+
+  try {
+    console.log(`[GateApass Sync] Subscribing to organizer events for UID: ${organizerUid}`);
+    const q = query(
+      collection(db, EVENTS_COLLECTION),
+      where('organizerUid', '==', organizerUid)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const organizerEvents = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          if (!LEGACY_PREDEFINED_EVENT_IDS.includes(docSnap.id)) {
+            organizerEvents.push({
+              ...data,
+              id: docSnap.id,
+              title: data.title || data.name || 'Untitled Event',
+              name: data.title || data.name || 'Untitled Event',
+              status: data.status || 'Active'
+            });
+          }
+        });
+
+        organizerEvents.sort((a, b) => {
+          const timeA = a.createdAt || a.updatedAt || 0;
+          const timeB = b.createdAt || b.updatedAt || 0;
+          return timeB - timeA;
+        });
+
+        console.log(`[GateApass Sync] Organizer received ${organizerEvents.length} owned event(s).`);
+        if (onEventsUpdate) onEventsUpdate(organizerEvents);
+      },
+      (error) => {
+        console.error('[GateApass Sync] Organizer events listener error:', error);
+        if (onError) onError(error);
+      }
+    );
+
+    return () => {
+      console.log(`[GateApass Sync] Unsubscribing organizer events for UID: ${organizerUid}`);
+      unsubscribe();
+    };
+  } catch (err) {
+    console.error('[GateApass Sync] Failed to establish organizer events listener:', err);
+    if (onError) onError(err);
+    return () => {};
+  }
+}
+
+/**
+ * Real-time subscription to all platform events for Global Administrator only.
+ * Satisfies `isAdmin()` Firestore security rule.
+ */
+export function subscribeToAllEventsAdmin(onEventsUpdate, onError) {
+  if (!db) return () => {};
+
+  try {
+    console.log('[GateApass Sync] Subscribing to all platform events (Admin Mode)');
+    const q = collection(db, EVENTS_COLLECTION);
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const allEvents = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          if (!LEGACY_PREDEFINED_EVENT_IDS.includes(docSnap.id)) {
+            allEvents.push({
+              ...data,
+              id: docSnap.id,
+              title: data.title || data.name || 'Untitled Event',
+              name: data.title || data.name || 'Untitled Event',
+              status: data.status || 'Active'
+            });
+          }
+        });
+
+        allEvents.sort((a, b) => {
+          const timeA = a.createdAt || a.updatedAt || 0;
+          const timeB = b.createdAt || b.updatedAt || 0;
+          return timeB - timeA;
+        });
+
+        console.log(`[GateApass Sync] Admin received ${allEvents.length} total platform event(s).`);
+        if (onEventsUpdate) onEventsUpdate(allEvents);
+      },
+      (error) => {
+        console.error('[GateApass Sync] Admin all-events listener error:', error);
+        if (onError) onError(error);
+      }
+    );
+
+    return () => {
+      console.log('[GateApass Sync] Unsubscribing admin all-events listener.');
+      unsubscribe();
+    };
+  } catch (err) {
+    console.error('[GateApass Sync] Failed to establish admin all-events listener:', err);
+    if (onError) onError(err);
+    return () => {};
+  }
+}
+
+/**
  * Fetches single event details by immutable unique ID from Firestore with local fallback.
  */
 export async function fetchEventById(id) {

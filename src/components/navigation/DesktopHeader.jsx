@@ -2,12 +2,18 @@ import React from 'react';
 import { Bell } from 'lucide-react';
 import Logo from '../common/Logo';
 import { useAuth } from '../../context/AuthContext';
+import {
+  canAccessAdminDashboard,
+  canAccessOrganizerDashboard
+} from '../../services/permissionService';
 
 export default function DesktopHeader({
   activeView,
   onNavigate,
   unreadCount = 0,
-  user
+  user,
+  onOpenAdmin,
+  onOpenOrganizerStudio
 }) {
   const { user: authUser, isAuthenticated, loading, openAuthModal } = useAuth();
 
@@ -22,6 +28,8 @@ export default function DesktopHeader({
   const activeUser = authUser || user;
   const userInitials = activeUser?.avatarInitials || getInitials(activeUser?.displayName || activeUser?.name);
   const displayName = activeUser?.displayName || activeUser?.name || 'Account';
+  const isAdmin = canAccessAdminDashboard(activeUser);
+  const isOrganizer = canAccessOrganizerDashboard(activeUser) && !isAdmin;
   return (
     <header
       className="gateapass-desktop-header"
@@ -92,6 +100,51 @@ export default function DesktopHeader({
           />
         ) : isAuthenticated ? (
           <>
+            {/* Role-based dashboard shortcuts */}
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => (onOpenAdmin ? onOpenAdmin() : onNavigate('admin'))}
+                style={{
+                  padding: '6px 14px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: 'var(--color-white)',
+                  backgroundColor: 'var(--color-black)',
+                  border: '1px solid var(--color-black)',
+                  borderRadius: 'var(--radius-control)',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span>Admin Dashboard</span>
+              </button>
+            )}
+
+            {isOrganizer && (
+              <button
+                type="button"
+                onClick={() => (onOpenOrganizerStudio ? onOpenOrganizerStudio() : onNavigate('organizer-studio'))}
+                style={{
+                  padding: '6px 14px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: 'var(--color-deep-violet)',
+                  backgroundColor: 'var(--color-light-violet)',
+                  border: '1px solid rgba(172, 88, 233, 0.3)',
+                  borderRadius: 'var(--radius-control)',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span>Organizer Studio</span>
+              </button>
+            )}
+
             {/* Notifications Icon with unread badge */}
             <button
               type="button"

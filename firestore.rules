@@ -18,9 +18,10 @@ service cloud.firestore {
       );
     }
 
-    // 2. Checks trusted server-stored /users/{uid} document with exists() guard
+    // 2. Checks trusted server-stored /users/{uid} document with exists() and field guards
     function getUserRole() {
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             'role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data
         ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
         : 'participant';
     }
@@ -40,7 +41,7 @@ service cloud.firestore {
     // Strict ownership based on immutable Firebase UID (never editable email address)
     function isEventOwner(eventData) {
       return isAuthenticated() && (
-        request.auth.uid == eventData.organizerUid
+        'organizerUid' in eventData && request.auth.uid == eventData.organizerUid
       );
     }
 
@@ -99,6 +100,7 @@ service cloud.firestore {
       // - RESTRICTED: Only verified organizers or administrators can create events.
       // - Enforces that organizerUid matches request.auth.uid strictly.
       allow create: if isAuthorizedOrganizerOrAdmin() && (
+        'organizerUid' in request.resource.data &&
         request.resource.data.organizerUid == request.auth.uid
       );
 
@@ -128,6 +130,46 @@ service cloud.firestore {
     match /passTypes/{passTypeId} {
       allow read: if isAuthenticated();
       allow write: if isAuthorizedOrganizerOrAdmin();
+    }
+
+    // =========================================================================
+    // BOOKINGS & DIGITAL PASSES COLLECTION RULES
+    // Strict multi-tenant isolation:
+    // - Participants can ONLY read their own bookings (participantUid == request.auth.uid).
+    // - Organizers can ONLY read bookings belonging to events they organize (organizerUid == request.auth.uid).
+    // - Global Administrators have platform-wide access.
+    // =========================================================================
+    match /bookings/{bookingId} {
+      // READ:
+      allow read: if isAuthenticated() && (
+        ('participantUid' in resource.data && resource.data.participantUid == request.auth.uid) ||
+        ('organizerUid' in resource.data && resource.data.organizerUid == request.auth.uid) ||
+        isAdmin()
+      );
+
+      // CREATE:
+      // A participant can only create a booking for themselves (participantUid strictly matches auth UID)
+      allow create: if isAuthenticated() && (
+        'participantUid' in request.resource.data &&
+        request.resource.data.participantUid == request.auth.uid
+      );
+
+      // UPDATE:
+      // - Admin can update any booking.
+      // - Organizer can update check-in status of their event's bookings.
+      // - Immutable ownership fields (cannot tamper with participantUid or organizerUid).
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (
+          'organizerUid' in resource.data && resource.data.organizerUid == request.auth.uid &&
+          request.resource.data.organizerUid == resource.data.organizerUid &&
+          request.resource.data.participantUid == resource.data.participantUid
+        )
+      );
+
+      // DELETE:
+      // Only platform administrator can delete bookings
+      allow delete: if isAdmin();
     }
 
     // Deny all other unmapped paths by default

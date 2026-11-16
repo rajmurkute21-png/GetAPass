@@ -91,3 +91,21 @@ export function canAccessPassStudio(user) {
 export function canPublishPassTemplate(user) {
   return checkPassPermission(user, PASS_PERMISSIONS.PUBLISH_PASS_TEMPLATE);
 }
+
+/**
+ * Verified role-based dashboard access guards
+ */
+export function canAccessAdminDashboard(user) {
+  if (!user) return false;
+  return Boolean(user.role === 'admin' || user.isAdmin);
+}
+
+export function canAccessOrganizerDashboard(user) {
+  if (!user) return false;
+  return Boolean(user.role === 'organizer' || user.role === 'admin' || user.isOrganizer || user.isAdmin);
+}
+
+export function isParticipantOnly(user) {
+  if (!user) return true;
+  return Boolean((user.role === 'participant' || !user.role) && !user.isAdmin && !user.isOrganizer);
+}

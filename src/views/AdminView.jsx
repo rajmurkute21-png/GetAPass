@@ -25,7 +25,9 @@ export default function AdminView({
   participants = [],
   onUpdateParticipants,
   onCreateEvent,
-  onLogout
+  onLogout,
+  onBackToPortal,
+  currentUser = null
 }) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedRowIds, setSelectedRowIds] = useState([]);
@@ -133,6 +135,8 @@ export default function AdminView({
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         onLogout={onLogout}
+        onBackToPortal={onBackToPortal}
+        currentUser={currentUser}
       />
 
       {/* Main Admin Content Container */}

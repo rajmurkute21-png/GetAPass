@@ -21,13 +21,17 @@ import {
   canManageEvent,
   canCreateEvents,
   PUBLISHED_STATUSES,
-  normalizeEventStatus
+  normalizeEventStatus,
+  subscribeToOrganizerEvents,
+  subscribeToAllEventsAdmin
 } from '../services/eventService';
 import { INITIAL_EVENTS } from './mockData';
 
 export {
   EVENTS_STORAGE_KEY,
   subscribeToEvents,
+  subscribeToOrganizerEvents,
+  subscribeToAllEventsAdmin,
   fetchPublishedEvents,
   fetchEventById,
   createEvent,

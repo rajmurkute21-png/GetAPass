@@ -9,10 +9,22 @@ import BookingView from './views/BookingView';
 import PaymentView from './views/PaymentView';
 import ProfileView from './views/ProfileView';
 import OrganizerStudioView from './views/OrganizerStudioView';
+import AdminView from './views/AdminView';
 import AuthModal from './components/auth/AuthModal';
 import { useAuth } from './context/AuthContext';
 import { getPassTypesByEvent } from './data/passTypes';
 import { getTemplateById } from './data/passTemplates';
+import {
+  canAccessAdminDashboard,
+  canAccessOrganizerDashboard
+} from './services/permissionService';
+import {
+  createBooking,
+  subscribeToParticipantBookings,
+  subscribeToOrganizerBookings,
+  subscribeToAllBookingsAdmin,
+  clearSessionBookingCache
+} from './services/bookingService';
 import {
   INITIAL_PASSES,
   INITIAL_BOOKINGS,
@@ -27,12 +39,14 @@ import {
   updateEvent,
   deleteEvent,
   subscribeToEvents,
+  subscribeToOrganizerEvents,
+  subscribeToAllEventsAdmin,
   migrateLocalEventsToFirestore
 } from './data/eventsData';
 
 export default function App() {
   // Navigation & Mode states
-  // 'participant' (public experience) | 'organizer-studio' (event admin & turnstile verifier)
+  // 'participant' (public experience) | 'organizer-studio' (event admin & turnstile verifier) | 'admin' (global admin)
   const [portalMode, setPortalMode] = useState('participant');
   const [organizerInitialTab, setOrganizerInitialTab] = useState('dashboard');
   const [activeView, setActiveView] = useState('landing'); // 'landing' | 'events' | 'event-details' | 'booking' | 'payment' | 'profile' | 'how-it-works'
@@ -48,9 +62,19 @@ export default function App() {
   const [events, setEvents] = useState(getAllEvents);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [eventsSyncError, setEventsSyncError] = useState(null);
+
+  // Personal participant data
   const [passes, setPasses] = useState(INITIAL_PASSES);
   const [bookings, setBookings] = useState(INITIAL_BOOKINGS);
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+
+  // Role-isolated data stores
+  const [organizerEvents, setOrganizerEvents] = useState([]);
+  const [organizerBookings, setOrganizerBookings] = useState([]);
+  const [adminEvents, setAdminEvents] = useState([]);
+  const [adminBookings, setAdminBookings] = useState([]);
+
+  // Mock fallbacks for turnstile and staff
   const [participants, setParticipants] = useState(INITIAL_PARTICIPANTS);
   const [checkinHistory, setCheckinHistory] = useState(INITIAL_CHECKINS);
 
@@ -61,7 +85,25 @@ export default function App() {
   const { user: authUser, logout } = useAuth();
   const currentUser = authUser || user;
 
-  // Real-time Firestore sync & cross-device event synchronization
+  // Route security guard: enforce verified server-role boundaries
+  useEffect(() => {
+    if (portalMode === 'admin' && !canAccessAdminDashboard(currentUser)) {
+      console.warn('[GateApass Security] Unauthorized attempt to access Admin Dashboard blocked.');
+      setPortalMode('participant');
+      setActiveView('events');
+    } else if (portalMode === 'organizer-studio' && !canAccessOrganizerDashboard(currentUser)) {
+      console.warn('[GateApass Security] Unauthorized attempt to access Organizer Studio blocked.');
+      setPortalMode('participant');
+      setActiveView('events');
+    }
+  }, [portalMode, currentUser?.role, currentUser?.isAdmin, currentUser?.isOrganizer]);
+
+  // Account switch handling: wipe in-memory caches
+  useEffect(() => {
+    clearSessionBookingCache();
+  }, [currentUser?.uid]);
+
+  // 1. Shared Public Event Discovery (for ALL users across accounts and devices)
   useEffect(() => {
     setEventsLoading(true);
 
@@ -96,6 +138,76 @@ export default function App() {
       unsubscribe();
     };
   }, [currentUser?.uid, currentUser?.email, currentUser?.role]);
+
+  // 2. Participant Personal Bookings and Passes Subscription
+  useEffect(() => {
+    if (!currentUser?.uid) {
+      setPasses([]);
+      setBookings([]);
+      return;
+    }
+
+    const unsubscribe = subscribeToParticipantBookings(
+      currentUser.uid,
+      (userBookings, userPasses) => {
+        setBookings(userBookings);
+        setPasses(userPasses);
+      },
+      (err) => console.warn('[GateApass Bookings] Participant subscription notice:', err)
+    );
+
+    return () => unsubscribe();
+  }, [currentUser?.uid]);
+
+  // 3. Organizer-Specific Real-Time Subscriptions (Only owned events and their bookings)
+  useEffect(() => {
+    if (!currentUser?.uid || !canAccessOrganizerDashboard(currentUser)) {
+      setOrganizerEvents([]);
+      setOrganizerBookings([]);
+      return;
+    }
+
+    const unsubEvents = subscribeToOrganizerEvents(
+      currentUser.uid,
+      (orgEvents) => setOrganizerEvents(orgEvents),
+      (err) => console.warn('[GateApass Events] Organizer events subscription notice:', err)
+    );
+
+    const unsubBookings = subscribeToOrganizerBookings(
+      currentUser.uid,
+      (orgBookings) => setOrganizerBookings(orgBookings),
+      (err) => console.warn('[GateApass Bookings] Organizer bookings subscription notice:', err)
+    );
+
+    return () => {
+      unsubEvents();
+      unsubBookings();
+    };
+  }, [currentUser?.uid, currentUser?.role, currentUser?.isOrganizer, currentUser?.isAdmin]);
+
+  // 4. Admin-Specific Platform-Wide Subscriptions (Platform-wide audit privileges)
+  useEffect(() => {
+    if (!canAccessAdminDashboard(currentUser)) {
+      setAdminEvents([]);
+      setAdminBookings([]);
+      return;
+    }
+
+    const unsubAllEvents = subscribeToAllEventsAdmin(
+      (allEvs) => setAdminEvents(allEvs),
+      (err) => console.warn('[GateApass Events] Admin all-events subscription notice:', err)
+    );
+
+    const unsubAllBookings = subscribeToAllBookingsAdmin(
+      (allBks) => setAdminBookings(allBks),
+      (err) => console.warn('[GateApass Bookings] Admin all-bookings subscription notice:', err)
+    );
+
+    return () => {
+      unsubAllEvents();
+      unsubAllBookings();
+    };
+  }, [currentUser?.uid, currentUser?.role, currentUser?.isAdmin]);
 
   // Listen to local persistent event changes across windows/components
   useEffect(() => {
@@ -145,10 +257,11 @@ export default function App() {
     setActiveView('payment');
   };
 
-  const handlePaymentSuccess = ({ amount, method, eventTitle, attendeeName, passType }) => {
+  const handlePaymentSuccess = async ({ amount, method, eventTitle, attendeeName, passType }) => {
     const rawTitle = eventTitle || selectedEvent?.title || 'GP';
     const prefix = rawTitle.replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || 'GP';
     const newPassId = `GP-${prefix}26-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newBookingId = `BK-${Math.floor(100000 + Math.random() * 900000)}`;
 
     const eventPassTypes = selectedEvent?.id ? getPassTypesByEvent(selectedEvent.id) : [];
     const matchedPassType = eventPassTypes.find(
@@ -159,73 +272,65 @@ export default function App() {
       ? getTemplateById(matchedPassType.templateId)
       : getTemplateById('tpl-classic-violet');
 
-    const newPass = {
-      id: newPassId,
-      eventTitle: eventTitle || selectedEvent?.title || 'Campus Event Pass',
-      eventId: selectedEvent?.id || `evt-${Date.now()}`,
+    const bookingPayload = {
+      bookingId: newBookingId,
+      passId: newPassId,
+      eventId: selectedEvent?.id || '',
+      eventTitle: eventTitle || selectedEvent?.title || 'Campus Event',
+      organizerUid: selectedEvent?.organizerUid || '',
+      organizerEmail: selectedEvent?.organizerEmail || '',
       passType: passType || 'General Pass',
-      attendeeName: attendeeName || currentUser?.name || 'Attendee',
-      email: currentUser?.email || '',
-      phone: currentUser?.phone || user?.phone || '',
-      authority: matchedPassType?.defaultAuthority || 'Participant',
-      date: selectedEvent?.date || new Date().toLocaleDateString('en-GB'),
-      time: selectedEvent?.time || 'Doors Open 09:00 AM',
-      venue: selectedEvent?.venue || 'Campus Venue',
-      gate: 'Gate A',
+      amount: Number(amount),
       status: 'Active',
-      price: amount,
+      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       paymentMethod: method,
-      issuedAt: 'Just now',
+      attendeeName: attendeeName || currentUser?.name || 'Attendee',
+      authority: matchedPassType?.defaultAuthority || 'Participant',
       permissions: matchedPassType?.accessPermissions || ['General Area'],
       templateId: matchedPassType?.templateId || 'tpl-classic-violet',
       templateVersion: matchedPassType?.templateVersion || 1,
       templateSnapshot: assignedTemplate
     };
 
-    const newBooking = {
-      bookingId: `BK-${Math.floor(100000 + Math.random() * 900000)}`,
-      eventTitle: eventTitle,
-      passType: passType,
-      amount: amount,
-      status: 'Active',
-      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      paymentMethod: method,
-      passId: newPassId
-    };
+    let createdPass = null;
+    let createdBooking = null;
+
+    if (currentUser?.uid) {
+      try {
+        const created = await createBooking(bookingPayload, currentUser, selectedEvent);
+        createdPass = created.pass;
+        createdBooking = created.booking;
+      } catch (err) {
+        console.error('[GateApass Bookings] Failed to save booking to Firestore:', err);
+      }
+    }
+
+    if (!createdBooking) {
+      createdBooking = bookingPayload;
+      createdPass = {
+        id: newPassId,
+        ...bookingPayload
+      };
+    }
+
+    setPasses((prev) => [createdPass, ...prev.filter((p) => p.id !== newPassId)]);
+    setBookings((prev) => [createdBooking, ...prev.filter((b) => b.bookingId !== newBookingId)]);
 
     const newNotif = {
       id: `notif-${Date.now()}`,
       title: 'Payment confirmed',
-      message: `₹${amount} received for ${eventTitle}. Your digital GateApass is ready.`,
+      message: `₹${amount} received for ${eventTitle || selectedEvent?.title}. Your digital GateApass is ready.`,
       type: 'success',
       time: 'Just now',
       actionText: 'View pass'
     };
-
-    setPasses((prev) => [newPass, ...prev]);
-    setBookings((prev) => [newBooking, ...prev]);
     setNotifications((prev) => [newNotif, ...prev]);
-    setParticipants((prev) => [
-      {
-        id: `pt-${Date.now()}`,
-        name: attendeeName,
-        email: currentUser.email,
-        event: eventTitle,
-        pass: passType,
-        passId: newPassId,
-        authority: matchedPassType?.defaultAuthority || 'Participant',
-        payment: `Paid ₹${amount}`,
-        status: 'Active',
-        date: newBooking.date
-      },
-      ...prev
-    ]);
 
     // Transition to Profile > My Passes
     setTimeout(() => {
       setActiveView('profile');
       setProfileSubTab('my-passes');
-    }, 1800);
+    }, 1200);
   };
 
   const handleRecordCheckin = (checkinItem) => {
@@ -246,9 +351,62 @@ export default function App() {
     }
   };
 
+  const handleLogout = async () => {
+    clearSessionBookingCache();
+    setPasses([]);
+    setBookings([]);
+    setOrganizerEvents([]);
+    setOrganizerBookings([]);
+    setAdminEvents([]);
+    setAdminBookings([]);
+    setPortalMode('participant');
+    setActiveView('landing');
+    await logout();
+  };
+
+  // Derive organizer participants strictly from the organizer's own bookings
+  const organizerParticipantsList = React.useMemo(() => {
+    if (organizerBookings.length > 0) {
+      return organizerBookings.map((b) => ({
+        id: b.id || b.bookingId,
+        name: b.participantName || b.attendeeName || 'Attendee',
+        email: b.participantEmail || '',
+        event: b.eventTitle,
+        pass: b.passType,
+        passId: b.passId,
+        authority: b.authority || 'Participant',
+        payment: `Paid ₹${b.amount}`,
+        status: b.status || 'Active',
+        date: b.date,
+        organizerUid: b.organizerUid
+      }));
+    }
+    return [];
+  }, [organizerBookings]);
+
+  // Derive platform participants for global administrator
+  const adminParticipantsList = React.useMemo(() => {
+    if (adminBookings.length > 0) {
+      return adminBookings.map((b) => ({
+        id: b.id || b.bookingId,
+        name: b.participantName || b.attendeeName || 'Attendee',
+        email: b.participantEmail || '',
+        event: b.eventTitle,
+        pass: b.passType,
+        passId: b.passId,
+        authority: b.authority || 'Participant',
+        payment: `Paid ₹${b.amount}`,
+        status: b.status || 'Active',
+        date: b.date,
+        organizerUid: b.organizerUid
+      }));
+    }
+    return participants;
+  }, [adminBookings, participants]);
+
   return (
     <div className="gateapass-app">
-      {/* SEPARATED PUBLIC ATTENDEE HEADER (Only rendered outside organizer studio) */}
+      {/* SEPARATED PUBLIC ATTENDEE HEADER (Only rendered outside organizer studio and admin) */}
       {portalMode === 'participant' && (
         <>
           {isMobile ? (
@@ -263,6 +421,11 @@ export default function App() {
               onNavigate={handleNavigate}
               unreadCount={notifications.length}
               user={currentUser}
+              onOpenAdmin={() => setPortalMode('admin')}
+              onOpenOrganizerStudio={() => {
+                setOrganizerInitialTab('dashboard');
+                setPortalMode('organizer-studio');
+              }}
             />
           )}
         </>
@@ -270,12 +433,26 @@ export default function App() {
 
       {/* Main View Area */}
       <div className="gateapass-content-wrapper" style={{ paddingBottom: isMobile && portalMode === 'participant' ? '72px' : 0 }}>
-        {/* ORGANIZER STUDIO (List Your Event, Event Dashboard & Turnstile Verifier) */}
-        {portalMode === 'organizer-studio' ? (
+        {/* GLOBAL ADMINISTRATOR DASHBOARD */}
+        {portalMode === 'admin' ? (
+          <AdminView
+            events={adminEvents.length > 0 ? adminEvents : events}
+            participants={adminParticipantsList}
+            onUpdateParticipants={setParticipants}
+            onCreateEvent={(newEvent) => {
+              const saved = saveEvent(newEvent, currentUser);
+              setSelectedEvent(saved);
+            }}
+            onLogout={handleLogout}
+            onBackToPortal={() => setPortalMode('participant')}
+            currentUser={currentUser}
+          />
+        ) : portalMode === 'organizer-studio' ? (
+          /* ORGANIZER STUDIO (Event Management, Pass Studio & Turnstile Verifier) */
           <OrganizerStudioView
             key={organizerInitialTab}
             initialTab={organizerInitialTab}
-            events={events}
+            events={organizerEvents.length > 0 ? organizerEvents : events.filter((e) => e.organizerUid === currentUser?.uid)}
             currentUser={currentUser}
             onCreateEvent={(newEvent) => {
               const saved = saveEvent(newEvent, currentUser);
@@ -293,7 +470,7 @@ export default function App() {
                 setSelectedEvent(null);
               }
             }}
-            participants={participants}
+            participants={organizerParticipantsList}
             onUpdateParticipants={setParticipants}
             checkinHistory={checkinHistory}
             onRecordCheckin={handleRecordCheckin}
@@ -321,8 +498,13 @@ export default function App() {
                 onBookEvent={handleBookEvent}
                 onViewEventDetails={handleViewEventDetails}
                 onCreateEvent={() => {
-                  setOrganizerInitialTab('create-event');
-                  setPortalMode('organizer-studio');
+                  if (canAccessOrganizerDashboard(currentUser)) {
+                    setOrganizerInitialTab('create-event');
+                    setPortalMode('organizer-studio');
+                  } else {
+                    setActiveView('profile');
+                    setProfileSubTab('list-event');
+                  }
                 }}
               />
             )}
@@ -342,8 +524,13 @@ export default function App() {
                 onBookEvent={handleBookEvent}
                 onViewEventDetails={handleViewEventDetails}
                 onCreateEvent={() => {
-                  setOrganizerInitialTab('create-event');
-                  setPortalMode('organizer-studio');
+                  if (canAccessOrganizerDashboard(currentUser)) {
+                    setOrganizerInitialTab('create-event');
+                    setPortalMode('organizer-studio');
+                  } else {
+                    setActiveView('profile');
+                    setProfileSubTab('list-event');
+                  }
                 }}
               />
             )}
@@ -358,8 +545,13 @@ export default function App() {
                 onBookEvent={handleBookEvent}
                 onViewEventDetails={handleViewEventDetails}
                 onCreateEvent={() => {
-                  setOrganizerInitialTab('create-event');
-                  setPortalMode('organizer-studio');
+                  if (canAccessOrganizerDashboard(currentUser)) {
+                    setOrganizerInitialTab('create-event');
+                    setPortalMode('organizer-studio');
+                  } else {
+                    setActiveView('profile');
+                    setProfileSubTab('list-event');
+                  }
                 }}
               />
             )}
@@ -402,10 +594,10 @@ export default function App() {
                   setOrganizerInitialTab(tab);
                   setPortalMode('organizer-studio');
                 }}
-                onLogout={async () => {
-                  await logout();
-                  setActiveView('landing');
+                onOpenAdminDashboard={() => {
+                  setPortalMode('admin');
                 }}
+                onLogout={handleLogout}
               />
             )}
           </>

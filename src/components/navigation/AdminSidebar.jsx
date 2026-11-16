@@ -9,14 +9,17 @@ import {
   ShieldAlert,
   BarChart3,
   Settings,
-  LogOut
+  LogOut,
+  ArrowLeft
 } from 'lucide-react';
 import Logo from '../common/Logo';
 
 export default function AdminSidebar({
   activeTab = 'dashboard',
   onSelectTab,
-  onLogout
+  onLogout,
+  onBackToPortal,
+  currentUser = null
 }) {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -59,12 +62,35 @@ export default function AdminSidebar({
         <Logo size="small" />
         <div>
           <h4 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-dark-text)' }}>
-            Zeal College Pune
+            GetAPass Platform
           </h4>
           <p style={{ fontSize: '12px', color: 'var(--color-muted-text)', marginTop: '2px' }}>
-            Organiser workspace
+            Platform Administration
           </p>
         </div>
+
+        {onBackToPortal && (
+          <button
+            type="button"
+            onClick={onBackToPortal}
+            style={{
+              padding: '8px 12px',
+              fontSize: '12px',
+              fontWeight: 600,
+              color: 'var(--color-deep-violet)',
+              backgroundColor: 'var(--color-light-violet)',
+              border: '1px solid rgba(172, 88, 233, 0.3)',
+              borderRadius: 'var(--radius-control)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <ArrowLeft size={14} />
+            <span>Exit to Public Portal</span>
+          </button>
+        )}
       </div>
 
       {/* Nav Menu */}
@@ -137,14 +163,14 @@ export default function AdminSidebar({
               fontSize: '13px'
             }}
           >
-            MP
+            {currentUser?.avatarInitials || (currentUser?.displayName ? currentUser.displayName.slice(0, 2).toUpperCase() : 'AD')}
           </div>
           <div>
-            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-dark-text)' }}>
-              Meera Patel
+            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-dark-text)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {currentUser?.displayName || currentUser?.name || 'Administrator'}
             </div>
             <div style={{ fontSize: '12px', color: 'var(--color-muted-text)' }}>
-              Administrator
+              Verified Admin
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   User,
   Ticket,
@@ -26,6 +26,11 @@ import PaymentCard from '../components/cards/PaymentCard';
 import Modal from '../components/common/Modal';
 import DigitalPass from '../components/pass/DigitalPass';
 import { useAuth } from '../context/AuthContext';
+import {
+  canAccessAdminDashboard,
+  canAccessOrganizerDashboard,
+  isParticipantOnly
+} from '../services/permissionService';
 
 export default function ProfileView({
   user,
@@ -35,7 +40,8 @@ export default function ProfileView({
   notifications = [],
   initialSubTab = 'profile',
   onLogout,
-  onOpenOrganizerStudio
+  onOpenOrganizerStudio,
+  onOpenAdminDashboard
 }) {
   const { user: authUser, isAuthenticated, openAuthModal, reloadUser, resendVerification } = useAuth();
   const [activeTab, setActiveTab] = useState(initialSubTab); // 'profile' | 'my-passes' | 'my-bookings' | 'payments' | 'list-event' | 'notifications' | 'settings' | 'help'
@@ -65,16 +71,44 @@ export default function ProfileView({
 
 
 
-  const menuItems = [
-    { id: 'profile', label: 'My Profile', icon: User },
-    { id: 'my-passes', label: 'My Passes', icon: Ticket, count: passes.length },
-    { id: 'my-bookings', label: 'My Bookings', icon: ShoppingBag, count: bookings.length },
-    { id: 'payments', label: 'Payments', icon: CreditCard },
-    { id: 'list-event', label: 'List Your Event', icon: Calendar, badge: 'Admin' },
-    { id: 'notifications', label: 'Notifications', icon: Bell, count: notifications.length },
-    { id: 'settings', label: 'Settings', icon: Settings },
-    { id: 'help', label: 'Help', icon: HelpCircle }
-  ];
+  const isAdmin = canAccessAdminDashboard(activeUser);
+  const isOrganizer = canAccessOrganizerDashboard(activeUser) && !isAdmin;
+  const isParticipant = isParticipantOnly(activeUser);
+
+  // Isolate passes and bookings strictly to the current active user UID
+  const userPasses = React.useMemo(() => {
+    if (!activeUser?.uid) return passes;
+    return passes.filter((p) => !p.participantUid || p.participantUid === activeUser.uid);
+  }, [passes, activeUser]);
+
+  const userBookings = React.useMemo(() => {
+    if (!activeUser?.uid) return bookings;
+    return bookings.filter((b) => !b.participantUid || b.participantUid === activeUser.uid);
+  }, [bookings, activeUser]);
+
+  const menuItems = React.useMemo(() => {
+    const items = [
+      { id: 'profile', label: 'My Profile', icon: User },
+      { id: 'my-passes', label: 'My Passes', icon: Ticket, count: userPasses.length },
+      { id: 'my-bookings', label: 'My Bookings', icon: ShoppingBag, count: userBookings.length },
+      { id: 'payments', label: 'Payments', icon: CreditCard }
+    ];
+
+    if (isAdmin) {
+      items.push({ id: 'organizer-studio', label: 'Organizer Studio', icon: Calendar, badge: 'Studio' });
+      items.push({ id: 'admin-dashboard', label: 'Admin Dashboard', icon: ShieldCheck, badge: 'Admin' });
+    } else if (isOrganizer) {
+      items.push({ id: 'organizer-studio', label: 'Organizer Studio', icon: Calendar, badge: 'Organizer' });
+    }
+
+    items.push(
+      { id: 'notifications', label: 'Notifications', icon: Bell, count: notifications.length },
+      { id: 'settings', label: 'Settings', icon: Settings },
+      { id: 'help', label: 'Help', icon: HelpCircle }
+    );
+
+    return items;
+  }, [isAdmin, isOrganizer, userPasses.length, userBookings.length, notifications.length]);
 
   const handleSaveProfile = (e) => {
     e.preventDefault();
@@ -230,6 +264,14 @@ export default function ProfileView({
                     key={item.id}
                     type="button"
                     onClick={() => {
+                      if (item.id === 'admin-dashboard') {
+                        if (onOpenAdminDashboard) onOpenAdminDashboard();
+                        return;
+                      }
+                      if (item.id === 'organizer-studio') {
+                        if (onOpenOrganizerStudio) onOpenOrganizerStudio('dashboard');
+                        return;
+                      }
                       setActiveTab(item.id);
                       setIsEditing(false);
                     }}
@@ -650,77 +692,119 @@ export default function ProfileView({
 
             {/* SUB-VIEW: LIST YOUR EVENT (Organizer & Verifier Hub) */}
             {activeTab === 'list-event' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-deep-violet)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
-                      ORGANIZER HUB
-                    </span>
-                    <span style={{ fontSize: '11px', fontWeight: 600, backgroundColor: 'var(--color-light-violet)', color: 'var(--color-deep-violet)', padding: '2px 8px', borderRadius: '4px' }}>
-                      Zero Login Barrier
-                    </span>
-                  </div>
-                  <h2 className="text-h2" style={{ fontSize: '28px', color: 'var(--color-dark-text)' }}>
-                    List Your Event & Turnstile Verifier
-                  </h2>
-                  <p style={{ fontSize: '14px', color: 'var(--color-muted-text)', marginTop: '4px' }}>
-                    Create and manage campus events with automated digital pass generation and integrated turnstile QR scanning. When you create an event, you automatically become its administrator.
-                  </p>
-                </div>
-
-                {/* Feature breakdown cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-                  <div style={{ padding: '16px', border: '1px solid var(--color-gray)', borderRadius: '4px', backgroundColor: 'var(--color-off-white)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                      <Plus size={18} style={{ color: 'var(--color-violet)' }} />
-                      <h4 style={{ fontSize: '14px', fontWeight: 600 }}>1. Create Event</h4>
-                    </div>
-                    <p style={{ fontSize: '12px', color: 'var(--color-muted-text)', lineHeight: '18px' }}>
-                      Set up event name, venue, categories, and custom pass tiers (Participant, VIP, Volunteer).
-                    </p>
-                  </div>
-
-                  <div style={{ padding: '16px', border: '1px solid var(--color-gray)', borderRadius: '4px', backgroundColor: 'var(--color-off-white)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                      <Calendar size={18} style={{ color: 'var(--color-violet)' }} />
-                      <h4 style={{ fontSize: '14px', fontWeight: 600 }}>2. Event Dashboard</h4>
-                    </div>
-                    <p style={{ fontSize: '12px', color: 'var(--color-muted-text)', lineHeight: '18px' }}>
-                      Real-time analytics for registrations, revenue collections, and live attendance metrics.
-                    </p>
-                  </div>
-
-                  <div style={{ padding: '16px', border: '1px solid var(--color-gray)', borderRadius: '4px', backgroundColor: 'var(--color-off-white)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                      <QrCode size={18} style={{ color: 'var(--color-violet)' }} />
-                      <h4 style={{ fontSize: '14px', fontWeight: 600 }}>3. Turnstile Verifier</h4>
-                    </div>
-                    <p style={{ fontSize: '12px', color: 'var(--color-muted-text)', lineHeight: '18px' }}>
-                      Optical QR pass scanner integrated right into your event tools for instant gate check-ins.
-                    </p>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '8px' }}>
-                  <Button
-                    variant="primary"
-                    size="large"
-                    icon={Plus}
-                    onClick={() => onOpenOrganizerStudio && onOpenOrganizerStudio('create-event')}
+              isParticipant ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '16px',
+                    padding: '48px 24px',
+                    backgroundColor: 'var(--color-off-white)',
+                    border: '1px solid var(--color-gray)',
+                    borderRadius: 'var(--radius-card)',
+                    textAlign: 'center',
+                    alignItems: 'center'
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '56px',
+                      height: '56px',
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--color-light-violet)',
+                      color: 'var(--color-deep-violet)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
                   >
-                    Create New Event Now
-                  </Button>
-
-                  <Button
-                    variant="violet"
-                    size="large"
-                    icon={Calendar}
-                    onClick={() => onOpenOrganizerStudio && onOpenOrganizerStudio('dashboard')}
-                  >
-                    Open Event Dashboard & Verifier →
+                    <ShieldCheck size={28} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-dark-text)' }}>
+                      Organizer Authorization Required
+                    </h3>
+                    <p style={{ fontSize: '14px', color: 'var(--color-muted-text)', maxWidth: '440px', marginTop: '6px', lineHeight: '20px' }}>
+                      You are signed in as a participant ({activeUser?.email || 'Guest'}). Creating campus events, configuring pass templates, and accessing turnstile scanners requires an authorized Organizer account.
+                    </p>
+                  </div>
+                  <Button variant="outline" onClick={() => setActiveTab('profile')}>
+                    Back to My Profile
                   </Button>
                 </div>
-              </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-deep-violet)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                        ORGANIZER HUB
+                      </span>
+                      <span style={{ fontSize: '11px', fontWeight: 600, backgroundColor: 'var(--color-light-violet)', color: 'var(--color-deep-violet)', padding: '2px 8px', borderRadius: '4px' }}>
+                        Verified Organizer
+                      </span>
+                    </div>
+                    <h2 className="text-h2" style={{ fontSize: '28px', color: 'var(--color-dark-text)' }}>
+                      List Your Event & Turnstile Verifier
+                    </h2>
+                    <p style={{ fontSize: '14px', color: 'var(--color-muted-text)', marginTop: '4px' }}>
+                      Create and manage campus events with automated digital pass generation and integrated turnstile QR scanning.
+                    </p>
+                  </div>
+
+                  {/* Feature breakdown cards */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+                    <div style={{ padding: '16px', border: '1px solid var(--color-gray)', borderRadius: '4px', backgroundColor: 'var(--color-off-white)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                        <Plus size={18} style={{ color: 'var(--color-violet)' }} />
+                        <h4 style={{ fontSize: '14px', fontWeight: 600 }}>1. Create Event</h4>
+                      </div>
+                      <p style={{ fontSize: '12px', color: 'var(--color-muted-text)', lineHeight: '18px' }}>
+                        Set up event name, venue, categories, and custom pass tiers (Participant, VIP, Volunteer).
+                      </p>
+                    </div>
+
+                    <div style={{ padding: '16px', border: '1px solid var(--color-gray)', borderRadius: '4px', backgroundColor: 'var(--color-off-white)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                        <Calendar size={18} style={{ color: 'var(--color-violet)' }} />
+                        <h4 style={{ fontSize: '14px', fontWeight: 600 }}>2. Event Dashboard</h4>
+                      </div>
+                      <p style={{ fontSize: '12px', color: 'var(--color-muted-text)', lineHeight: '18px' }}>
+                        Real-time analytics for registrations, revenue collections, and live attendance metrics.
+                      </p>
+                    </div>
+
+                    <div style={{ padding: '16px', border: '1px solid var(--color-gray)', borderRadius: '4px', backgroundColor: 'var(--color-off-white)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                        <QrCode size={18} style={{ color: 'var(--color-violet)' }} />
+                        <h4 style={{ fontSize: '14px', fontWeight: 600 }}>3. Turnstile Verifier</h4>
+                      </div>
+                      <p style={{ fontSize: '12px', color: 'var(--color-muted-text)', lineHeight: '18px' }}>
+                        Optical QR pass scanner integrated right into your event tools for instant gate check-ins.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '8px' }}>
+                    <Button
+                      variant="primary"
+                      size="large"
+                      icon={Plus}
+                      onClick={() => onOpenOrganizerStudio && onOpenOrganizerStudio('create-event')}
+                    >
+                      Create New Event Now
+                    </Button>
+
+                    <Button
+                      variant="violet"
+                      size="large"
+                      icon={Calendar}
+                      onClick={() => onOpenOrganizerStudio && onOpenOrganizerStudio('dashboard')}
+                    >
+                      Open Event Dashboard & Verifier →
+                    </Button>
+                  </div>
+                </div>
+              )
             )}
 
             {/* SUB-VIEW 2: MY PASSES (CRITICAL: Only accessible through profile) */}
@@ -735,7 +819,7 @@ export default function ProfileView({
                   </p>
                 </div>
 
-                {passes.length === 0 ? (
+                {userPasses.length === 0 ? (
                   <div
                     style={{
                       padding: '48px 24px',
@@ -765,7 +849,7 @@ export default function ProfileView({
                       gap: '20px'
                     }}
                   >
-                    {passes.map((p) => (
+                    {userPasses.map((p) => (
                       <PassCard
                         key={p.id}
                         pass={p}
@@ -789,7 +873,7 @@ export default function ProfileView({
                   </p>
                 </div>
 
-                {bookings.length === 0 ? (
+                {userBookings.length === 0 ? (
                   <div
                     style={{
                       padding: '48px 24px',
@@ -813,7 +897,7 @@ export default function ProfileView({
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {bookings.map((b) => (
+                    {userBookings.map((b) => (
                       <div
                         key={b.bookingId}
                         style={{
@@ -843,7 +927,7 @@ export default function ProfileView({
                             variant="outline"
                             size="compact"
                             onClick={() => {
-                              const foundPass = passes.find((p) => p.id === b.passId);
+                              const foundPass = userPasses.find((p) => p.id === b.passId) || userPasses[0];
                               if (foundPass) setSelectedPassForModal(foundPass);
                             }}
                           >
@@ -869,7 +953,7 @@ export default function ProfileView({
                   </p>
                 </div>
 
-                {bookings.length === 0 ? (
+                {userBookings.length === 0 ? (
                   <div
                     style={{
                       padding: '48px 24px',
@@ -899,7 +983,7 @@ export default function ProfileView({
                       gap: '20px'
                     }}
                   >
-                    {bookings.map((b) => (
+                    {userBookings.map((b) => (
                       <PaymentCard
                         key={b.bookingId}
                         booking={b}

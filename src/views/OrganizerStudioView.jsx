@@ -48,9 +48,19 @@ export default function OrganizerStudioView({
   const [activeTab, setActiveTab] = useState(initialTab);
   const [activeStudioTemplate, setActiveStudioTemplate] = useState(null);
 
-  // Selected event being managed
-  const [selectedEventId, setSelectedEventId] = useState(events[0]?.id || '');
-  const currentEvent = events.find((e) => e.id === selectedEventId) || events[0] || null;
+  // Enforce organizer UID ownership boundary (never show another organizer's events)
+  const organizerEvents = React.useMemo(() => {
+    if (!currentUser?.uid) return events;
+    return events.filter((e) => e.organizerUid === currentUser.uid);
+  }, [events, currentUser?.uid]);
+
+  // Selected event being managed from owned events only
+  const [selectedEventId, setSelectedEventId] = useState(() => organizerEvents[0]?.id || '');
+
+  // Keep selected event synced to owned events
+  const currentEvent = React.useMemo(() => {
+    return organizerEvents.find((e) => e.id === selectedEventId) || organizerEvents[0] || null;
+  }, [organizerEvents, selectedEventId]);
 
   // Edit Event Modal State
   const [editingEventModalOpen, setEditingEventModalOpen] = useState(false);
@@ -65,9 +75,13 @@ export default function OrganizerStudioView({
   const [authorityPermissions, setAuthorityPermissions] = useState(INITIAL_AUTHORITY_PERMISSIONS);
   const [selectedAuthorityForEdit, setSelectedAuthorityForEdit] = useState('Participant');
 
-  // Filter participants for current event
+  // Filter participants for current owned event
   const eventParticipants = currentEvent?.title
-    ? participants.filter((p) => (p.event || '').toLowerCase() === currentEvent.title.toLowerCase())
+    ? participants.filter((p) => {
+        const pEv = (p.event || p.eventTitle || '').toLowerCase();
+        const curTitle = (currentEvent.title || currentEvent.name || '').toLowerCase();
+        return pEv === curTitle;
+      })
     : [];
 
   const handleOpenEditEvent = (ev) => {
@@ -173,7 +187,7 @@ export default function OrganizerStudioView({
                   textTransform: 'capitalize'
                 }}
               >
-                {currentUser?.role ? `${currentUser.role} Mode` : 'Organizer Studio'} · {events.length} Events Active
+                {currentUser?.role ? `${currentUser.role} Mode` : 'Organizer Studio'} · {organizerEvents.length} Events Managed
               </span>
             </div>
             <p style={{ fontSize: '12px', color: 'var(--color-muted-text)', marginTop: '2px' }}>
@@ -184,7 +198,7 @@ export default function OrganizerStudioView({
 
         {/* Managed Event Selector & Quick Create */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {events.length > 0 ? (
+          {organizerEvents.length > 0 ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '13px', color: 'var(--color-muted-text)' }}>Managing:</span>
               <select
@@ -202,7 +216,7 @@ export default function OrganizerStudioView({
                   maxWidth: '220px'
                 }}
               >
-                {events.map((ev) => (
+                {organizerEvents.map((ev) => (
                   <option key={ev.id} value={ev.id}>
                     {ev.title || ev.name} ({ev.category})
                   </option>
@@ -309,7 +323,7 @@ export default function OrganizerStudioView({
             ============================================================== */}
         {activeTab === 'dashboard' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '36px' }}>
-            {events.length === 0 ? (
+            {organizerEvents.length === 0 ? (
               <div
                 style={{
                   padding: '64px 32px',
@@ -420,7 +434,7 @@ export default function OrganizerStudioView({
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
                   <h3 style={{ fontSize: '20px', fontWeight: 700, margin: 0 }}>
-                    All Campus Events ({events.length})
+                    My Organized Events ({organizerEvents.length})
                   </h3>
                   <p style={{ fontSize: '13px', color: 'var(--color-muted-text)', margin: '4px 0 0' }}>
                     All events created by your organizer account remain permanently saved and active.
@@ -450,7 +464,7 @@ export default function OrganizerStudioView({
                     </tr>
                   </thead>
                   <tbody>
-                    {events.map((ev) => {
+                    {organizerEvents.map((ev) => {
                       const isSelected = ev.id === selectedEventId;
                       const eventPasses = getPassTypesByEvent(ev.id);
 
