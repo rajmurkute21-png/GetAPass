@@ -1,5 +1,5 @@
-import React from 'react';
-import { AlertCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export default function Input({
   label,
@@ -18,8 +18,13 @@ export default function Input({
   style = {},
   ...props
 }) {
-  const [focused, setFocused] = React.useState(false);
+  const [focused, setFocused] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const inputId = id || name || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
+
+  const isPasswordType = type === 'password';
+  const resolvedType = isPasswordType ? (showPassword ? 'text' : 'password') : type;
+  const paddingRight = error ? (isPasswordType ? '68px' : '40px') : (isPasswordType ? '40px' : '14px');
 
   return (
     <div
@@ -77,7 +82,7 @@ export default function Input({
         <input
           id={inputId}
           name={name}
-          type={type}
+          type={resolvedType}
           value={value}
           onChange={onChange}
           placeholder={placeholder}
@@ -88,21 +93,44 @@ export default function Input({
             width: '100%',
             height: 'var(--height-control)',
             paddingLeft: Icon ? '40px' : '14px',
-            paddingRight: error ? '40px' : '14px',
+            paddingRight,
             backgroundColor: disabled ? 'var(--color-off-white)' : 'var(--color-white)',
             border: error
               ? '1.5px solid var(--color-error)'
               : focused
-              ? '1.5px solid var(--color-deep-violet)'
-              : '1px solid var(--color-gray)',
+              ? '1.5px solid var(--color-electric-violet, #7C3AED)'
+              : '1px solid var(--color-border-solid, #E9E5F0)',
             borderRadius: 'var(--radius-control)',
             outline: 'none',
             fontSize: '14px',
             color: disabled ? 'var(--color-muted-text)' : 'var(--color-dark-text)',
-            transition: 'border-color 0.15s ease'
+            transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+            boxShadow: focused ? '0 0 0 3px rgba(124, 58, 237, 0.12)' : 'none'
           }}
           {...props}
         />
+
+        {isPasswordType && (
+          <button
+            type="button"
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+            onClick={() => setShowPassword(!showPassword)}
+            style={{
+              position: 'absolute',
+              right: error ? '36px' : '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#777487',
+              padding: '4px'
+            }}
+          >
+            {showPassword ? <EyeOff size={18} strokeWidth={1.8} /> : <Eye size={18} strokeWidth={1.8} />}
+          </button>
+        )}
 
         {error && (
           <div

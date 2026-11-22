@@ -151,13 +151,13 @@ export default function TicketCategorySelector({
                     height: '32px',
                     borderRadius: '50%',
                     border: 'none',
-                    background: 'linear-gradient(135deg, #9333EA 0%, #7C3AED 100%)',
+                    backgroundColor: '#7C3AED',
                     color: '#FFFFFF',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    boxShadow: '0 2px 6px rgba(124, 58, 237, 0.3)'
+                    boxShadow: '0 2px 8px rgba(124, 58, 237, 0.35)'
                   }}
                 >
                   <Plus size={15} />

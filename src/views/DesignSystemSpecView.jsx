@@ -368,7 +368,7 @@ export default function DesignSystemSpecView({ initialTab }) {
                   marginTop: '16px',
                   padding: '20px',
                   borderRadius: '16px',
-                  background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                  backgroundColor: '#0f172a',
                   color: '#ffffff',
                   display: 'flex',
                   flexDirection: 'column',
@@ -381,7 +381,7 @@ export default function DesignSystemSpecView({ initialTab }) {
                       Glassmorphic Smooth Toggle (Cool Blue Palette)
                     </h5>
                     <p style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 0' }}>
-                      Frosted glassmorphism, soft gradients, and serene cool-blue lighting
+                      Frosted glassmorphism, pure solid surfaces, and serene cool-blue lighting
                     </p>
                   </div>
                   <GlassToggle
@@ -430,7 +430,7 @@ export default function DesignSystemSpecView({ initialTab }) {
                   marginTop: '16px',
                   padding: '24px',
                   borderRadius: '16px',
-                  background: 'linear-gradient(135deg, rgba(20, 14, 38, 0.95) 0%, rgba(12, 8, 24, 0.98) 100%)',
+                  backgroundColor: '#140e26',
                   border: '1px solid rgba(255, 255, 255, 0.12)',
                   color: '#ffffff',
                   display: 'flex',

@@ -83,8 +83,8 @@ check('Configured with ~1.0-1.4s animation cycle', () => {
 
 // 4. Lighting & Indicator
 console.log('\n--- SECTION 4: Lighting & Micro Indicator ---');
-check('Implements soft Electric Violet and Pink radial backlight glow', () => {
-  assert(logoLoaderSrc.includes('rgba(142, 44, 252') && logoLoaderSrc.includes('rgba(236, 72, 153'));
+check('Implements soft Electric Violet backlight glow (zero gradients)', () => {
+  assert(logoLoaderSrc.includes('rgba(124, 58, 237') || logoLoaderSrc.includes('rgba(142, 44, 252'));
 });
 
 check('Renders tiny 3-dot sequenced pulse loading indicator below logo', () => {

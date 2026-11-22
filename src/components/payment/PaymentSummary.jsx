@@ -208,19 +208,20 @@ export default function PaymentSummary({
               onClick={() => setMethod(m.id)}
               style={{
                 height: '44px',
-                border: isSel ? '1.5px solid var(--color-black)' : '1px solid var(--color-gray)',
-                backgroundColor: isSel ? 'var(--color-off-white)' : 'var(--color-white)',
-                borderRadius: 'var(--radius-control)',
+                border: isSel ? '1.5px solid #7C3AED' : '1px solid #E9E5F0',
+                backgroundColor: isSel ? 'rgba(124, 58, 237, 0.08)' : '#FFFFFF',
+                borderRadius: '12px',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
                 padding: '0 12px',
                 fontWeight: isSel ? 600 : 500,
-                color: 'var(--color-dark-text)',
-                cursor: 'pointer'
+                color: isSel ? '#7C3AED' : '#181526',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
               }}
             >
-              <IconComp size={16} color={isSel ? 'var(--color-deep-violet)' : 'var(--color-muted-text)'} />
+              <IconComp size={16} color={isSel ? '#7C3AED' : '#777487'} />
               <span style={{ fontSize: '13px' }}>{m.label}</span>
             </button>
           );

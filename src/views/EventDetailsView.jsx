@@ -296,13 +296,17 @@ export default function EventDetailsView({
           {/* Right Column: Sticky Pass Booking Panel */}
           <div>
             <div
+              className="gateapass-card"
               style={{
                 position: 'sticky',
                 top: '100px',
                 padding: '24px',
-                border: '1px solid var(--color-gray)',
-                borderRadius: 'var(--radius-card)',
-                backgroundColor: 'var(--color-white)',
+                border: '1px solid var(--color-border-solid, #E9E5F0)',
+                borderRadius: '20px',
+                backgroundColor: 'rgba(255, 255, 255, 0.92)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                boxShadow: 'var(--liquid-glass-shadow-md)',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '20px'

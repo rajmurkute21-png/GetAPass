@@ -114,8 +114,8 @@ export default function LogoLoader({
               width: `${resolvedHeight * 1.3}px`,
               height: `${resolvedHeight * 1.3}px`,
               borderRadius: '50%',
-              background: 'radial-gradient(circle, rgba(142, 44, 252, 0.5) 0%, rgba(236, 72, 153, 0.3) 50%, transparent 75%)',
-              filter: 'blur(6px)',
+              backgroundColor: 'rgba(124, 58, 237, 0.45)',
+              filter: 'blur(8px)',
               pointerEvents: 'none',
               zIndex: 0
             }}
@@ -211,8 +211,7 @@ export default function LogoLoader({
             width: `${Math.max(calculatedWidth + 32, 120)}px`,
             height: `${resolvedHeight + 36}px`,
             borderRadius: '9999px',
-            background:
-              'radial-gradient(ellipse at center, rgba(142, 44, 252, 0.38) 0%, rgba(236, 72, 153, 0.22) 50%, transparent 72%)',
+            backgroundColor: 'rgba(124, 58, 237, 0.35)',
             filter: 'blur(16px)',
             pointerEvents: 'none',
             zIndex: 0

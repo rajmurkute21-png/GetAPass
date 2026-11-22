@@ -35,45 +35,43 @@ export default function Button({
     switch (variant) {
       case 'primary':
         return {
-          backgroundColor: 'var(--color-black)',
-          color: 'var(--color-white)',
-          border: '1px solid var(--color-black)'
+          backgroundColor: 'var(--color-electric-violet, #7C3AED)',
+          color: '#FFFFFF',
+          border: '1px solid var(--color-electric-violet, #7C3AED)',
+          boxShadow: '0 4px 14px rgba(124, 58, 237, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
         };
       case 'secondary':
-        return {
-          backgroundColor: 'var(--color-light-violet)',
-          color: 'var(--color-near-black)',
-          border: '1px solid var(--color-light-violet)'
-        };
       case 'outline':
         return {
-          backgroundColor: 'var(--color-white)',
-          color: 'var(--color-black)',
-          border: '1px solid var(--color-black)'
+          backgroundColor: 'rgba(255, 255, 255, 0.92)',
+          color: 'var(--color-electric-violet, #7C3AED)',
+          border: '1.5px solid var(--color-electric-violet, #7C3AED)',
+          boxShadow: '0 2px 8px rgba(24, 21, 38, 0.04)'
         };
       case 'violet':
         return {
-          backgroundColor: 'var(--color-violet)',
-          color: 'var(--color-white)',
-          border: '1px solid var(--color-violet)'
+          backgroundColor: 'var(--color-electric-violet, #7C3AED)',
+          color: '#FFFFFF',
+          border: '1px solid var(--color-electric-violet, #7C3AED)',
+          boxShadow: '0 4px 14px rgba(124, 58, 237, 0.28)'
         };
       case 'danger':
         return {
-          backgroundColor: 'var(--color-error)',
-          color: 'var(--color-white)',
-          border: '1px solid var(--color-error)'
+          backgroundColor: 'var(--color-error, #D92D20)',
+          color: '#FFFFFF',
+          border: '1px solid var(--color-error, #D92D20)'
         };
       case 'text':
         return {
           backgroundColor: 'transparent',
-          color: 'var(--color-black)',
+          color: 'var(--color-primary-text, #181526)',
           border: '1px solid transparent'
         };
       default:
         return {
-          backgroundColor: 'var(--color-black)',
-          color: 'var(--color-white)',
-          border: '1px solid var(--color-black)'
+          backgroundColor: 'var(--color-electric-violet, #7C3AED)',
+          color: '#FFFFFF',
+          border: '1px solid var(--color-electric-violet, #7C3AED)'
         };
     }
   };

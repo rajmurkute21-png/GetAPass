@@ -59,7 +59,7 @@ export default function PassCard({
         style={{
           height: '4px',
           width: '100%',
-          background: `linear-gradient(90deg, ${theme.primary} 0%, ${theme.accent} 100%)`
+          backgroundColor: theme.primary || '#7C3AED'
         }}
       />
 

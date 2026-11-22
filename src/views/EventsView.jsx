@@ -267,14 +267,14 @@ export default function EventsView({
                     height: '34px',
                     borderRadius: '50%',
                     border: 'none',
-                    background: viewMode === 'grid' ? 'linear-gradient(135deg, #9333EA 0%, #7C3AED 100%)' : 'transparent',
+                    background: viewMode === 'grid' ? '#7C3AED' : 'transparent',
                     color: '#FFFFFF',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
-                    boxShadow: viewMode === 'grid' ? '0 0 12px rgba(147, 51, 234, 0.5)' : 'none'
+                    boxShadow: viewMode === 'grid' ? '0 0 10px rgba(124, 58, 237, 0.4)' : 'none'
                   }}
                 >
                   <LayoutGrid size={15} />
@@ -288,14 +288,14 @@ export default function EventsView({
                     height: '34px',
                     borderRadius: '50%',
                     border: 'none',
-                    background: viewMode === 'list' ? 'linear-gradient(135deg, #9333EA 0%, #7C3AED 100%)' : 'transparent',
+                    background: viewMode === 'list' ? '#7C3AED' : 'transparent',
                     color: '#FFFFFF',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
-                    boxShadow: viewMode === 'list' ? '0 0 12px rgba(147, 51, 234, 0.5)' : 'none'
+                    boxShadow: viewMode === 'list' ? '0 0 10px rgba(124, 58, 237, 0.4)' : 'none'
                   }}
                 >
                   <List size={15} />
@@ -343,8 +343,8 @@ export default function EventsView({
                         fontSize: '12px',
                         fontWeight: priceFilter === p.id ? 700 : 500,
                         borderRadius: '9999px',
-                        border: priceFilter === p.id ? '1px solid #9333EA' : '1px solid rgba(203, 213, 225, 0.8)',
-                        background: priceFilter === p.id ? 'linear-gradient(135deg, #9333EA 0%, #EC4899 100%)' : '#FFFFFF',
+                        border: priceFilter === p.id ? '1px solid #7C3AED' : '1px solid #E9E5F0',
+                        background: priceFilter === p.id ? '#7C3AED' : '#FFFFFF',
                         color: priceFilter === p.id ? '#FFFFFF' : '#334155',
                         cursor: 'pointer',
                         transition: 'all 0.15s ease'
@@ -400,9 +400,9 @@ export default function EventsView({
                     position: 'absolute',
                     inset: 0,
                     borderRadius: '9999px',
-                    background: 'linear-gradient(135deg, #9333EA 0%, #7C3AED 55%, #EC4899 100%)',
+                    backgroundColor: '#7C3AED',
                     zIndex: 0,
-                    boxShadow: '0 4px 16px rgba(147, 51, 234, 0.35), 0 0 10px rgba(236, 72, 153, 0.2)'
+                    boxShadow: '0 4px 14px rgba(124, 58, 237, 0.35)'
                   }}
                   transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                 />
@@ -426,9 +426,9 @@ export default function EventsView({
                         position: 'absolute',
                         inset: 0,
                         borderRadius: '9999px',
-                        background: 'linear-gradient(135deg, #9333EA 0%, #7C3AED 55%, #EC4899 100%)',
+                        backgroundColor: '#7C3AED',
                         zIndex: 0,
-                        boxShadow: '0 4px 16px rgba(147, 51, 234, 0.35), 0 0 10px rgba(236, 72, 153, 0.2)'
+                        boxShadow: '0 4px 14px rgba(124, 58, 237, 0.35)'
                       }}
                       transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                     />

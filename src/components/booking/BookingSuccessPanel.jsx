@@ -52,9 +52,9 @@ export default function BookingSuccessPanel({
       <div
         style={{
           padding: '32px 24px',
-          background: 'linear-gradient(135deg, rgba(147, 51, 234, 0.08) 0%, rgba(236, 72, 153, 0.05) 100%)',
+          backgroundColor: 'rgba(124, 58, 237, 0.06)',
           borderRadius: '24px',
-          border: '1px solid rgba(147, 51, 234, 0.2)',
+          border: '1px solid rgba(124, 58, 237, 0.18)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -70,12 +70,12 @@ export default function BookingSuccessPanel({
             width: '64px',
             height: '64px',
             borderRadius: '50%',
-            background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+            backgroundColor: '#10B981',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: '#FFFFFF',
-            boxShadow: '0 8px 24px rgba(16, 185, 129, 0.4)'
+            boxShadow: '0 8px 24px rgba(16, 185, 129, 0.35)'
           }}
         >
           <CheckCircle2 size={36} strokeWidth={2.4} />
@@ -180,7 +180,7 @@ export default function BookingSuccessPanel({
                     fontSize: '12px',
                     fontWeight: selectedPassIndex === idx ? 700 : 500,
                     border: selectedPassIndex === idx ? '1px solid #7C3AED' : '1px solid #CBD5E1',
-                    background: selectedPassIndex === idx ? 'linear-gradient(135deg, #9333EA, #7C3AED)' : '#FFFFFF',
+                    backgroundColor: selectedPassIndex === idx ? '#7C3AED' : '#FFFFFF',
                     color: selectedPassIndex === idx ? '#FFFFFF' : '#334155',
                     cursor: 'pointer',
                     whiteSpace: 'nowrap',
@@ -198,7 +198,7 @@ export default function BookingSuccessPanel({
         <div
           style={{
             padding: '24px 12px',
-            background: 'linear-gradient(180deg, #130e26 0%, #0c0a17 100%)',
+            backgroundColor: '#0c0a17',
             borderRadius: '24px',
             display: 'flex',
             flexDirection: 'column',

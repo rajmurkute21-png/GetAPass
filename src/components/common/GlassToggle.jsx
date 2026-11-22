@@ -2,7 +2,7 @@ import React from 'react';
 
 /**
  * GetAPass Glassmorphism Smooth Toggle Switch
- * Visual Aesthetic: Frosted glassmorphism with soft gradients, subtle ambient lighting,
+ * Visual Aesthetic: Frosted glassmorphism with pure solid surfaces, subtle ambient lighting,
  * and cool blue palette with light and dark tranquil contrasts.
  */
 export default function GlassToggle({

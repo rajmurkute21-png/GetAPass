@@ -219,14 +219,8 @@ export default function DigitalPass({
           <div className="getapass-stage-brand">
             <div className="getapass-stage-brand-mark">
               <svg viewBox="0 0 36 36" width="30" height="30" fill="none">
-                <path d="M18 3L4 32H13L18 20L23 32H32L18 3Z" fill="url(#stageLogoGrad)" />
+                <path d="M18 3L4 32H13L18 20L23 32H32L18 3Z" fill="#7C3AED" />
                 <path d="M14.5 24H21.5L18 16L14.5 24Z" fill="#FAF5FF" opacity="0.9" />
-                <defs>
-                  <linearGradient id="stageLogoGrad" x1="4" y1="3" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-                    <stop stopColor="#8E2CFC" />
-                    <stop offset="1" stopColor="#C026D3" />
-                  </linearGradient>
-                </defs>
               </svg>
             </div>
             <span className="getapass-stage-brand-name">GetAPass</span>

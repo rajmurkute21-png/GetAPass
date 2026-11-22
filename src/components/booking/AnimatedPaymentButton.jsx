@@ -34,11 +34,11 @@ export default function AnimatedPaymentButton({
         gap: '10px',
         cursor: disabled || isProcessing || isSuccess ? 'not-allowed' : 'pointer',
         background: isSuccess
-          ? 'linear-gradient(135deg, #059669 0%, #10B981 100%) !important'
-          : 'linear-gradient(135deg, #9333EA 0%, #7C3AED 52%, #EC4899 100%) !important',
+          ? '#10B981 !important'
+          : '#7C3AED !important',
         boxShadow: isSuccess
-          ? '0 8px 24px -4px rgba(16, 185, 129, 0.45) !important'
-          : 'var(--liquid-glass-shadow-btn), var(--liquid-glass-specular) !important',
+          ? '0 8px 24px -4px rgba(16, 185, 129, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.4) !important'
+          : '0 8px 22px -4px rgba(124, 58, 237, 0.38), inset 0 1px 1px rgba(255, 255, 255, 0.4) !important',
         transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
       }}
     >

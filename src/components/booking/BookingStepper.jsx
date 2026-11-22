@@ -48,7 +48,8 @@ export default function BookingStepper({
             top: '20px',
             left: '32px',
             height: '3px',
-            background: 'linear-gradient(90deg, #9333EA 0%, #7C3AED 50%, #EC4899 100%)',
+            background: '#7C3AED',
+            boxShadow: '0 0 10px rgba(124, 58, 237, 0.4)',
             zIndex: 1,
             transformOrigin: 'left'
           }}
