@@ -1,0 +1,518 @@
+/* ==========================================================================
+   GetAPass — Selective Mobile-First Liquid Glass UI System
+   Inspired by Apple Liquid Glass with GetAPass Electric Violet (#7C3AED)
+   ========================================================================== */
+
+:root {
+  /* Liquid Glass Color & Lighting Tokens */
+  --liquid-glass-primary: #7C3AED;
+  --liquid-glass-accent: #8B5CF6;
+  --liquid-glass-deep: #6D28D9;
+  --liquid-glass-glow: rgba(124, 58, 237, 0.45);
+  --liquid-glass-glow-subtle: rgba(124, 58, 237, 0.18);
+  
+  /* Translucent Glass Surfaces */
+  --liquid-glass-surface-dark: rgba(18, 13, 33, 0.82);
+  --liquid-glass-surface-light: rgba(255, 255, 255, 0.84);
+  --liquid-glass-surface-card: rgba(255, 255, 255, 0.88);
+  --liquid-glass-border-light: rgba(255, 255, 255, 0.22);
+  --liquid-glass-border-violet: rgba(168, 85, 247, 0.35);
+  
+  /* Specular Highlight & Inner Reflections */
+  --liquid-glass-specular: inset 0 1px 1px 0 rgba(255, 255, 255, 0.45);
+  --liquid-glass-shadow-nav: 0 16px 40px -8px rgba(0, 0, 0, 0.48), 0 0 20px rgba(124, 58, 237, 0.16);
+  --liquid-glass-shadow-btn: 0 8px 24px -4px rgba(124, 58, 237, 0.42);
+  --liquid-glass-shadow-fab: 0 10px 28px -4px rgba(124, 58, 237, 0.55), 0 0 0 4px rgba(124, 58, 237, 0.18);
+  
+  /* Blur Radii */
+  --liquid-glass-blur: blur(20px);
+  --liquid-glass-blur-sheet: blur(28px);
+}
+
+/* Mobile Layout Base Spacing for Floating Nav */
+@media (max-width: 768px) {
+  body {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 16px)) !important;
+  }
+}
+
+/* ==========================================================================
+   A. FLOATING BOTTOM NAVIGATION (GLASS EFFECT)
+   ========================================================================== */
+.liquid-glass-nav-container {
+  position: fixed;
+  bottom: max(14px, env(safe-area-inset-bottom, 14px));
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 95;
+  pointer-events: none; /* allows clicking behind empty edges */
+  padding: 0 16px;
+}
+
+.liquid-glass-nav-pill {
+  pointer-events: auto;
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  height: 64px;
+  background: var(--liquid-glass-surface-dark);
+  backdrop-filter: var(--liquid-glass-blur);
+  -webkit-backdrop-filter: var(--liquid-glass-blur);
+  border: 1px solid var(--liquid-glass-border-light);
+  border-radius: 9999px;
+  box-shadow: var(--liquid-glass-shadow-nav), var(--liquid-glass-specular);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.24s ease;
+}
+
+.liquid-glass-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px 4px;
+  border-radius: 9999px;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+  text-decoration: none;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.liquid-glass-nav-item:active {
+  transform: scale(0.92);
+}
+
+.liquid-glass-nav-item.is-active {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.liquid-glass-nav-icon-wrap {
+  width: 34px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.liquid-glass-nav-item.is-active .liquid-glass-nav-icon-wrap {
+  background: rgba(139, 92, 246, 0.25);
+  box-shadow: 0 0 14px rgba(124, 58, 237, 0.5);
+  color: #C084FC;
+}
+
+/* Floating Center QR Scan Action Button (FAB) */
+.liquid-glass-nav-fab {
+  position: relative;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #9333EA 0%, #7C3AED 50%, #6D28D9 100%);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  box-shadow: var(--liquid-glass-shadow-fab), var(--liquid-glass-specular);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin: 0 4px;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.liquid-glass-nav-fab:active {
+  transform: scale(0.93);
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.6);
+}
+
+.liquid-glass-nav-fab-pulse {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+  border-radius: 50%;
+  background: rgba(168, 85, 247, 0.25);
+  z-index: -1;
+  pointer-events: none;
+  animation: fabPulse 2.8s infinite ease-out;
+}
+
+@keyframes fabPulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 0.2; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+/* ==========================================================================
+   B. PRIMARY ACTION BUTTONS (GLASS STYLE)
+   ========================================================================== */
+.gateapass-btn-liquid-glass {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 24px;
+  height: 48px;
+  border-radius: 9999px !important;
+  background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 52%, #6D28D9 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.32) !important;
+  box-shadow: var(--liquid-glass-shadow-btn), var(--liquid-glass-specular) !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.2px !important;
+  cursor: pointer;
+  text-decoration: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.gateapass-btn-liquid-glass:hover {
+  transform: translateY(-1.5px);
+  box-shadow: 0 12px 28px -4px rgba(124, 58, 237, 0.52), inset 0 1px 1px rgba(255, 255, 255, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.45) !important;
+}
+
+.gateapass-btn-liquid-glass:active {
+  transform: scale(0.97) translateY(0) !important;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4), inset 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Secondary Translucent Glass Action (e.g. Save Pass, Share) */
+.gateapass-btn-liquid-secondary {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 20px;
+  height: 48px;
+  border-radius: 9999px !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #1F192F !important;
+  border: 1px solid rgba(255, 255, 255, 0.95) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.gateapass-btn-liquid-secondary:hover {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(168, 85, 247, 0.35) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.12) !important;
+}
+
+.gateapass-btn-liquid-secondary:active {
+  transform: scale(0.97) !important;
+}
+
+/* Mobile Sticky Bottom Floating Booking Bar */
+.liquid-glass-sticky-cta-bar {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .liquid-glass-sticky-cta-bar {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 80;
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-top: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.08);
+    padding: 12px 18px max(14px, env(safe-area-inset-bottom, 14px));
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    animation: stickyBarSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+@keyframes stickyBarSlideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* ==========================================================================
+   C. MODALS & BOTTOM SHEETS (FROSTED GLASS)
+   ========================================================================== */
+.liquid-glass-modal-overlay {
+  background-color: rgba(12, 8, 24, 0.7) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  transition: opacity 0.25s ease;
+}
+
+/* Mobile-First Slide-Up Sheet Adaptation */
+@media (max-width: 640px) {
+  .gateapass-modal-overlay {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+
+  .gateapass-modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 28px 28px 0 0 !important;
+    margin: 0 !important;
+    max-height: 90vh !important;
+    padding: 16px 20px max(24px, env(safe-area-inset-bottom, 24px)) !important;
+    animation: modalSlideUpSheet 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    background: rgba(255, 255, 255, 0.94) !important;
+    backdrop-filter: var(--liquid-glass-blur-sheet) !important;
+    -webkit-backdrop-filter: var(--liquid-glass-blur-sheet) !important;
+    border-bottom: none !important;
+    border-left: none !important;
+    border-right: none !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.95) !important;
+    box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.24) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* iOS Drag Handle Pill */
+  .liquid-glass-sheet-handle {
+    display: block !important;
+    width: 40px;
+    height: 4.5px;
+    border-radius: 9999px;
+    background-color: rgba(0, 0, 0, 0.18);
+    margin: 0 auto 12px;
+    flex-shrink: 0;
+  }
+}
+
+.liquid-glass-sheet-handle {
+  display: none;
+}
+
+@keyframes modalSlideUpSheet {
+  from {
+    transform: translateY(100%);
+    opacity: 0.9;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Frosted Glass Close Button */
+.liquid-glass-close-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #372F48;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.liquid-glass-close-btn:hover {
+  background: rgba(0, 0, 0, 0.09);
+  transform: rotate(90deg);
+}
+
+.liquid-glass-close-btn:active {
+  transform: scale(0.92) rotate(90deg);
+}
+
+/* ==========================================================================
+   D. FLOATING FILTERS & CONTROLS (GLASS CHIPS)
+   ========================================================================== */
+.liquid-glass-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.76);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  color: #372F48;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.liquid-glass-chip:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(168, 85, 247, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.12);
+}
+
+.liquid-glass-chip:active {
+  transform: scale(0.96);
+}
+
+.liquid-glass-chip.is-active {
+  background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.45);
+}
+
+/* Floating Glass Search Input */
+.liquid-glass-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 540px;
+}
+
+.liquid-glass-search-input {
+  width: 100%;
+  height: 46px;
+  border-radius: 9999px;
+  padding: 0 44px 0 42px;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  box-shadow: 0 4px 18px rgba(124, 58, 237, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  color: #111111;
+  outline: none;
+  transition: all 0.22s ease;
+}
+
+.liquid-glass-search-input:focus {
+  background: #ffffff;
+  border-color: #8B5CF6;
+  box-shadow: 0 6px 24px rgba(124, 58, 237, 0.16), 0 0 0 3px rgba(124, 58, 237, 0.14);
+}
+
+.liquid-glass-search-icon {
+  position: absolute;
+  left: 15px;
+  color: #7C3AED;
+  pointer-events: none;
+}
+
+.liquid-glass-search-clear {
+  position: absolute;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.08);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  cursor: pointer;
+}
+
+/* Floating Suggestions Glass Card */
+.liquid-glass-suggestions {
+  position: absolute;
+  top: 52px;
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  box-shadow: 0 16px 40px rgba(124, 58, 237, 0.12), 0 2px 6px rgba(0, 0, 0, 0.04);
+  padding: 8px;
+  z-index: 50;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   E. ACCESSIBILITY & FALLBACKS
+   ========================================================================== */
+@supports not (backdrop-filter: blur(1px)) {
+  .liquid-glass-nav-pill {
+    background: #181328 !important;
+  }
+  .gateapass-btn-liquid-secondary {
+    background: #ffffff !important;
+  }
+  .liquid-glass-chip {
+    background: #ffffff !important;
+  }
+  .liquid-glass-search-input {
+    background: #ffffff !important;
+  }
+  .liquid-glass-modal-overlay {
+    background-color: rgba(12, 8, 24, 0.9) !important;
+  }
+  .gateapass-modal {
+    background: #ffffff !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liquid-glass-nav-fab-pulse {
+    animation: none !important;
+  }
+  .gateapass-btn-liquid-glass,
+  .gateapass-btn-liquid-secondary,
+  .liquid-glass-nav-item,
+  .liquid-glass-chip {
+    transition: none !important;
+    transform: none !important;
+  }
+  .gateapass-modal {
+    animation: none !important;
+  }
+  .liquid-glass-sticky-cta-bar {
+    animation: none !important;
+  }
+}

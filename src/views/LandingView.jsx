@@ -71,7 +71,7 @@ export default function LandingView({
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', marginTop: '12px' }}>
               <Button
-                variant="violet"
+                variant="liquid-glass"
                 size="large"
                 icon={ArrowRight}
                 iconPosition="right"
@@ -81,13 +81,13 @@ export default function LandingView({
               </Button>
 
               <Button
-                variant="outline"
+                variant="liquid-secondary"
                 size="large"
                 onClick={onHowItWorks}
                 style={{
-                  backgroundColor: 'transparent',
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
                   color: 'var(--color-white)',
-                  borderColor: '#444'
+                  borderColor: 'rgba(255, 255, 255, 0.2)'
                 }}
               >
                 How It Works

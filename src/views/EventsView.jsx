@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Search, Plus, Calendar, RefreshCw } from 'lucide-react';
+import { Search, Plus, Calendar, RefreshCw, X, Clock, Sparkles, ArrowUpDown } from 'lucide-react';
 import EventCard from '../components/cards/EventCard';
-import Input from '../components/common/Input';
 import Button from '../components/common/Button';
 import { CATEGORIES } from '../data/mockData';
 
@@ -16,26 +15,48 @@ export default function EventsView({
   onCreateEvent
 }) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [sortBy, setSortBy] = useState('date'); // 'date' | 'price' | 'name'
 
-  const filteredEvents = events.filter((ev) => {
-    const category = ev.category || '';
-    const title = ev.title || ev.name || '';
-    const venue = ev.venue || '';
+  const SUGGESTIONS = [
+    { label: 'Music Festival', icon: Clock, category: 'Festivals' },
+    { label: 'Tech Summit', icon: Sparkles, category: 'Conferences' },
+    { label: 'Art Exhibition', icon: Calendar, category: 'Exhibitions' }
+  ];
 
-    const matchesCategory =
-      selectedCategory === 'All' || category.toLowerCase() === selectedCategory.toLowerCase();
-    const matchesSearch =
-      title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      venue.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      category.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const filteredEvents = events
+    .filter((ev) => {
+      const category = ev.category || '';
+      const title = ev.title || ev.name || '';
+      const venue = ev.venue || '';
+
+      const matchesCategory =
+        selectedCategory === 'All' || category.toLowerCase() === selectedCategory.toLowerCase();
+      const matchesSearch =
+        title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        venue.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        category.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'price') {
+        const pA = a.startingPrice || a.price || 0;
+        const pB = b.startingPrice || b.price || 0;
+        return pA - pB;
+      }
+      if (sortBy === 'name') {
+        const nA = a.title || a.name || '';
+        const nB = b.title || b.name || '';
+        return nA.localeCompare(nB);
+      }
+      return 0; // Default order
+    });
 
   return (
     <div className="gateapass-events-view" style={{ textAlign: 'left', padding: '40px 0 64px' }}>
       <div className="container-desktop">
         {/* Title Header */}
-        <div style={{ marginBottom: '32px' }}>
+        <div style={{ marginBottom: '28px' }}>
           <span
             style={{
               fontSize: '12px',
@@ -48,14 +69,14 @@ export default function EventsView({
             CATALOGUE
           </span>
           <h1 className="text-h1" style={{ color: 'var(--color-dark-text)', marginTop: '4px' }}>
-            Explore Campus Events
+            Discover Amazing Events
           </h1>
-          <p style={{ fontSize: '16px', color: 'var(--color-muted-text)', marginTop: '6px' }}>
-            Book secure digital passes for conferences, hackathons, workshops, and student festivals.
+          <p style={{ fontSize: '15px', color: 'var(--color-muted-text)', marginTop: '6px' }}>
+            Book secure digital passes for conferences, hackathons, workshops, and campus festivals.
           </p>
         </div>
 
-        {/* Search & Category Filter Bar */}
+        {/* Floating Search & Filter Controls (Selective Liquid Glass) */}
         <div
           style={{
             display: 'flex',
@@ -64,41 +85,143 @@ export default function EventsView({
             marginBottom: '32px'
           }}
         >
-          {/* Search Input */}
-          <div style={{ maxWidth: '540px' }}>
-            <Input
-              icon={Search}
-              placeholder="Search by event title, venue, or keyword..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-
-          {/* Category Filter Pills (strictly 4px radius, no pill) */}
+          {/* Floating Glass Search & Sort Controls Row */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
+              justifyContent: 'space-between',
+              gap: '14px',
+              flexWrap: 'wrap'
+            }}
+          >
+            {/* Search Input with Frosted Glass & Suggestions */}
+            <div className="liquid-glass-search-wrap" style={{ position: 'relative' }}>
+              <Search size={18} className="liquid-glass-search-icon" />
+              <input
+                type="text"
+                className="liquid-glass-search-input"
+                placeholder="Search events, venues, keywords..."
+                value={searchQuery}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setTimeout(() => setSearchFocused(false), 220)}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label="Search events"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  className="liquid-glass-search-clear"
+                  onClick={() => setSearchQuery('')}
+                  aria-label="Clear search"
+                >
+                  <X size={14} />
+                </button>
+              )}
+
+              {/* Floating Suggestions Glass Card */}
+              {searchFocused && (
+                <div className="liquid-glass-suggestions">
+                  <div style={{ padding: '6px 12px 4px', fontSize: '11px', fontWeight: 700, color: '#8B5CF6', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                    Quick Suggestions
+                  </div>
+                  {SUGGESTIONS.map((sug, i) => {
+                    const SugIcon = sug.icon;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onMouseDown={() => {
+                          setSearchQuery(sug.label);
+                          if (onSelectCategory) {
+                            onSelectCategory(sug.category);
+                          }
+                        }}
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          padding: '10px 14px',
+                          border: 'none',
+                          background: 'transparent',
+                          borderRadius: '12px',
+                          cursor: 'pointer',
+                          fontSize: '13px',
+                          fontWeight: 500,
+                          color: '#2D2342',
+                          textAlign: 'left',
+                          transition: 'background 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(124, 58, 237, 0.08)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                      >
+                        <SugIcon size={15} style={{ color: '#7C3AED' }} />
+                        <span>{sug.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Sort Control */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  height: '42px',
+                  padding: '0 14px',
+                  borderRadius: '9999px',
+                  background: 'rgba(255, 255, 255, 0.78)',
+                  backdropFilter: 'blur(14px)',
+                  WebkitBackdropFilter: 'blur(14px)',
+                  border: '1px solid rgba(255, 255, 255, 0.92)',
+                  boxShadow: '0 2px 8px rgba(124, 58, 237, 0.06)'
+                }}
+              >
+                <ArrowUpDown size={14} style={{ color: '#7C3AED' }} />
+                <label htmlFor="events-sort-select" style={{ fontSize: '12px', color: '#666', fontWeight: 600 }}>Sort:</label>
+                <select
+                  id="events-sort-select"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: '#2D2342',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="date">Upcoming Date</option>
+                  <option value="price">Price: Low to High</option>
+                  <option value="name">Title: A to Z</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Liquid Glass Category Filter Chips (Pill shaped, subtle glass background) */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
               overflowX: 'auto',
-              paddingBottom: '4px'
+              paddingBottom: '6px',
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none'
             }}
           >
             <button
               type="button"
               onClick={() => onSelectCategory('All')}
-              style={{
-                height: '36px',
-                padding: '0 14px',
-                fontSize: '13px',
-                fontWeight: selectedCategory === 'All' ? 600 : 500,
-                backgroundColor: selectedCategory === 'All' ? 'var(--color-black)' : 'var(--color-white)',
-                color: selectedCategory === 'All' ? 'var(--color-white)' : 'var(--color-dark-text)',
-                border: '1px solid var(--color-gray)',
-                borderRadius: 'var(--radius-control)',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap'
-              }}
+              className={`liquid-glass-chip ${selectedCategory === 'All' ? 'is-active' : ''}`}
             >
               All Events
             </button>
@@ -109,18 +232,7 @@ export default function EventsView({
                   key={cat}
                   type="button"
                   onClick={() => onSelectCategory(cat)}
-                  style={{
-                    height: '36px',
-                    padding: '0 14px',
-                    fontSize: '13px',
-                    fontWeight: isSel ? 600 : 500,
-                    backgroundColor: isSel ? 'var(--color-black)' : 'var(--color-white)',
-                    color: isSel ? 'var(--color-white)' : 'var(--color-dark-text)',
-                    border: '1px solid var(--color-gray)',
-                    borderRadius: 'var(--radius-control)',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap'
-                  }}
+                  className={`liquid-glass-chip ${isSel ? 'is-active' : ''}`}
                 >
                   {cat}
                 </button>

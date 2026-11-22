@@ -456,6 +456,9 @@ export default function App() {
     } else if (id === 'profile') {
       setActiveView('profile');
       setProfileSubTab('profile');
+    } else if (id === 'scan') {
+      setActiveView('profile');
+      setProfileSubTab('my-passes');
     }
   };
 
@@ -775,8 +778,8 @@ export default function App() {
         )}
       </div>
 
-      {/* Mobile Bottom Navigation (Shown during public attendee flow) */}
-      {isMobile && portalMode === 'participant' && (
+      {/* Mobile Bottom Navigation (Shown on main discovery and account screens) */}
+      {isMobile && portalMode === 'participant' && ['landing', 'events', 'profile'].includes(activeView) && (
         <MobileBottomNav
           activeItem={
             activeView === 'profile' && profileSubTab === 'my-passes'

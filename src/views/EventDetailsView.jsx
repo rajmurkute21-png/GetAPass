@@ -321,12 +321,12 @@ export default function EventDetailsView({
               </div>
 
               <Button
-                variant="primary"
+                variant="liquid-glass"
                 size="large"
                 fullWidth
                 onClick={onBookNow}
               >
-                Book Your Pass
+                Book Your Pass →
               </Button>
 
               <p style={{ fontSize: '12px', color: 'var(--color-muted-text)', textAlign: 'center', lineHeight: '16px' }}>
@@ -335,6 +335,25 @@ export default function EventDetailsView({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Mobile Sticky Liquid Glass CTA Bar */}
+      <div className="liquid-glass-sticky-cta-bar">
+        <div>
+          <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#666', fontWeight: 700 }}>
+            Pass Starting At
+          </div>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: '#111' }}>
+            ₹{startingPrice}
+          </div>
+        </div>
+        <Button
+          variant="liquid-glass"
+          onClick={onBookNow}
+          style={{ minWidth: '150px' }}
+        >
+          Book Now →
+        </Button>
       </div>
     </div>
   );

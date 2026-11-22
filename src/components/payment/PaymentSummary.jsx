@@ -303,9 +303,10 @@ export default function PaymentSummary({
         </div>
       </div>
 
-      {/* Primary Pay Action */}
+      {/* Primary Pay Action (Liquid Glass) */}
       <Button
-        variant="primary"
+        variant="liquid-glass"
+        size="large"
         fullWidth
         loading={isProcessing}
         onClick={handlePay}

@@ -35,7 +35,7 @@ export default function Modal({
 
   return (
     <div
-      className="gateapass-modal-overlay"
+      className="gateapass-modal-overlay liquid-glass-modal-overlay"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -45,9 +45,9 @@ export default function Modal({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(15, 10, 30, 0.65)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
+        backgroundColor: 'rgba(12, 8, 24, 0.7)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -57,7 +57,7 @@ export default function Modal({
       }}
     >
       <div
-        className="gateapass-modal"
+        className="gateapass-modal liquid-glass-modal-sheet"
         role="dialog"
         aria-modal="true"
         style={{
@@ -80,6 +80,8 @@ export default function Modal({
           boxSizing: 'border-box'
         }}
       >
+        {/* iOS Mobile Drag Handle */}
+        <div className="liquid-glass-sheet-handle" aria-hidden="true" />
         <div
           className="gateapass-modal-header no-print"
           style={{
@@ -109,21 +111,7 @@ export default function Modal({
           <button
             onClick={onClose}
             aria-label="Close modal"
-            style={{
-              width: '36px',
-              height: '36px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--color-dark-text)',
-              border: '1px solid rgba(0, 0, 0, 0.08)',
-              borderRadius: '9999px',
-              backgroundColor: 'rgba(255, 255, 255, 0.85)',
-              cursor: 'pointer',
-              boxShadow: '0 2px 6px rgba(0, 0, 0, 0.05)',
-              transition: 'all 0.2s ease',
-              flexShrink: 0
-            }}
+            className="liquid-glass-close-btn"
           >
             <X size={18} />
           </button>

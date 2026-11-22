@@ -3,7 +3,8 @@ import { Loader2 } from 'lucide-react';
 
 export default function Button({
   children,
-  variant = 'primary', // 'primary' | 'secondary' | 'outline' | 'violet' | 'danger' | 'text'
+  variant = 'primary', // 'primary' | 'secondary' | 'outline' | 'violet' | 'danger' | 'text' | 'liquid-glass' | 'liquid-secondary'
+  liquidGlass = false, // selective Liquid Glass visual styling
   size = 'medium',    // 'medium' (44px) | 'compact' (36px) | 'large' (48px)
   icon: Icon,
   iconPosition = 'left',
@@ -17,8 +18,20 @@ export default function Button({
   ...props
 }) {
   const isActionDisabled = disabled || loading;
+  const isLiquidGlass = liquidGlass || variant === 'liquid-glass';
+  const isLiquidSecondary = variant === 'liquid-secondary';
 
   const getVariantStyles = () => {
+    if (isLiquidGlass) {
+      return {
+        // base styles handled by .gateapass-btn-liquid-glass
+      };
+    }
+    if (isLiquidSecondary) {
+      return {
+        // base styles handled by .gateapass-btn-liquid-secondary
+      };
+    }
     switch (variant) {
       case 'primary':
         return {
@@ -82,7 +95,7 @@ export default function Button({
       type={type}
       disabled={isActionDisabled}
       onClick={onClick}
-      className={`gateapass-btn gateapass-btn-${variant} ${className}`}
+      className={`gateapass-btn gateapass-btn-${variant} ${isLiquidGlass ? 'gateapass-btn-liquid-glass' : ''} ${isLiquidSecondary ? 'gateapass-btn-liquid-secondary' : ''} ${className}`}
       style={{
         display: 'inline-flex',
         alignItems: 'center',

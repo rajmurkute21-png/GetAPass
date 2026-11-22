@@ -434,9 +434,9 @@ export default function BookingView({
               </div>
             </div>
 
-            {/* Primary Action Button */}
+            {/* Primary Action Button (Liquid Glass) */}
             <Button
-              variant="primary"
+              variant="liquid-glass"
               size="large"
               icon={ArrowRight}
               iconPosition="right"

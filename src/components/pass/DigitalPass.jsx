@@ -281,7 +281,7 @@ export default function DigitalPass({
           }}
         >
           <Button
-            variant="outline"
+            variant="liquid-secondary"
             icon={RotateCw}
             onClick={() => setIsFlipped(!isFlipped)}
             style={{ minWidth: '150px' }}
@@ -290,7 +290,7 @@ export default function DigitalPass({
           </Button>
 
           <Button
-            variant="outline"
+            variant="liquid-secondary"
             icon={copied ? CheckCircle : Share2}
             onClick={handleShare}
             style={{ minWidth: '150px' }}
@@ -299,15 +299,10 @@ export default function DigitalPass({
           </Button>
 
           <Button
-            variant="primary"
+            variant="liquid-glass"
             icon={Printer}
             onClick={handlePrint}
-            style={{
-              minWidth: '160px',
-              backgroundColor: '#7C3AED',
-              color: '#FFFFFF',
-              boxShadow: '0 4px 14px rgba(124, 58, 237, 0.4)'
-            }}
+            style={{ minWidth: '160px' }}
           >
             Print / Save PDF
           </Button>

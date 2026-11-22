@@ -2,6 +2,7 @@
    GetApass Design System & Global Tokens
    V1.0 - October 2026
    ========================================================================== */
+@import './styles/liquidGlass.css';
 
 :root {
   /* Color Tokens */
