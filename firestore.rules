@@ -3,7 +3,11 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // =========================================================================
-    // HELPER FUNCTIONS & SERVER-ENFORCED AUTHORIZATION
+    // HELPER FUNCTIONS & SERVER-ENFORCED AUTHORIZATION (4 ROLES)
+    // 1. admin       - Full platform control & role assignment
+    // 2. organizer   - Manages own events and associated records
+    // 3. verifier    - Validates passes and records turnstile check-ins
+    // 4. participant - Discovers events, books tickets, manages own passes/profile
     // =========================================================================
     function isAuthenticated() {
       return request.auth != null;
@@ -14,7 +18,8 @@ service cloud.firestore {
       return isAuthenticated() && (
         request.auth.token.role == role ||
         (role == 'admin' && request.auth.token.admin == true) ||
-        (role == 'organizer' && request.auth.token.organizer == true)
+        (role == 'organizer' && request.auth.token.organizer == true) ||
+        (role == 'verifier' && request.auth.token.verifier == true)
       );
     }
 
@@ -34,6 +39,10 @@ service cloud.firestore {
       return hasCustomRole('organizer') || (isAuthenticated() && getUserRole() == 'organizer');
     }
 
+    function isVerifier() {
+      return hasCustomRole('verifier') || (isAuthenticated() && getUserRole() == 'verifier');
+    }
+
     function isAuthorizedOrganizerOrAdmin() {
       return isAdmin() || isOrganizer();
     }
@@ -46,67 +55,53 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // USERS COLLECTION RULES
+    // 1. USERS COLLECTION RULES (/users/{userId})
     // Protects private user profiles and strictly prevents self-elevation of roles.
     // =========================================================================
     match /users/{userId} {
-      // Private profile: Users can only read their own document, or an admin can read.
-      // Arbitrary users cannot browse other users' private details or emails.
       allow read: if isAuthenticated() && (
         request.auth.uid == userId ||
         isAdmin()
       );
 
-      // On creation (first sign-in): User can only initialize with 'participant' role.
-      // Even if a client sends { role: 'admin' }, Firestore strictly rejects it.
+      // On creation: User can only initialize with 'participant' role
       allow create: if isAuthenticated() && request.auth.uid == userId && (
         !('role' in request.resource.data) ||
         request.resource.data.role == 'participant' ||
         isAdmin()
       );
 
-      // On update: Users can update profile information (displayName, college, avatar),
-      // BUT CANNOT modify their own 'role' field!
-      // Only an administrator can elevate or modify a user's role.
+      // On update: Users CANNOT modify their own 'role' field
       allow update: if isAuthenticated() && (
-        isAdmin() ||
+        (
+          isAdmin() &&
+          (!('role' in request.resource.data) || request.resource.data.role in ['admin', 'organizer', 'verifier', 'participant'])
+        ) ||
         (
           request.auth.uid == userId &&
           (!('role' in request.resource.data) || request.resource.data.role == resource.data.role)
         )
       );
 
-      // Only administrators can delete user accounts
       allow delete: if isAdmin();
     }
 
     // =========================================================================
-    // EVENTS COLLECTION RULES
-    // Structured to be 100% compatible with client query constraints:
-    // - query(where('status', 'in', ['Active', 'Published']))
-    // - query(where('organizerUid', '==', request.auth.uid), where('status', '==', 'Draft'))
+    // 2. EVENTS COLLECTION RULES (/events/{eventId})
     // =========================================================================
     match /events/{eventId} {
-      // READ:
-      // - Published/Active events can be read by all authenticated users across devices.
-      // - Draft events can ONLY be read by their creator (matching organizerUid) or an admin.
       allow read: if isAuthenticated() && (
         resource.data.status in ['Active', 'Published'] ||
         isEventOwner(resource.data) ||
+        isVerifier() ||
         isAdmin()
       );
 
-      // CREATE:
-      // - RESTRICTED: Only verified organizers or administrators can create events.
-      // - Enforces that organizerUid matches request.auth.uid strictly.
       allow create: if isAuthorizedOrganizerOrAdmin() && (
         'organizerUid' in request.resource.data &&
         request.resource.data.organizerUid == request.auth.uid
       );
 
-      // UPDATE:
-      // - RESTRICTED: Only the creator of the event (or admin) can edit or publish.
-      // - Prevents changing organizerUid (no event hijacking).
       allow update: if (
         isAdmin() ||
         (
@@ -116,8 +111,6 @@ service cloud.firestore {
         )
       );
 
-      // DELETE:
-      // - RESTRICTED: Only the creator of the event (or admin) can delete.
       allow delete: if isAdmin() || (
         isAuthorizedOrganizerOrAdmin() &&
         isEventOwner(resource.data)
@@ -125,7 +118,7 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // PASS TYPES COLLECTION RULES
+    // 3. PASS TYPES COLLECTION RULES (/passTypes/{passTypeId})
     // =========================================================================
     match /passTypes/{passTypeId} {
       allow read: if isAuthenticated();
@@ -133,43 +126,166 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // BOOKINGS & DIGITAL PASSES COLLECTION RULES
-    // Strict multi-tenant isolation:
-    // - Participants can ONLY read their own bookings (participantUid == request.auth.uid).
-    // - Organizers can ONLY read bookings belonging to events they organize (organizerUid == request.auth.uid).
-    // - Global Administrators have platform-wide access.
+    // 4. BOOKINGS COLLECTION RULES (/bookings/{bookingId})
     // =========================================================================
     match /bookings/{bookingId} {
-      // READ:
       allow read: if isAuthenticated() && (
         ('participantUid' in resource.data && resource.data.participantUid == request.auth.uid) ||
         ('organizerUid' in resource.data && resource.data.organizerUid == request.auth.uid) ||
+        isVerifier() ||
         isAdmin()
       );
 
-      // CREATE:
-      // A participant can only create a booking for themselves (participantUid strictly matches auth UID)
       allow create: if isAuthenticated() && (
         'participantUid' in request.resource.data &&
-        request.resource.data.participantUid == request.auth.uid
+        request.resource.data.participantUid == request.auth.uid &&
+        (!('status' in request.resource.data) || request.resource.data.status in ['Pending', 'Confirmed', 'Active'])
       );
 
-      // UPDATE:
-      // - Admin can update any booking.
-      // - Organizer can update check-in status of their event's bookings.
-      // - Immutable ownership fields (cannot tamper with participantUid or organizerUid).
       allow update: if isAuthenticated() && (
         isAdmin() ||
         (
           'organizerUid' in resource.data && resource.data.organizerUid == request.auth.uid &&
           request.resource.data.organizerUid == resource.data.organizerUid &&
           request.resource.data.participantUid == resource.data.participantUid
+        ) ||
+        (
+          'participantUid' in resource.data && resource.data.participantUid == request.auth.uid &&
+          request.resource.data.participantUid == resource.data.participantUid &&
+          request.resource.data.organizerUid == resource.data.organizerUid &&
+          request.resource.data.amount == resource.data.amount
+        ) ||
+        (
+          isVerifier() &&
+          request.resource.data.organizerUid == resource.data.organizerUid &&
+          request.resource.data.participantUid == resource.data.participantUid &&
+          request.resource.data.amount == resource.data.amount
         )
       );
 
-      // DELETE:
-      // Only platform administrator can delete bookings
       allow delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // 5. DIGITAL PASSES COLLECTION RULES (/passes/{passId})
+    // Dedicated collection for turnstile validation & attendee digital passes
+    // =========================================================================
+    match /passes/{passId} {
+      allow read: if isAuthenticated() && (
+        ('participantUid' in resource.data && resource.data.participantUid == request.auth.uid) ||
+        ('organizerUid' in resource.data && resource.data.organizerUid == request.auth.uid) ||
+        isVerifier() ||
+        isAdmin()
+      );
+
+      allow create: if isAuthenticated() && (
+        ('participantUid' in request.resource.data && request.resource.data.participantUid == request.auth.uid) ||
+        isAuthorizedOrganizerOrAdmin()
+      );
+
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (
+          'organizerUid' in resource.data && resource.data.organizerUid == request.auth.uid &&
+          request.resource.data.organizerUid == resource.data.organizerUid &&
+          request.resource.data.participantUid == resource.data.participantUid
+        ) ||
+        (
+          isVerifier() &&
+          request.resource.data.organizerUid == resource.data.organizerUid &&
+          request.resource.data.participantUid == resource.data.participantUid &&
+          request.resource.data.eventId == resource.data.eventId
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // 6. FINANCIAL TRANSACTIONS COLLECTION RULES (/transactions/{transactionId})
+    // Immutable audit ledger for payment reconciliations
+    // =========================================================================
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated() && (
+        ('participantUid' in resource.data && resource.data.participantUid == request.auth.uid) ||
+        ('organizerUid' in resource.data && resource.data.organizerUid == request.auth.uid) ||
+        isAdmin()
+      );
+
+      allow create: if isAuthenticated() && (
+        ('participantUid' in request.resource.data && request.resource.data.participantUid == request.auth.uid) ||
+        isAdmin()
+      );
+
+      // Immutable: Only Administrator can update or reconcile transactions
+      allow update, delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // 7. USER NOTIFICATIONS COLLECTION RULES (/notifications/{notificationId})
+    // Isolated real-time notification feed per user UID
+    // =========================================================================
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && (
+        ('recipientUid' in resource.data && resource.data.recipientUid == request.auth.uid) ||
+        isAdmin()
+      );
+
+      allow create: if isAuthenticated();
+
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (
+          'recipientUid' in resource.data && resource.data.recipientUid == request.auth.uid &&
+          request.resource.data.recipientUid == resource.data.recipientUid
+        )
+      );
+
+      allow delete: if isAuthenticated() && (
+        ('recipientUid' in resource.data && resource.data.recipientUid == request.auth.uid) ||
+        isAdmin()
+      );
+    }
+
+    // =========================================================================
+    // 8. TURNSTILE CHECK-IN AUDIT LOGS (/checkIns/{checkInId})
+    // Immutable access control records for every admission attempt
+    // =========================================================================
+    match /checkIns/{checkInId} {
+      allow read: if isAuthenticated() && (
+        ('organizerUid' in resource.data && resource.data.organizerUid == request.auth.uid) ||
+        ('verifierUid' in resource.data && resource.data.verifierUid == request.auth.uid) ||
+        isAdmin()
+      );
+
+      allow create: if isAuthenticated() && (
+        isVerifier() ||
+        isAuthorizedOrganizerOrAdmin()
+      );
+
+      // Immutable log: No client modification or deletion allowed
+      allow update, delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // 9. VERIFIER ASSIGNMENTS COLLECTION RULES (/verifierAssignments/{assignmentId})
+    // Scopes verifiers to specific events and gates
+    // =========================================================================
+    match /verifierAssignments/{assignmentId} {
+      allow read: if isAuthenticated() && (
+        ('verifierUid' in resource.data && resource.data.verifierUid == request.auth.uid) ||
+        ('organizerUid' in resource.data && resource.data.organizerUid == request.auth.uid) ||
+        isAdmin()
+      );
+
+      allow create, update, delete: if isAuthenticated() && (
+        isAdmin() ||
+        (
+          isAuthorizedOrganizerOrAdmin() &&
+          'organizerUid' in request.resource.data &&
+          request.resource.data.organizerUid == request.auth.uid
+        )
+      );
     }
 
     // Deny all other unmapped paths by default

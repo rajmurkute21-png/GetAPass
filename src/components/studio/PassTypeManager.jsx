@@ -8,10 +8,12 @@ import {
   Layers,
   Sparkles,
   ExternalLink,
-  Check
+  Check,
+  Eye
 } from 'lucide-react';
 import Button from '../common/Button';
 import Modal from '../common/Modal';
+import Ticket3D from '../pass/Ticket3D';
 import {
   getPassTypesByEvent,
   savePassType,
@@ -31,6 +33,7 @@ export default function PassTypeManager({
 
   // Edit / Create Modal State
   const [modalOpen, setModalOpen] = useState(false);
+  const [preview3DModalPass, setPreview3DModalPass] = useState(null);
   const [editingPassType, setEditingPassType] = useState(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -265,6 +268,13 @@ export default function PassTypeManager({
                         <Button
                           variant="outline"
                           size="compact"
+                          icon={Eye}
+                          onClick={() => setPreview3DModalPass(pt)}
+                          title="Preview 3D Ticket"
+                        />
+                        <Button
+                          variant="outline"
+                          size="compact"
                           icon={Edit2}
                           onClick={() => handleOpenEditModal(pt)}
                           title="Edit Pass Type"
@@ -476,6 +486,46 @@ export default function PassTypeManager({
               </Button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* 3D Ticket Preview Modal for Pass Tier */}
+      {preview3DModalPass && (
+        <Modal
+          isOpen={true}
+          onClose={() => setPreview3DModalPass(null)}
+          title={`Dynamic 3D Pass: ${event?.title || 'Event'} — ${preview3DModalPass.name}`}
+          maxWidth="1020px"
+          padding="20px 24px"
+          cancelText={null}
+        >
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+            <Ticket3D
+              pass={{
+                id: 'GP-TIER-001',
+                eventTitle: event?.title || 'Campus Event',
+                title: event?.title || 'Campus Event',
+                category: event?.category || 'Concert',
+                passType: preview3DModalPass.name || 'Standard Pass',
+                attendeeName: 'Aarav Shah',
+                authority: preview3DModalPass.defaultAuthority || 'Participant',
+                date: event?.date || 'Sat, 24 May 2025',
+                time: event?.time || '7:00 PM',
+                venue: event?.venue || 'Campus Auditorium',
+                gate: 'Gate A',
+                status: 'Active',
+                price: preview3DModalPass.price || 0,
+                permissions: preview3DModalPass.accessPermissions || ['General Area'],
+                coverImage: event?.bannerImage || event?.coverImage
+              }}
+              isInteractive={true}
+            />
+            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+              <Button variant="outline" onClick={() => setPreview3DModalPass(null)}>
+                Close Preview
+              </Button>
+            </div>
+          </div>
         </Modal>
       )}
     </div>

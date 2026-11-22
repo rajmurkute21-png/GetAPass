@@ -1,91 +1,91 @@
-import React, { useEffect, useState } from 'react';
-import QRCode from 'qrcode';
-import { Share2, Printer, CheckCircle } from 'lucide-react';
-import StatusBadge from '../common/StatusBadge';
+import React, { useState } from 'react';
+import {
+  Share2,
+  Printer,
+  CheckCircle,
+  RotateCw,
+  Info
+} from 'lucide-react';
 import Button from '../common/Button';
-import PassCanvas from '../studio/PassCanvas';
-import { getTemplateById } from '../../data/passTemplates';
+import Ticket3D from './Ticket3D';
+
+class TicketErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('[GetAPass 3D Pass] Render error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div
+          style={{
+            padding: '32px 24px',
+            textAlign: 'center',
+            backgroundColor: '#0c0a17',
+            borderRadius: '20px',
+            color: '#ffffff',
+            maxWidth: '600px',
+            margin: '0 auto',
+            border: '1px solid rgba(168, 85, 247, 0.3)'
+          }}
+        >
+          <h4 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 8px', color: '#c084fc' }}>
+            Unable to render 3D ticket
+          </h4>
+          <p style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.7)', margin: 0 }}>
+            Pass credentials are secure. Please try reopening the pass or contact support.
+          </p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function DigitalPass({
   pass,
-  showActions = true
+  showActions = true,
+  _onClose = null
 }) {
-  const [qrDataUrl, setQrDataUrl] = useState('');
   const [copied, setCopied] = useState(false);
+  const [isFlipped, setIsFlipped] = useState(false);
 
   const {
     id = 'GP-TF26-9481',
-    eventTitle = 'TechFest 2026',
-    passType = 'Participant Pass',
-    attendeeName = 'Aarav Shah',
-    authority = 'Participant',
-    date = '15 October 2026',
-    time = '10:00 AM – 8:00 PM',
-    venue = 'Zeal College, Pune',
-    gate = 'Gate A',
-    status = 'Active',
-    price = 199,
-    paymentMethod = 'UPI',
-    templateSnapshot,
-    templateId
+    passId,
+    eventTitle = 'Campus Event',
+    title,
+    attendeeName = 'Pass Holder',
+    participantName,
+    date = 'Sat, 24 May 2025',
+    time = '7:00 PM',
+    venue = 'Main Auditorium'
   } = pass || {};
 
-  const templateToRender = templateSnapshot || (templateId ? getTemplateById(templateId) : null);
-
-  const canvasData = {
-    event: {
-      id: pass?.eventId || 'event-id',
-      name: eventTitle,
-      title: eventTitle,
-      date,
-      time,
-      venue
-    },
-    participant: {
-      name: attendeeName,
-      email: pass?.email || '',
-      phone: pass?.phone || ''
-    },
-    pass: {
-      id,
-      type: passType,
-      authority,
-      gate,
-      status,
-      price,
-      paymentMethod,
-      accessAreas: pass?.permissions || ['General Area']
-    }
-  };
-
-  useEffect(() => {
-    // Generate clean functional QR code for the pass ID
-    const qrPayload = JSON.stringify({
-      passId: id,
-      event: eventTitle,
-      attendee: attendeeName,
-      authority: authority,
-      status: status
-    });
-
-    QRCode.toDataURL(qrPayload, {
-      width: 240,
-      margin: 1,
-      color: {
-        dark: '#000000',
-        light: '#FFFFFF'
-      }
-    }).then(setQrDataUrl).catch(console.error);
-  }, [id, eventTitle, attendeeName, authority, status]);
+  const resolvedPassId = passId || id;
+  const resolvedTitle = title || eventTitle;
+  const resolvedAttendee = participantName || attendeeName;
 
   const handlePrint = () => {
     window.print();
   };
 
   const handleShare = () => {
-    navigator.clipboard?.writeText(id);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const textToCopy = `GetAPass Digital Ticket\nEvent: ${resolvedTitle}\nPass ID: ${resolvedPassId}\nAttendee: ${resolvedAttendee}\nDate: ${date} at ${time}\nVenue: ${venue}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(textToCopy);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    }
   };
 
   return (
@@ -95,239 +95,112 @@ export default function DigitalPass({
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: '20px',
+        gap: '16px',
         width: '100%',
-        maxWidth: '390px',
+        maxWidth: '860px',
         margin: '0 auto'
       }}
     >
-      {templateToRender ? (
-        <PassCanvas
-          template={templateToRender}
-          data={canvasData}
-          isInteractive={false}
-          viewMode="desktop"
-        />
-      ) : (
-        /* Default Classic Pass Card */
-        <div
-          className="gateapass-digital-pass-card"
-          style={{
-            width: '100%',
-            backgroundColor: 'var(--color-white)',
-            border: '1px solid var(--color-gray)',
-            borderRadius: 'var(--radius-card)',
-            overflow: 'hidden',
-            textAlign: 'left'
-          }}
-        >
-          {/* Black Top Bar with GateApass Logo */}
-          <div
-            style={{
-              backgroundColor: 'var(--color-near-black)',
-              padding: '16px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div
-                style={{
-                  width: '26px',
-                  height: '26px',
-                  backgroundColor: 'var(--color-violet)',
-                  borderRadius: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--color-white)'
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
-                  <rect x="3" y="5" width="18" height="14" rx="2" />
-                  <path d="M7 5v14" />
-                  <path d="M17 5v14" />
-                </svg>
-              </div>
-              <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-white)', letterSpacing: '-0.3px' }}>
-                GateApass
-              </span>
+      {/* ============================================================== */}
+      {/* UNIVERSAL 3D DIGITAL EVENT TICKET STAGE                         */}
+      {/* ============================================================== */}
+      <div className="getapass-studio-stage">
+        {/* Stage Top Brand & Tagline Header */}
+        <div className="getapass-stage-header">
+          <div className="getapass-stage-brand">
+            <div className="getapass-stage-brand-mark">
+              <svg viewBox="0 0 36 36" width="30" height="30" fill="none">
+                <path d="M18 3L4 32H13L18 20L23 32H32L18 3Z" fill="url(#stageLogoGrad)" />
+                <path d="M14.5 24H21.5L18 16L14.5 24Z" fill="#FAF5FF" opacity="0.9" />
+                <defs>
+                  <linearGradient id="stageLogoGrad" x1="4" y1="3" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#8E2CFC" />
+                    <stop offset="1" stopColor="#C026D3" />
+                  </linearGradient>
+                </defs>
+              </svg>
             </div>
-
-            <span
-              style={{
-                fontSize: '11px',
-                fontWeight: 600,
-                textTransform: 'uppercase',
-                letterSpacing: '1px',
-                color: 'var(--color-light-violet)'
-              }}
-            >
-              Digital Pass
-            </span>
+            <span className="getapass-stage-brand-name">GetAPass</span>
           </div>
 
-          {/* Pass Body */}
-          <div style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                  color: 'var(--color-deep-violet)',
-                  letterSpacing: '0.8px'
-                }}
-              >
-                {passType}
-              </span>
-              <StatusBadge status={status} />
-            </div>
-
-            <div>
-              <h2
-                style={{
-                  fontSize: '26px',
-                  lineHeight: '32px',
-                  fontWeight: 700,
-                  color: 'var(--color-dark-text)',
-                  letterSpacing: '-0.5px'
-                }}
-              >
-                {eventTitle}
-              </h2>
-              <p style={{ fontSize: '13px', color: 'var(--color-muted-text)', marginTop: '4px' }}>
-                {date} · {time} · {gate}
-              </p>
-            </div>
-
-            {/* QR Code Container */}
-            <div
-              style={{
-                backgroundColor: 'var(--color-white)',
-                border: '1px solid var(--color-gray)',
-                borderRadius: '4px',
-                padding: '16px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '10px'
-              }}
-            >
-              {qrDataUrl ? (
-                <img
-                  src={qrDataUrl}
-                  alt={`QR code for ${id}`}
-                  style={{ width: '180px', height: '180px', display: 'block' }}
-                />
-              ) : (
-                <div style={{ width: '180px', height: '180px', backgroundColor: 'var(--color-off-white)' }} />
-              )}
-              <span
-                style={{
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  letterSpacing: '1px',
-                  color: 'var(--color-dark-text)',
-                  textTransform: 'uppercase'
-                }}
-              >
-                ILLUSTRATIVE · VERIFIED AT GATE
-              </span>
-            </div>
-
-            {/* Attendee Details */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '12px',
-                paddingTop: '12px',
-                borderTop: '1px solid var(--color-gray)'
-              }}
-            >
-              <div>
-                <span style={{ fontSize: '11px', color: 'var(--color-muted-text)', textTransform: 'uppercase' }}>
-                  Attendee
-                </span>
-                <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-dark-text)', marginTop: '2px' }}>
-                  {attendeeName}
-                </p>
-              </div>
-
-              <div>
-                <span style={{ fontSize: '11px', color: 'var(--color-muted-text)', textTransform: 'uppercase' }}>
-                  Pass ID
-                </span>
-                <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-deep-violet)', marginTop: '2px' }}>
-                  {id}
-                </p>
-              </div>
-
-              <div>
-                <span style={{ fontSize: '11px', color: 'var(--color-muted-text)', textTransform: 'uppercase' }}>
-                  Authority
-                </span>
-                <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-dark-text)', marginTop: '2px' }}>
-                  {authority}
-                </p>
-              </div>
-
-              <div>
-                <span style={{ fontSize: '11px', color: 'var(--color-muted-text)', textTransform: 'uppercase' }}>
-                  Venue
-                </span>
-                <p style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-dark-text)', marginTop: '2px' }}>
-                  {venue}
-                </p>
-              </div>
-            </div>
-
-            {/* Guidelines footer inside pass */}
-            <div
-              style={{
-                paddingTop: '12px',
-                borderTop: '1px solid var(--color-gray)',
-                fontSize: '12px',
-                color: 'var(--color-muted-text)',
-                lineHeight: '16px'
-              }}
-            >
-              Bring your college ID. A pass admits one participant and may be used for entry once. Paid ₹{price} via {paymentMethod}.
-            </div>
+          <div className="getapass-stage-tagline-wrap">
+            <div className="getapass-stage-tagline-line" />
+            <span className="getapass-stage-tagline">Discover • Book • Experience</span>
           </div>
         </div>
-      )}
+
+        {/* 3D Interactive Ticket wrapped in Error Boundary */}
+        <TicketErrorBoundary>
+          <Ticket3D
+            pass={pass}
+            isInteractive={true}
+            onFlipToggle={(flipped) => setIsFlipped(flipped)}
+          />
+        </TicketErrorBoundary>
+
+        {/* Interactive Hint */}
+        <div
+          className="no-print"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontSize: '12px',
+            fontWeight: 500,
+            color: '#6d5d85',
+            marginTop: '8px'
+          }}
+        >
+          <Info size={14} style={{ color: '#8E2CFC' }} />
+          <span>Hover or move cursor to tilt 3D ticket · Click ticket to flip for entry clearances</span>
+        </div>
+      </div>
 
       {/* Action Buttons */}
       {showActions && (
         <div
+          className="no-print"
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
+            gap: '12px',
             width: '100%',
-            justifyContent: 'stretch'
+            maxWidth: '680px',
+            justifyContent: 'center',
+            flexWrap: 'wrap',
+            paddingTop: '4px'
           }}
         >
           <Button
             variant="outline"
+            icon={RotateCw}
+            onClick={() => setIsFlipped(!isFlipped)}
+            style={{ minWidth: '150px' }}
+          >
+            {isFlipped ? 'Show Front' : 'Flip Details'}
+          </Button>
+
+          <Button
+            variant="outline"
             icon={copied ? CheckCircle : Share2}
             onClick={handleShare}
-            style={{ flex: 1 }}
+            style={{ minWidth: '150px' }}
           >
-            {copied ? 'Pass ID Copied' : 'Share ID'}
+            {copied ? 'Details Copied!' : 'Share Pass ID'}
           </Button>
 
           <Button
             variant="primary"
             icon={Printer}
             onClick={handlePrint}
-            style={{ flex: 1 }}
+            style={{
+              minWidth: '160px',
+              backgroundColor: '#7C3AED',
+              color: '#FFFFFF',
+              boxShadow: '0 4px 14px rgba(124, 58, 237, 0.4)'
+            }}
           >
-            Print Pass
+            Print / Save PDF
           </Button>
         </div>
       )}

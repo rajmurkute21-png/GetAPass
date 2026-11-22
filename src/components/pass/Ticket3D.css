@@ -1,0 +1,1104 @@
+/* ==========================================================================
+   GetAPass — Premium 3D Interactive Ticket Styles
+   ========================================================================== */
+
+/* 3D Perspective Stage */
+.getapass-3d-stage {
+  perspective: 1400px;
+  perspective-origin: 50% 50%;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  padding: 24px 16px 28px;
+  overflow: visible;
+}
+
+/* Ambient Backlight Glow (Focused underneath ticket bottom rim) */
+.getapass-ambient-glow {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 72%;
+  max-width: 540px;
+  height: 32px;
+  border-radius: 9999px;
+  background: var(--ticket-glow, rgba(124, 58, 237, 0.4));
+  filter: blur(24px);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.32;
+  transition: opacity 0.4s ease, filter 0.4s ease;
+}
+
+/* 3D Ticket Container */
+.getapass-3d-ticket {
+  position: relative;
+  width: 100%;
+  max-width: 760px;
+  height: 310px;
+  border-radius: 20px;
+  transform-style: preserve-3d;
+  cursor: pointer;
+  z-index: 2;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Floating Idle Animation when cursor is not actively moving */
+.getapass-3d-ticket.is-floating {
+  animation: ticketIdleFloat 5s ease-in-out infinite;
+}
+
+@keyframes ticketIdleFloat {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+/* Flip Container for 3D Front & Back */
+.ticket-flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.7s cubic-bezier(0.4, 0.2, 0.2, 1);
+  border-radius: 20px;
+}
+
+.ticket-flip-inner.is-flipped {
+  transform: rotateY(180deg);
+}
+
+/* Common Ticket Face */
+.ticket-face {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 20px;
+  background-color: #0c0a17;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.2) inset,
+    0 -2px 0 0 var(--ticket-border-glow, rgba(168, 85, 247, 0.85)) inset,
+    0 22px 50px -12px rgba(0, 0, 0, 0.65),
+    0 10px 24px -6px var(--ticket-glow, rgba(124, 58, 237, 0.35));
+}
+
+.ticket-face.ticket-front {
+  display: flex;
+  flex-direction: row;
+}
+
+.ticket-face.ticket-back {
+  transform: rotateY(180deg);
+  background: linear-gradient(135deg, #0e0b1d 0%, #151128 50%, #0c0918 100%);
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* ==========================================================================
+   PERFORATED CUTOUTS & TEAR LINE
+   ========================================================================== */
+
+/* Top Semi-Circular Cutout at Perforation Divider */
+.ticket-notch-top {
+  position: absolute;
+  top: -16px;
+  left: 68%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--stage-notch-bg, #F0E6FF);
+  border: 1px solid var(--stage-notch-border, rgba(168, 85, 247, 0.35));
+  box-shadow: inset 0 -3px 6px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Bottom Semi-Circular Cutout at Perforation Divider */
+.ticket-notch-bottom {
+  position: absolute;
+  bottom: -16px;
+  left: 68%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--stage-notch-bg, #F0E6FF);
+  border: 1px solid var(--stage-notch-border, rgba(168, 85, 247, 0.35));
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Vertical Dashed Perforation Line */
+.ticket-perforation-line {
+  position: absolute;
+  top: 16px;
+  bottom: 16px;
+  left: 68%;
+  width: 0;
+  border-left: 2px dashed rgba(255, 255, 255, 0.32);
+  z-index: 6;
+  pointer-events: none;
+}
+
+/* Mirrored Cutouts & Perforation Line for Back Face */
+.ticket-notch-back {
+  left: 32% !important;
+}
+
+.ticket-perforation-back {
+  left: 32% !important;
+}
+
+/* Outer Edge Serrated Notches */
+.ticket-notch-outer-left {
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: var(--stage-notch-bg, #EFE7FE);
+  border: 1px solid var(--stage-notch-border, rgba(168, 85, 247, 0.32));
+  box-shadow: inset -2px 0 5px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+  pointer-events: none;
+}
+
+.ticket-notch-outer-right {
+  position: absolute;
+  right: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: var(--stage-notch-bg, #EFE7FE);
+  border: 1px solid var(--stage-notch-border, rgba(168, 85, 247, 0.32));
+  box-shadow: inset 2px 0 5px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* ==========================================================================
+   MAIN TICKET (LEFT SECTION ~68%)
+   ========================================================================== */
+.ticket-main-section {
+  position: relative;
+  width: 68%;
+  flex: 0 0 68%;
+  max-width: 68%;
+  min-width: 0;
+  height: 100%;
+  padding: 22px 24px 20px 26px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  z-index: 2;
+  box-sizing: border-box;
+}
+
+/* Background Event Artwork with Gradient Dissolve */
+.ticket-artwork-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 62%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.ticket-artwork-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(12, 10, 23, 0.25) 0%,
+    rgba(12, 10, 23, 0.72) 42%,
+    #0c0a17 80%,
+    #0c0a17 100%
+  );
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Ticket Content Container inside Main Section */
+.ticket-main-content {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Category Badge */
+.ticket-category-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: #ffffff;
+  background-color: var(--badge-bg, rgba(124, 58, 237, 0.3));
+  border: 1px solid var(--badge-border, rgba(168, 85, 247, 0.5));
+  backdrop-filter: blur(8px);
+  width: fit-content;
+  box-shadow: 0 2px 8px var(--ticket-glow, rgba(124, 58, 237, 0.3));
+}
+
+.ticket-category-pill svg {
+  color: #ffffff;
+}
+
+/* Event Title & Subtitle */
+.ticket-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ticket-event-title {
+  font-size: 26px;
+  line-height: 31px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.5px;
+  margin: 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.ticket-event-subtitle {
+  font-size: 13px;
+  line-height: 17px;
+  color: rgba(255, 255, 255, 0.78);
+  font-weight: 500;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Details Grid: Date/Time & Venue */
+.ticket-details-grid {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 2px;
+}
+
+.ticket-detail-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ticket-detail-icon-wrap {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.85);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.ticket-detail-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ticket-detail-primary {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 17px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 210px;
+}
+
+.ticket-detail-secondary {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.65);
+  line-height: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 210px;
+}
+
+/* Divider Line between detail items */
+.ticket-details-divider {
+  width: 1px;
+  height: 26px;
+  background-color: rgba(255, 255, 255, 0.16);
+  flex-shrink: 0;
+}
+
+/* Bottom Bar: Pass Type, Attendee Name & Booking ID */
+.ticket-bottom-bar {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(10px);
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.ticket-pass-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  background-color: rgba(124, 58, 237, 0.35);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  color: #ffffff;
+}
+
+.ticket-pass-badge svg {
+  color: var(--ticket-accent, #c084fc);
+}
+
+.ticket-attendee-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.ticket-attendee-info svg {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.ticket-meta-divider {
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 12px;
+}
+
+.ticket-booking-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* ==========================================================================
+   TICKET STUB (RIGHT SECTION ~32%)
+   ========================================================================== */
+.ticket-stub-section {
+  position: relative;
+  width: 32%;
+  flex: 0 0 32%;
+  max-width: 32%;
+  min-width: 0;
+  height: 100%;
+  padding: 18px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(180deg, #100d20 0%, #0d0a1a 100%);
+  z-index: 2;
+  box-sizing: border-box;
+}
+
+/* Top GetAPass Mini Brand */
+.ticket-stub-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ticket-brand-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: linear-gradient(135deg, #7c3aed 0%, #c026d3 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(124, 58, 237, 0.4);
+}
+
+.ticket-brand-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.3px;
+}
+
+/* High Contrast QR Card - STRICTLY FLAT & CRISP */
+.ticket-qr-container {
+  background-color: #ffffff;
+  border-radius: 10px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  /* QR must not be transformed or filtered */
+  transform: translateZ(0);
+}
+
+.ticket-qr-image {
+  display: block;
+  width: 114px;
+  height: 114px;
+  image-rendering: pixelated;
+}
+
+.ticket-qr-placeholder {
+  width: 114px;
+  height: 114px;
+  background-color: #f3f4f6;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Verification Status Pill */
+.ticket-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  width: fit-content;
+}
+
+.ticket-status-badge.status-valid,
+.ticket-status-badge.status-active {
+  background-color: rgba(16, 185, 129, 0.16);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  color: #34d399;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+}
+
+.ticket-status-badge.status-used {
+  background-color: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  color: #fbbf24;
+}
+
+.ticket-status-badge.status-revoked,
+.ticket-status-badge.status-expired {
+  background-color: rgba(239, 68, 68, 0.16);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  color: #f87171;
+}
+
+.ticket-stub-id {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  margin-top: -4px;
+}
+
+/* ==========================================================================
+   HOLOGRAPHIC SPECULAR SHEEN & GLARE
+   ========================================================================== */
+.ticket-specular-glare {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 20px;
+  background: radial-gradient(
+    circle at var(--glare-x, 50%) var(--glare-y, 50%),
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0.05) 30%,
+    transparent 60%
+  );
+  pointer-events: none;
+  z-index: 8;
+  mix-blend-mode: overlay;
+  opacity: var(--glare-opacity, 0.35);
+  transition: opacity 0.2s ease;
+}
+
+/* Subtle Animated Shimmer Sweep */
+.ticket-shimmer-sweep {
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    115deg,
+    transparent 42%,
+    rgba(255, 255, 255, 0.08) 48%,
+    rgba(255, 255, 255, 0.18) 50%,
+    rgba(255, 255, 255, 0.08) 52%,
+    transparent 58%
+  );
+  transform: rotate(25deg);
+  pointer-events: none;
+  z-index: 7;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.getapass-3d-ticket:hover .ticket-shimmer-sweep {
+  opacity: 1;
+  animation: ticketLightSweep 4s ease-in-out infinite;
+}
+
+@keyframes ticketLightSweep {
+  0% {
+    transform: translate(-100%, -100%) rotate(25deg);
+  }
+  30%, 100% {
+    transform: translate(100%, 100%) rotate(25deg);
+  }
+}
+
+/* ==========================================================================
+   BACK FACE (DETAILS & CLEARANCES)
+   ========================================================================== */
+.ticket-back-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 12px;
+}
+
+.ticket-hologram-strip {
+  height: 4px;
+  width: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #7c3aed 0%, #ec4899 35%, #06b6d4 70%, #10b981 100%);
+  margin-bottom: 12px;
+}
+
+.ticket-back-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  padding: 10px 0;
+}
+
+.ticket-back-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ticket-back-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.ticket-back-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.ticket-clearances-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.ticket-clearance-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background-color: rgba(124, 58, 237, 0.25);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  color: #e0e7ff;
+}
+
+.ticket-back-policy {
+  font-size: 11px;
+  line-height: 15px;
+  color: rgba(255, 255, 255, 0.55);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 10px;
+}
+
+/* ==========================================================================
+   GETAPASS STUDIO STAGE (MATCHING 3D REFERENCE IMAGE)
+   ========================================================================== */
+.getapass-studio-stage {
+  --stage-notch-bg: #EFE7FE;
+  --stage-notch-border: rgba(168, 85, 247, 0.32);
+  position: relative;
+  width: 100%;
+  max-width: 860px;
+  background: radial-gradient(130% 120% at 50% 10%, rgba(255, 255, 255, 0.96) 0%, rgba(246, 240, 255, 0.92) 50%, rgba(235, 224, 254, 0.9) 100%);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  border-radius: 28px;
+  box-shadow:
+    0 24px 64px -16px rgba(124, 58, 237, 0.16),
+    0 2px 8px rgba(0, 0, 0, 0.03),
+    0 0 0 1px rgba(255, 255, 255, 0.85) inset;
+  padding: 24px 28px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: visible;
+  transition: all 0.3s ease;
+}
+
+/* Stage Top Header */
+.getapass-stage-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 12px;
+  border-bottom: 1px solid rgba(168, 85, 247, 0.12);
+  margin-bottom: 8px;
+}
+
+.getapass-stage-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.getapass-stage-brand-mark {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.getapass-stage-brand-name {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: #110d22;
+}
+
+.getapass-stage-tagline-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.getapass-stage-tagline-line {
+  width: 48px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.5));
+  border-radius: 2px;
+}
+
+.getapass-stage-tagline {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6d5d85;
+  letter-spacing: 0.3px;
+}
+
+/* ==========================================================================
+   CATEGORY SELECTOR TABS UNDERNEATH TICKET
+   ========================================================================== */
+.ticket-category-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 20px;
+  width: 100%;
+  max-width: 820px;
+  overflow-x: auto;
+  padding: 8px 6px 14px;
+  scrollbar-width: none;
+}
+
+.ticket-category-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.ticket-cat-tab-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.ticket-cat-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #4a3e5d;
+  cursor: pointer;
+  min-width: 86px;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.ticket-cat-tab:hover {
+  transform: translateY(-2px);
+  background: #ffffff;
+  border-color: rgba(147, 51, 234, 0.4);
+  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.12);
+}
+
+.ticket-cat-tab.is-active {
+  background: #ffffff;
+  border: 2px solid #9333EA;
+  box-shadow: 0 8px 24px rgba(147, 51, 234, 0.22), 0 0 16px rgba(147, 51, 234, 0.25);
+  transform: translateY(-2px);
+}
+
+.ticket-cat-tab-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9333ea;
+  background-color: rgba(147, 51, 234, 0.1);
+  transition: all 0.2s ease;
+}
+
+.ticket-cat-tab.is-active .ticket-cat-tab-icon {
+  background: linear-gradient(135deg, #9333EA 0%, #A855F7 100%);
+  color: #ffffff;
+  box-shadow: 0 3px 10px rgba(147, 51, 234, 0.4);
+}
+
+.ticket-cat-tab-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: #372f48;
+}
+
+.ticket-cat-active-pill {
+  width: 28px;
+  height: 4px;
+  border-radius: 9999px;
+  background: #9333EA;
+  box-shadow: 0 2px 8px rgba(147, 51, 234, 0.6);
+  animation: pillFadeIn 0.25s ease;
+}
+
+@keyframes pillFadeIn {
+  from { opacity: 0; transform: scaleX(0.5); }
+  to { opacity: 1; transform: scaleX(1); }
+}
+
+/* ==========================================================================
+   RESPONSIVE LAYOUT (SMART MOBILE & TABLET ADAPTATION)
+   ========================================================================== */
+@media (max-width: 680px) {
+  .getapass-studio-stage {
+    padding: 16px 12px 20px;
+    border-radius: 20px;
+  }
+
+  .getapass-stage-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .getapass-stage-tagline-wrap {
+    display: none;
+  }
+
+  .getapass-3d-stage {
+    padding: 12px 4px 18px;
+    perspective: 1000px;
+  }
+
+  .getapass-3d-ticket {
+    max-width: 100%;
+    height: auto;
+    min-height: 500px;
+  }
+
+  .ticket-face {
+    position: relative;
+    height: auto;
+  }
+
+  .ticket-face.ticket-front {
+    flex-direction: column;
+    min-height: auto;
+  }
+
+  .ticket-face.ticket-back {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .ticket-main-section {
+    width: 100%;
+    flex: none;
+    max-width: 100%;
+    min-height: 230px;
+    padding: 18px 18px 16px;
+  }
+
+  .ticket-stub-section {
+    width: 100%;
+    flex: none;
+    max-width: 100%;
+    min-height: auto;
+    padding: 16px 18px 18px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px dashed rgba(255, 255, 255, 0.25);
+  }
+
+  .ticket-perforation-line,
+  .ticket-notch-top,
+  .ticket-notch-bottom {
+    display: none;
+  }
+
+  .ticket-event-title {
+    font-size: 22px;
+    line-height: 26px;
+  }
+
+  .ticket-qr-image {
+    width: 88px;
+    height: 88px;
+  }
+
+  .ticket-details-grid {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .ticket-details-divider {
+    display: none;
+  }
+
+  .ticket-bottom-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .ticket-category-bar {
+    justify-content: flex-start;
+    padding-left: 8px;
+  }
+}
+
+@media (max-width: 440px) {
+  .ticket-stub-section {
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+    padding: 14px 12px;
+  }
+
+  .ticket-detail-primary,
+  .ticket-detail-secondary {
+    max-width: 140px;
+  }
+}
+
+@media (max-width: 600px) {
+  .ticket-back-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .ticket-back-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+}
+
+/* Reduced Motion Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .getapass-3d-ticket.is-floating {
+    animation: none;
+  }
+
+  .getapass-3d-ticket {
+    transition: none !important;
+    transform: none !important;
+  }
+
+  .ticket-shimmer-sweep {
+    display: none;
+  }
+}
+
+/* Production Print & PDF Download Optimization */
+@page {
+  size: landscape;
+  margin: 8mm;
+}
+
+@media print {
+  /* Hide all surrounding UI, headers, action buttons, hints, and close buttons */
+  header,
+  nav,
+  .no-print,
+  .gateapass-header,
+  .gateapass-mobile-header,
+  .gateapass-sidebar,
+  .gateapass-stage-header,
+  .gateapass-stage-tagline-wrap,
+  .gateapass-modal-overlay > div > div:first-child,
+  .gateapass-modal button,
+  .getapass-ambient-glow,
+  .ticket-specular-glare,
+  .ticket-shimmer-sweep,
+  .ticket-category-bar {
+    display: none !important;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .gateapass-modal-overlay {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+
+  .gateapass-modal {
+    box-shadow: none !important;
+    border: none !important;
+    background: transparent !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+  }
+
+  .getapass-studio-stage {
+    box-shadow: none !important;
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+  }
+
+  .getapass-3d-stage {
+    perspective: none !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+  }
+
+  .getapass-3d-ticket {
+    transform: none !important;
+    animation: none !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+    width: 760px !important;
+    height: 310px !important;
+    margin: 16px auto !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .ticket-face {
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  .ticket-qr-container {
+    border: 1px solid #000000 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+  }
+
+  .ticket-qr-image {
+    filter: none !important;
+  }
+}

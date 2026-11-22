@@ -17,7 +17,7 @@ import {
 import Button from '../common/Button';
 import Input from '../common/Input';
 import Modal from '../common/Modal';
-import PassCanvas from '../studio/PassCanvas';
+import Ticket3D from '../pass/Ticket3D';
 import { getAllTemplates, SAMPLE_PASS_DATA } from '../../data/passTemplates';
 import { savePassType } from '../../data/passTypes';
 import { createEventInFirestore, normalizeEventStatus } from '../../services/eventService';
@@ -130,8 +130,8 @@ export default function EventCreateWizard({
   const [highlights, setHighlights] = useState('Keynote talks\nHackathon tracks with prizes\nOfficial certificate of completion');
   const [whatYouGet, setWhatYouGet] = useState('Digital GateApass\nMeals & snacks\nAccess to mentor sessions');
 
-  // Preview Modal
-  const [previewTemplateId, setPreviewTemplateId] = useState(null);
+  // Dynamic 3D Pass Preview Modal State
+  const [previewPassItem, setPreviewPassItem] = useState(null);
 
   // Helper: toggle a predefined pass
   const handleTogglePassOption = (option) => {
@@ -921,59 +921,63 @@ export default function EventCreateWizard({
                       </div>
                     )}
 
-                    {/* Template Selection Dropdown with Category Filter & Preview Button */}
-                    <div style={{ padding: '16px', border: '1px solid var(--color-gray)', borderRadius: '4px', backgroundColor: 'var(--color-off-white)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                        <label style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-dark-text)', margin: 0 }}>
-                          Pass Design Template (from Template Library)
-                        </label>
-
-                        {assignedTemplate && (
-                          <button
-                            type="button"
-                            onClick={() => setPreviewTemplateId(assignedTemplate.id)}
+                    {/* Dynamic 3D Pass Engine Configuration */}
+                    <div
+                      style={{
+                        padding: '16px 20px',
+                        border: '1px solid rgba(124, 58, 237, 0.25)',
+                        borderRadius: '12px',
+                        backgroundColor: 'rgba(124, 58, 237, 0.04)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '10px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Sparkles size={16} color="#7C3AED" />
+                          <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-dark-text)' }}>
+                            Dynamic 3D Pass Engine
+                          </span>
+                          <span
                             style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              fontSize: '12px',
-                              fontWeight: 600,
-                              color: 'var(--color-deep-violet)',
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer'
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              backgroundColor: '#F3E8FF',
+                              color: '#7C3AED',
+                              padding: '2px 8px',
+                              borderRadius: '9999px'
                             }}
                           >
-                            <Eye size={13} /> Preview Template
-                          </button>
-                        )}
-                      </div>
+                            Theme: {category}
+                          </span>
+                        </div>
 
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '10px', alignItems: 'center' }}>
-                        <select
-                          value={passItem.templateId}
-                          onChange={(e) => handleUpdateConfiguredPass(passIdx, { templateId: e.target.value })}
+                        <button
+                          type="button"
+                          onClick={() => setPreviewPassItem(passItem)}
                           style={{
-                            height: '40px',
-                            border: '1px solid var(--color-gray)',
-                            borderRadius: 'var(--radius-control)',
-                            padding: '0 12px',
-                            fontSize: '14px',
-                            fontWeight: 600,
-                            backgroundColor: 'var(--color-white)'
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            color: '#7C3AED',
+                            backgroundColor: '#FFFFFF',
+                            border: '1px solid rgba(124, 58, 237, 0.35)',
+                            borderRadius: '6px',
+                            padding: '6px 14px',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 6px rgba(124, 58, 237, 0.1)'
                           }}
                         >
-                          {templates.map((tpl) => (
-                            <option key={tpl.id} value={tpl.id}>
-                              {tpl.name} ({tpl.category}) {tpl.isSystemTemplate ? '· System' : `· Custom v${tpl.currentVersion || 1}`}
-                            </option>
-                          ))}
-                        </select>
-
-                        <div style={{ fontSize: '12px', color: 'var(--color-muted-text)', whiteSpace: 'nowrap' }}>
-                          Category: <strong>{assignedTemplate?.category}</strong>
-                        </div>
+                          <Eye size={13} /> Preview Dynamic 3D Pass
+                        </button>
                       </div>
+
+                      <p style={{ fontSize: '12px', color: 'var(--color-muted-text)', margin: 0, lineHeight: '18px' }}>
+                        Digital tickets for <strong>{name || 'this event'}</strong> are automatically rendered in 3D using your <strong>{category}</strong> visual identity, official artwork, attendee badge, and verified turnstile clearances.
+                      </p>
                     </div>
 
                     {/* Access Permissions Checkboxes */}
@@ -1226,26 +1230,42 @@ export default function EventCreateWizard({
         </div>
       </div>
 
-      {/* TEMPLATE PREVIEW MODAL */}
-      {previewTemplateId && (
+      {/* DYNAMIC 3D TICKET PREVIEW MODAL */}
+      {previewPassItem && (
         <Modal
           isOpen={true}
-          onClose={() => setPreviewTemplateId(null)}
-          title={`Template Preview: ${templates.find((t) => t.id === previewTemplateId)?.name}`}
-          size="medium"
+          onClose={() => setPreviewPassItem(null)}
+          title={`Dynamic 3D Pass: ${name || 'Event'} — ${previewPassItem.name}`}
+          maxWidth="1020px"
+          padding="20px 24px"
+          cancelText={null}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-            <div style={{ transform: 'scale(0.8)', transformOrigin: 'top center' }}>
-              <PassCanvas
-                template={templates.find((t) => t.id === previewTemplateId)}
-                data={SAMPLE_PASS_DATA}
-                isInteractive={false}
-                targetWidth={360}
-              />
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+            <Ticket3D
+              pass={{
+                id: 'GP-PREVIEW-001',
+                eventTitle: name || 'Campus Event',
+                title: name || 'Campus Event',
+                category: category || 'Hackathons',
+                passType: previewPassItem.name || 'Standard Pass',
+                attendeeName: currentUser?.displayName || currentUser?.name || 'Aarav Shah',
+                authority: previewPassItem.authority || 'Participant',
+                date: startDate || '15 October 2026',
+                time: startTime || '10:00 AM',
+                venue: venueName || 'Campus Auditorium',
+                gate: 'Gate A',
+                status: 'Active',
+                price: previewPassItem.price || 0,
+                permissions: previewPassItem.accessAreas || ['General Area'],
+                coverImage: coverImage
+              }}
+              isInteractive={true}
+            />
+            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+              <Button variant="outline" onClick={() => setPreviewPassItem(null)}>
+                Close Preview
+              </Button>
             </div>
-            <Button variant="outline" onClick={() => setPreviewTemplateId(null)}>
-              Close Preview
-            </Button>
           </div>
         </Modal>
       )}

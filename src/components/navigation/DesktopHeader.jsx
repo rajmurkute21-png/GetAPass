@@ -1,10 +1,11 @@
 import React from 'react';
-import { Bell } from 'lucide-react';
+import { Bell, ShieldCheck } from 'lucide-react';
 import Logo from '../common/Logo';
 import { useAuth } from '../../context/AuthContext';
 import {
   canAccessAdminDashboard,
-  canAccessOrganizerDashboard
+  canAccessOrganizerDashboard,
+  isVerifier
 } from '../../services/permissionService';
 
 export default function DesktopHeader({
@@ -13,7 +14,8 @@ export default function DesktopHeader({
   unreadCount = 0,
   user,
   onOpenAdmin,
-  onOpenOrganizerStudio
+  onOpenOrganizerStudio,
+  onOpenVerifier
 }) {
   const { user: authUser, isAuthenticated, loading, openAuthModal } = useAuth();
 
@@ -30,13 +32,17 @@ export default function DesktopHeader({
   const displayName = activeUser?.displayName || activeUser?.name || 'Account';
   const isAdmin = canAccessAdminDashboard(activeUser);
   const isOrganizer = canAccessOrganizerDashboard(activeUser) && !isAdmin;
+  const isVerifierUser = isVerifier(activeUser) && !isAdmin;
   return (
     <header
       className="gateapass-desktop-header"
       style={{
         height: 'var(--header-desktop-height)',
-        backgroundColor: 'var(--color-white)',
-        borderBottom: '1px solid var(--color-gray)',
+        backgroundColor: 'rgba(255, 255, 255, 0.82)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.85)',
+        boxShadow: '0 4px 20px rgba(124, 58, 237, 0.04)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -100,28 +106,8 @@ export default function DesktopHeader({
           />
         ) : isAuthenticated ? (
           <>
-            {/* Role-based dashboard shortcuts */}
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => (onOpenAdmin ? onOpenAdmin() : onNavigate('admin'))}
-                style={{
-                  padding: '6px 14px',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: 'var(--color-white)',
-                  backgroundColor: 'var(--color-black)',
-                  border: '1px solid var(--color-black)',
-                  borderRadius: 'var(--radius-control)',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <span>Admin Dashboard</span>
-              </button>
-            )}
+            {/* Role-based dashboard shortcuts (Admin Dashboard moved securely to Profile) */}
+
 
             {isOrganizer && (
               <button
@@ -142,6 +128,29 @@ export default function DesktopHeader({
                 }}
               >
                 <span>Organizer Studio</span>
+              </button>
+            )}
+
+            {isVerifierUser && (
+              <button
+                type="button"
+                onClick={() => (onOpenVerifier ? onOpenVerifier() : onNavigate('verifier'))}
+                style={{
+                  padding: '6px 14px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: '#027A48',
+                  backgroundColor: '#ECFDF3',
+                  border: '1px solid rgba(2, 122, 72, 0.3)',
+                  borderRadius: 'var(--radius-control)',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <ShieldCheck size={14} />
+                <span>Gate Verifier</span>
               </button>
             )}
 

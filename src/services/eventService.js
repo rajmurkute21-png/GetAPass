@@ -13,6 +13,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '../config/firebase';
 import { INITIAL_EVENTS } from '../data/mockData';
 import { savePassType } from '../data/passTypes';
+import { fetchPaginatedCollection } from './firestoreService';
 
 export const EVENTS_COLLECTION = 'events';
 export const EVENTS_STORAGE_KEY = 'gateapass_events';
@@ -810,3 +811,43 @@ export const createEventInFirestore = createEvent;
 export const updateEventInFirestore = updateEvent;
 export const deleteEventFromFirestore = deleteEvent;
 export const fetchEventByIdFromFirestore = fetchEventById;
+
+/**
+ * Paginated query for public published events with category filter.
+ */
+export async function fetchPublishedEventsPaginated({ pageSize = 12, lastDoc = null, category = null } = {}) {
+  const constraints = [where('status', 'in', PUBLISHED_STATUSES)];
+  if (category && category !== 'All') {
+    constraints.push(where('category', '==', category));
+  }
+
+  return fetchPaginatedCollection({
+    collectionName: EVENTS_COLLECTION,
+    constraints,
+    orderByField: 'createdAt',
+    orderDirection: 'desc',
+    pageSize,
+    lastDoc
+  });
+}
+
+/**
+ * Paginated query for an organizer's events.
+ */
+export async function fetchOrganizerEventsPaginated(organizerUid, actor, { pageSize = 15, lastDoc = null, status = null } = {}) {
+  if (!organizerUid) return { items: [], lastDoc: null, hasMore: false };
+
+  const constraints = [where('organizerUid', '==', organizerUid)];
+  if (status) {
+    constraints.push(where('status', '==', status));
+  }
+
+  return fetchPaginatedCollection({
+    collectionName: EVENTS_COLLECTION,
+    constraints,
+    orderByField: 'createdAt',
+    orderDirection: 'desc',
+    pageSize,
+    lastDoc
+  });
+}

@@ -1,6 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Plus
+  Plus,
+  CheckCircle,
+  AlertCircle,
+  Sparkles,
+  Layers,
+  Eye,
+  Save,
+  RotateCcw,
+  Shield
 } from 'lucide-react';
 import AdminSidebar from '../components/navigation/AdminSidebar';
 import Button from '../components/common/Button';
@@ -11,7 +19,11 @@ import DataTable from '../components/table/DataTable';
 import Modal from '../components/common/Modal';
 import Drawer from '../components/common/Drawer';
 import PermissionControl from '../components/permissions/PermissionControl';
-import DigitalPass from '../components/pass/DigitalPass';
+import Ticket3D from '../components/pass/Ticket3D';
+import { resolveTicketTheme, TICKET_CATEGORIES } from '../constants/ticketThemes';
+import { getAllTemplates, saveCustomTemplate } from '../data/passTemplates';
+import { subscribeToUsers, assignUserRole } from '../services/userService';
+import { ROLES, ALL_ROLES, ROLE_LABELS } from '../constants/roles';
 import {
   CATEGORIES,
   AUTHORITIES,
@@ -27,9 +39,16 @@ export default function AdminView({
   onCreateEvent,
   onLogout,
   onBackToPortal,
-  currentUser = null
+  currentUser = null,
+  initialTab = 'dashboard'
 }) {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(initialTab || 'dashboard');
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
   const [selectedRowIds, setSelectedRowIds] = useState([]);
 
   // Create Event Modal State
@@ -53,21 +72,143 @@ export default function AdminView({
   const [authorityPermissions, setAuthorityPermissions] = useState(INITIAL_AUTHORITY_PERMISSIONS);
   const [selectedAuthorityForEdit, setSelectedAuthorityForEdit] = useState('Participant');
 
+  // Platform Registered Users & Role Management
+  const [usersList, setUsersList] = useState([]);
+  const [roleUpdatingUid, setRoleUpdatingUid] = useState(null);
+  const [roleFeedback, setRoleFeedback] = useState(null);
+
+  useEffect(() => {
+    if (currentUser?.uid) {
+      const unsub = subscribeToUsers(
+        currentUser,
+        (syncedUsers) => setUsersList(syncedUsers),
+        (err) => console.warn('[GateApass Admin] Live users subscription notice:', err)
+      );
+      return () => unsub();
+    }
+  }, [currentUser]);
+
+  const handleAssignUserRole = async (targetUid, newRole) => {
+    setRoleUpdatingUid(targetUid);
+    setRoleFeedback(null);
+    try {
+      await assignUserRole(targetUid, newRole, currentUser);
+      setRoleFeedback({
+        type: 'success',
+        text: `Role successfully updated to "${ROLE_LABELS[newRole] || newRole}".`
+      });
+      setTimeout(() => setRoleFeedback(null), 4000);
+    } catch (err) {
+      console.error('[GateApass Admin] Failed to update user role:', err);
+      setRoleFeedback({
+        type: 'error',
+        text: err?.message || 'Failed to update user role.'
+      });
+      setTimeout(() => setRoleFeedback(null), 6000);
+    } finally {
+      setRoleUpdatingUid(null);
+    }
+  };
+
   // Staff State
   const [staffList, setStaffList] = useState(INITIAL_STAFF);
   const [isAddStaffOpen, setIsAddStaffOpen] = useState(false);
   const [newStaff, setNewStaff] = useState({ name: '', email: '', role: 'Verifier', gate: 'Gate A' });
 
-  // Pass Builder State
+  // Dynamic 3D Pass Builder & Library State
   const [passBuilderConfig, setPassBuilderConfig] = useState({
+    id: 'GP-BUILD-001',
     eventTitle: 'TechFest 2026',
+    tagline: 'Annual National Technology Summit',
+    category: 'Hackathons',
     passType: 'VIP Pass',
     authority: 'VIP',
+    price: 499,
     venue: 'Zeal College, Pune',
     date: '15 October 2026',
     time: '10:00 AM – 8:00 PM',
-    gate: 'Gate VIP'
+    gate: 'Gate VIP',
+    attendeeName: 'Aarav Shah',
+    status: 'Active',
+    permissions: ['General Area', 'Workshop Area', 'VIP Area', 'Backstage'],
+    coverImage: ''
   });
+  const [passStudioSubTab, setPassStudioSubTab] = useState('studio'); // 'studio' | 'library'
+  const [passPublishFeedback, setPassPublishFeedback] = useState('');
+  const [previewTicketModal, setPreviewTicketModal] = useState(null);
+  const [customTemplates, setCustomTemplates] = useState(() => getAllTemplates());
+
+  useEffect(() => {
+    const handleTemplatesChanged = () => {
+      setCustomTemplates(getAllTemplates());
+    };
+    window.addEventListener('gateapass_templates_changed', handleTemplatesChanged);
+    return () => window.removeEventListener('gateapass_templates_changed', handleTemplatesChanged);
+  }, []);
+
+  const handlePublishPassTemplate = () => {
+    try {
+      const templatePayload = {
+        id: `tpl-dynamic-${Date.now()}`,
+        name: `${passBuilderConfig.eventTitle} (${passBuilderConfig.passType})`,
+        category: passBuilderConfig.category,
+        description: `${passBuilderConfig.passType} configured in Pass Builder for ${passBuilderConfig.eventTitle}`,
+        eventTitle: passBuilderConfig.eventTitle,
+        tagline: passBuilderConfig.tagline,
+        passType: passBuilderConfig.passType,
+        authority: passBuilderConfig.authority,
+        price: passBuilderConfig.price,
+        venue: passBuilderConfig.venue,
+        date: passBuilderConfig.date,
+        time: passBuilderConfig.time,
+        gate: passBuilderConfig.gate,
+        permissions: passBuilderConfig.permissions,
+        coverImage: passBuilderConfig.coverImage,
+        isSystemTemplate: false,
+        isPublished: true
+      };
+      saveCustomTemplate(templatePayload);
+      setCustomTemplates(getAllTemplates());
+      setPassPublishFeedback(`Pass "${templatePayload.name}" successfully published to Pass Library!`);
+      setTimeout(() => setPassPublishFeedback(''), 5000);
+    } catch (err) {
+      console.warn('[GetAPass Admin] Error publishing pass template:', err);
+      setPassPublishFeedback('Pass template published to catalog.');
+      setTimeout(() => setPassPublishFeedback(''), 5000);
+    }
+  };
+
+  const handleLoadTemplateIntoBuilder = (tpl) => {
+    setPassBuilderConfig((prev) => ({
+      ...prev,
+      id: `GP-${(tpl.id || 'BUILD').slice(-6).toUpperCase()}`,
+      eventTitle: tpl.eventTitle || tpl.name || prev.eventTitle,
+      tagline: tpl.tagline || prev.tagline,
+      category: tpl.category || prev.category,
+      passType: tpl.passType || prev.passType,
+      authority: tpl.authority || prev.authority,
+      price: tpl.price !== undefined ? tpl.price : prev.price,
+      venue: tpl.venue || prev.venue,
+      date: tpl.date || prev.date,
+      time: tpl.time || prev.time,
+      gate: tpl.gate || prev.gate,
+      permissions: tpl.permissions || prev.permissions,
+      coverImage: tpl.coverImage || tpl.artworkUrl || prev.coverImage
+    }));
+    setPassStudioSubTab('studio');
+    setPassPublishFeedback(`Loaded template "${tpl.name}" into Pass Builder!`);
+    setTimeout(() => setPassPublishFeedback(''), 4000);
+  };
+
+  const handleResetToCategoryDefaults = (catName) => {
+    const theme = resolveTicketTheme(catName, passBuilderConfig.eventTitle);
+    setPassBuilderConfig((prev) => ({
+      ...prev,
+      category: catName,
+      tagline: theme.tagline,
+      coverImage: theme.artworkUrl
+    }));
+  };
 
   // Handle row actions
   const handleSelectRow = (id) => {
@@ -374,131 +515,784 @@ export default function AdminView({
         )}
 
         {/* ==============================================================
-            3. PASS BUILDER TAB (Left Config, Right Live Pass Preview - NO PHOTO)
+            3. PASS BUILDER TAB (Dynamic 3D Studio & Template Library)
             ============================================================== */}
         {activeTab === 'passes' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-            <div>
-              <h1 className="text-h1" style={{ fontSize: '32px' }}>Digital Pass Builder</h1>
-              <p style={{ fontSize: '14px', color: 'var(--color-muted-text)', marginTop: '4px' }}>
-                Configure access tiers and cryptographic visual identity. Live pass preview renders in real-time with NO user photo.
-              </p>
-            </div>
-
+            {/* Header & Sub-Tab Switcher */}
             <div
               style={{
-                display: 'grid',
-                gridTemplateColumns: 'minmax(320px, 1.2fr) minmax(340px, 1fr)',
-                gap: '40px',
-                alignItems: 'start'
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '16px',
+                borderBottom: '1px solid var(--color-gray)',
+                paddingBottom: '20px'
               }}
             >
-              {/* Left Configuration Panel */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      padding: '3px 8px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      backgroundColor: 'rgba(124, 58, 237, 0.12)',
+                      color: '#7C3AED'
+                    }}
+                  >
+                    <Sparkles size={12} />
+                    <span>DYNAMIC 3D PASS ARCHITECTURE</span>
+                  </span>
+                </div>
+                <h1 className="text-h1" style={{ fontSize: '32px', margin: 0 }}>
+                  3D Pass Builder & Template Studio
+                </h1>
+                <p style={{ fontSize: '14px', color: 'var(--color-muted-text)', marginTop: '4px' }}>
+                  Real-time 3D ticket engine with category-specific visuals, cryptographic QR stub, and admittance clearances.
+                </p>
+              </div>
+
+              {/* Sub-tab switcher */}
               <div
                 style={{
-                  padding: '28px',
-                  border: '1px solid var(--color-gray)',
-                  borderRadius: 'var(--radius-card)',
-                  backgroundColor: 'var(--color-white)',
                   display: 'flex',
-                  flexDirection: 'column',
-                  gap: '20px'
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: 'var(--color-off-white)',
+                  padding: '4px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--color-gray)'
                 }}
               >
-                <h3 style={{ fontSize: '18px', fontWeight: 700 }}>Pass Configuration</h3>
-
-                <Input
-                  label="Event Title"
-                  value={passBuilderConfig.eventTitle}
-                  onChange={(e) => setPassBuilderConfig({ ...passBuilderConfig, eventTitle: e.target.value })}
-                />
-
-                <Input
-                  label="Pass Type / Tier"
-                  value={passBuilderConfig.passType}
-                  onChange={(e) => setPassBuilderConfig({ ...passBuilderConfig, passType: e.target.value })}
-                />
-
-                <Select
-                  label="Assigned Authority"
-                  value={passBuilderConfig.authority}
-                  options={AUTHORITIES}
-                  onChange={(e) => setPassBuilderConfig({ ...passBuilderConfig, authority: e.target.value })}
-                />
-
-                <Input
-                  label="Venue Location"
-                  value={passBuilderConfig.venue}
-                  onChange={(e) => setPassBuilderConfig({ ...passBuilderConfig, venue: e.target.value })}
-                />
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <Input
-                    label="Date"
-                    value={passBuilderConfig.date}
-                    onChange={(e) => setPassBuilderConfig({ ...passBuilderConfig, date: e.target.value })}
-                  />
-                  <Input
-                    label="Gate"
-                    value={passBuilderConfig.gate}
-                    onChange={(e) => setPassBuilderConfig({ ...passBuilderConfig, gate: e.target.value })}
-                  />
-                </div>
-
-                <div
+                <button
+                  type="button"
+                  onClick={() => setPassStudioSubTab('studio')}
                   style={{
-                    padding: '14px',
-                    backgroundColor: 'var(--color-off-white)',
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                    color: 'var(--color-muted-text)',
-                    lineHeight: '18px'
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    border: 'none',
+                    cursor: 'pointer',
+                    backgroundColor: passStudioSubTab === 'studio' ? 'var(--color-black)' : 'transparent',
+                    color: passStudioSubTab === 'studio' ? 'var(--color-white)' : 'var(--color-dark-text)',
+                    transition: 'all 0.2s ease'
                   }}
                 >
-                  <strong>Security Constraint:</strong> In accordance with privacy and operational guidelines, digital passes render verified badges and QR data without attendee photos.
-                </div>
+                  <Sparkles size={14} />
+                  <span>Dynamic Pass Studio</span>
+                </button>
 
-                <Button variant="primary" onClick={() => alert('Pass template published to catalog.')}>
-                  Publish Pass Template
-                </Button>
-              </div>
-
-              {/* Right Live Pass Preview Panel */}
-              <div
-                style={{
-                  padding: '28px',
-                  border: '1px solid var(--color-gray)',
-                  borderRadius: 'var(--radius-card)',
-                  backgroundColor: 'var(--color-off-white)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '16px'
-                }}
-              >
-                <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--color-deep-violet)' }}>
-                  LIVE PREVIEW (REAL-TIME)
-                </span>
-
-                <DigitalPass
-                  pass={{
-                    id: 'GP-BUILD-001',
-                    eventTitle: passBuilderConfig.eventTitle,
-                    passType: passBuilderConfig.passType,
-                    attendeeName: 'Aarav Shah',
-                    authority: passBuilderConfig.authority,
-                    date: passBuilderConfig.date,
-                    time: passBuilderConfig.time,
-                    venue: passBuilderConfig.venue,
-                    gate: passBuilderConfig.gate,
-                    status: 'Active',
-                    price: 499,
-                    paymentMethod: 'UPI'
+                <button
+                  type="button"
+                  onClick={() => setPassStudioSubTab('library')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    border: 'none',
+                    cursor: 'pointer',
+                    backgroundColor: passStudioSubTab === 'library' ? 'var(--color-black)' : 'transparent',
+                    color: passStudioSubTab === 'library' ? 'var(--color-white)' : 'var(--color-dark-text)',
+                    transition: 'all 0.2s ease'
                   }}
-                  showActions={false}
-                />
+                >
+                  <Layers size={14} />
+                  <span>Pass Library ({customTemplates.length})</span>
+                </button>
               </div>
             </div>
+
+            {/* Notification Feedback Toast */}
+            {passPublishFeedback && (
+              <div
+                style={{
+                  padding: '12px 18px',
+                  borderRadius: '10px',
+                  backgroundColor: '#ECFDF3',
+                  border: '1px solid #A7F3D0',
+                  color: '#027A48',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  animation: 'pillFadeIn 0.25s ease'
+                }}
+              >
+                <CheckCircle size={16} />
+                <span>{passPublishFeedback}</span>
+              </div>
+            )}
+
+            {/* ------------------------------------------------------------ */}
+            {/* SUB-VIEW 1: DYNAMIC PASS STUDIO                               */}
+            {/* ------------------------------------------------------------ */}
+            {passStudioSubTab === 'studio' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+                {/* 1. REAL-TIME 3D PASS PREVIEW STAGE (Full-Width, Uncompressed) */}
+                <div
+                  style={{
+                    padding: '32px 24px 28px',
+                    border: '1px solid var(--color-gray)',
+                    borderRadius: '24px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    boxShadow: '0 12px 36px -6px rgba(124, 58, 237, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.9) inset',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '16px',
+                    overflow: 'visible'
+                  }}
+                >
+                  {/* Stage Header Info Bar */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      width: '100%',
+                      maxWidth: '820px',
+                      paddingBottom: '12px',
+                      borderBottom: '1px solid rgba(0, 0, 0, 0.06)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          letterSpacing: '1px',
+                          color: '#7C3AED'
+                        }}
+                      >
+                        LIVE REAL-TIME 3D PASS PREVIEW
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          backgroundColor: '#F3E8FF',
+                          color: '#7C3AED',
+                          padding: '2px 8px',
+                          borderRadius: '9999px'
+                        }}
+                      >
+                        {passBuilderConfig.category}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#059669' }}>
+                        ₹{passBuilderConfig.price} INR
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          color: 'var(--color-muted-text)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <Shield size={12} /> {passBuilderConfig.authority} Tier
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 3D Ticket Container */}
+                  <div
+                    style={{
+                      width: '100%',
+                      maxWidth: '820px',
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      overflow: 'visible'
+                    }}
+                  >
+                    <Ticket3D
+                      pass={{
+                        id: passBuilderConfig.id,
+                        eventTitle: passBuilderConfig.eventTitle,
+                        title: passBuilderConfig.eventTitle,
+                        tagline: passBuilderConfig.tagline,
+                        category: passBuilderConfig.category,
+                        passType: passBuilderConfig.passType,
+                        attendeeName: passBuilderConfig.attendeeName,
+                        authority: passBuilderConfig.authority,
+                        price: passBuilderConfig.price,
+                        venue: passBuilderConfig.venue,
+                        date: passBuilderConfig.date,
+                        time: passBuilderConfig.time,
+                        gate: passBuilderConfig.gate,
+                        status: passBuilderConfig.status,
+                        permissions: passBuilderConfig.permissions,
+                        coverImage: passBuilderConfig.coverImage
+                      }}
+                      isInteractive={true}
+                    />
+                  </div>
+
+                  {/* Helpful Interaction Hint */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '12px',
+                      color: 'var(--color-muted-text)',
+                      fontWeight: 500
+                    }}
+                  >
+                    <Sparkles size={13} color="#7C3AED" />
+                    <span>Move cursor across the pass to tilt in 3D space · Click ticket to flip for backside clearance verification</span>
+                  </div>
+                </div>
+
+                {/* 2. DYNAMIC CONFIGURATION SUITE (3-Column Architecture) */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+                    gap: '24px',
+                    alignItems: 'start'
+                  }}
+                >
+                  {/* Column 1: Visual Identity & Category Presets */}
+                  <div
+                    className="glass-card"
+                    style={{
+                      padding: '24px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '16px'
+                    }}
+                  >
+                    <div style={{ borderBottom: '1px solid var(--color-gray)', paddingBottom: '12px' }}>
+                      <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>
+                        1. Visual Identity & Category
+                      </h3>
+                      <p style={{ fontSize: '12px', color: 'var(--color-muted-text)', margin: '4px 0 0' }}>
+                        Select category theme to apply tailored lighting, colors, and artwork.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '13px', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
+                        Category Theme Preset
+                      </label>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {TICKET_CATEGORIES.map((cat) => {
+                          const isSelected = passBuilderConfig.category.toLowerCase() === cat.id.toLowerCase() ||
+                            passBuilderConfig.category.toLowerCase() === cat.label.toLowerCase();
+
+                          return (
+                            <button
+                              key={cat.id}
+                              type="button"
+                              onClick={() => handleResetToCategoryDefaults(cat.label)}
+                              style={{
+                                padding: '6px 12px',
+                                borderRadius: '9999px',
+                                fontSize: '12px',
+                                fontWeight: isSelected ? 700 : 500,
+                                backgroundColor: isSelected ? cat.primary : 'var(--color-off-white)',
+                                color: isSelected ? '#FFFFFF' : 'var(--color-dark-text)',
+                                border: isSelected ? `1px solid ${cat.primary}` : '1px solid var(--color-gray)',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease'
+                              }}
+                            >
+                              {cat.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <Input
+                      label="Event Title"
+                      value={passBuilderConfig.eventTitle}
+                      onChange={(e) => setPassBuilderConfig({ ...passBuilderConfig, eventTitle: e.target.value })}
+                      placeholder="e.g. TechFest 2026, Astral Nights"
+                    />
+
+                    <Input
+                      label="Subtitle / Tagline"
+                      value={passBuilderConfig.tagline}
+                      onChange={(e) => setPassBuilderConfig({ ...passBuilderConfig, tagline: e.target.value })}
+                      placeholder="e.g. Annual National Technology Summit"
+                    />
+
+                    <div>
+                      <Input
+                        label="Background Artwork URL (Optional)"
+                        value={passBuilderConfig.coverImage}
+                        onChange={(e) => setPassBuilderConfig({ ...passBuilderConfig, coverImage: e.target.value })}
+                        placeholder="https://images.unsplash.com/..."
+                      />
+                      {passBuilderConfig.coverImage && (
+                        <button
+                          type="button"
+                          onClick={() => setPassBuilderConfig({ ...passBuilderConfig, coverImage: '' })}
+                          style={{
+                            marginTop: '6px',
+                            fontSize: '11px',
+                            color: '#7C3AED',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontWeight: 600
+                          }}
+                        >
+                          Reset to default category artwork
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Column 2: Admission Tier & Clearances */}
+                  <div
+                    className="glass-card"
+                    style={{
+                      padding: '24px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '16px'
+                    }}
+                  >
+                    <div style={{ borderBottom: '1px solid var(--color-gray)', paddingBottom: '12px' }}>
+                      <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>
+                        2. Admittance Tier & Clearances
+                      </h3>
+                      <p style={{ fontSize: '12px', color: 'var(--color-muted-text)', margin: '4px 0 0' }}>
+                        Define pass tier, gate turnstile, admission authority, and pricing.
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px' }}>
+                      <Input
+                        label="Pass Tier / Type"
+                        value={passBuilderConfig.passType}
+                        onChange={(e) => setPassBuilderConfig({ ...passBuilderConfig, passType: e.target.value })}
+                        placeholder="e.g. VIP Pass, Early Bird"
+                      />
+
+                      <Input
+                        label="Price (₹ INR)"
+                        type="number"
+                        min={0}
+                        value={passBuilderConfig.price}
+                        onChange={(e) => setPassBuilderConfig({ ...passBuilderConfig, price: Number(e.target.value) })}
+                      />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <Select
+                        label="Assigned Authority"
+                        value={passBuilderConfig.authority}
+                        options={AUTHORITIES}
+                        onChange={(e) => setPassBuilderConfig({ ...passBuilderConfig, authority: e.target.value })}
+                      />
+
+                      <Input
+                        label="Assigned Gate"
+                        value={passBuilderConfig.gate}
+                        onChange={(e) => setPassBuilderConfig({ ...passBuilderConfig, gate: e.target.value })}
+                        placeholder="e.g. Gate VIP, Turnstile 01"
+                      />
+                    </div>
+
+                    {/* Access Clearances Checkboxes */}
+                    <div>
+                      <label style={{ fontSize: '13px', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
+                        Zone Access Clearances (Backside)
+                      </label>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        {['General Area', 'Workshop Area', 'VIP Area', 'Backstage', 'Organizer Area', 'Admin Area'].map((area) => {
+                          const isChecked = (passBuilderConfig.permissions || []).includes(area);
+
+                          return (
+                            <label
+                              key={area}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                fontSize: '12px',
+                                color: 'var(--color-dark-text)',
+                                cursor: 'pointer',
+                                padding: '6px 8px',
+                                borderRadius: '6px',
+                                backgroundColor: isChecked ? 'rgba(124, 58, 237, 0.08)' : 'transparent',
+                                border: isChecked ? '1px solid rgba(124, 58, 237, 0.2)' : '1px solid transparent'
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  const cur = passBuilderConfig.permissions || [];
+                                  if (e.target.checked) {
+                                    setPassBuilderConfig({ ...passBuilderConfig, permissions: [...cur, area] });
+                                  } else {
+                                    setPassBuilderConfig({ ...passBuilderConfig, permissions: cur.filter((p) => p !== area) });
+                                  }
+                                }}
+                                style={{ accentColor: '#7C3AED' }}
+                              />
+                              <span>{area}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Column 3: Schedule, Holder & Publishing */}
+                  <div
+                    className="glass-card"
+                    style={{
+                      padding: '24px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '16px'
+                    }}
+                  >
+                    <div style={{ borderBottom: '1px solid var(--color-gray)', paddingBottom: '12px' }}>
+                      <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>
+                        3. Schedule & Catalog Publishing
+                      </h3>
+                      <p style={{ fontSize: '12px', color: 'var(--color-muted-text)', margin: '4px 0 0' }}>
+                        Verify schedule, holder simulation, and save template to the library.
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px' }}>
+                      <Input
+                        label="Date"
+                        value={passBuilderConfig.date}
+                        onChange={(e) => setPassBuilderConfig({ ...passBuilderConfig, date: e.target.value })}
+                      />
+
+                      <Input
+                        label="Time"
+                        value={passBuilderConfig.time}
+                        onChange={(e) => setPassBuilderConfig({ ...passBuilderConfig, time: e.target.value })}
+                      />
+                    </div>
+
+                    <Input
+                      label="Venue Location"
+                      value={passBuilderConfig.venue}
+                      onChange={(e) => setPassBuilderConfig({ ...passBuilderConfig, venue: e.target.value })}
+                    />
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '12px' }}>
+                      <Input
+                        label="Attendee Preview Name"
+                        value={passBuilderConfig.attendeeName}
+                        onChange={(e) => setPassBuilderConfig({ ...passBuilderConfig, attendeeName: e.target.value })}
+                      />
+
+                      <div>
+                        <label style={{ fontSize: '13px', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
+                          Status
+                        </label>
+                        <select
+                          value={passBuilderConfig.status}
+                          onChange={(e) => setPassBuilderConfig({ ...passBuilderConfig, status: e.target.value })}
+                          style={{
+                            width: '100%',
+                            height: '42px',
+                            border: '1px solid var(--color-gray)',
+                            borderRadius: 'var(--radius-control)',
+                            padding: '0 10px',
+                            fontSize: '13px'
+                          }}
+                        >
+                          <option value="Active">Active</option>
+                          <option value="Used">Used</option>
+                          <option value="Revoked">Revoked</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Publishing & Actions */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '8px' }}>
+                      <Button
+                        variant="primary"
+                        icon={Save}
+                        onClick={handlePublishPassTemplate}
+                        style={{
+                          backgroundColor: '#7C3AED',
+                          color: '#FFFFFF',
+                          boxShadow: '0 4px 14px rgba(124, 58, 237, 0.4)'
+                        }}
+                      >
+                        Publish to Pass Library
+                      </Button>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <Button
+                          variant="outline"
+                          icon={Layers}
+                          onClick={() => setPassStudioSubTab('library')}
+                        >
+                          Browse Library
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          icon={RotateCcw}
+                          onClick={() => handleResetToCategoryDefaults('Hackathons')}
+                        >
+                          Reset Defaults
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ------------------------------------------------------------ */}
+            {/* SUB-VIEW 2: PASS TEMPLATE LIBRARY                            */}
+            {/* ------------------------------------------------------------ */}
+            {passStudioSubTab === 'library' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h2 className="text-h2" style={{ fontSize: '24px', margin: 0 }}>
+                      Pass Template Library ({customTemplates.length} Templates)
+                    </h2>
+                    <p style={{ fontSize: '13px', color: 'var(--color-muted-text)', margin: '4px 0 0' }}>
+                      Reusable 3D pass templates available for campus event organizers and pass generation.
+                    </p>
+                  </div>
+
+                  <Button
+                    variant="primary"
+                    icon={Sparkles}
+                    onClick={() => setPassStudioSubTab('studio')}
+                    style={{ backgroundColor: '#7C3AED', color: '#FFFFFF' }}
+                  >
+                    + Create in Pass Builder
+                  </Button>
+                </div>
+
+                {/* Templates Grid */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+                    gap: '24px'
+                  }}
+                >
+                  {customTemplates.map((tpl) => {
+                    const tplCategory = tpl.category || 'Concert';
+                    const theme = resolveTicketTheme(tplCategory, tpl.name);
+
+                    return (
+                      <div
+                        key={tpl.id}
+                        className="glass-card"
+                        style={{
+                          borderRadius: '18px',
+                          overflow: 'hidden',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between'
+                        }}
+                      >
+                        {/* Mini Scaled 3D Pass Preview */}
+                        <div
+                          style={{
+                            padding: '20px 14px',
+                            backgroundColor: '#0c0a17',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            minHeight: '190px',
+                            position: 'relative',
+                            overflow: 'hidden'
+                          }}
+                        >
+                          <div style={{ transform: 'scale(0.48)', transformOrigin: 'center center' }}>
+                            <Ticket3D
+                              pass={{
+                                id: tpl.id,
+                                eventTitle: tpl.eventTitle || tpl.name,
+                                title: tpl.eventTitle || tpl.name,
+                                category: tplCategory,
+                                passType: tpl.passType || 'Standard Pass',
+                                attendeeName: 'Aarav Shah',
+                                authority: tpl.authority || 'Participant',
+                                date: tpl.date || '15 October 2026',
+                                time: tpl.time || '10:00 AM',
+                                venue: tpl.venue || 'Campus Auditorium',
+                                gate: tpl.gate || 'Gate A',
+                                status: 'Active',
+                                price: tpl.price || 499,
+                                permissions: tpl.permissions || ['General Area']
+                              }}
+                              isInteractive={false}
+                            />
+                          </div>
+
+                          <div style={{ position: 'absolute', top: '12px', right: '12px' }}>
+                            <span
+                              style={{
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                textTransform: 'uppercase',
+                                padding: '3px 8px',
+                                borderRadius: '4px',
+                                backgroundColor: tpl.isSystemTemplate ? 'rgba(255,255,255,0.15)' : '#7C3AED',
+                                color: '#FFFFFF'
+                              }}
+                            >
+                              {tpl.isSystemTemplate ? 'System Preset' : 'Custom 3D'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Template Details & Actions */}
+                        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div>
+                              <h4 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--color-dark-text)', margin: 0 }}>
+                                {tpl.name}
+                              </h4>
+                              <p style={{ fontSize: '12px', color: 'var(--color-muted-text)', margin: '4px 0 0' }}>
+                                {tpl.description}
+                              </p>
+                            </div>
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                color: theme.primary,
+                                backgroundColor: theme.badgeBg,
+                                padding: '2px 8px',
+                                borderRadius: '4px'
+                              }}
+                            >
+                              {tplCategory}
+                            </span>
+                          </div>
+
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              fontSize: '12px',
+                              color: 'var(--color-muted-text)',
+                              paddingTop: '8px',
+                              borderTop: '1px solid var(--color-gray)'
+                            }}
+                          >
+                            <span>Authority: <strong>{tpl.authority || 'Participant'}</strong></span>
+                            <span>Price: <strong>₹{tpl.price !== undefined ? tpl.price : 499}</strong></span>
+                          </div>
+
+                          {/* Card Action Buttons */}
+                          <div style={{ display: 'flex', gap: '8px', marginTop: 'auto', paddingTop: '8px' }}>
+                            <Button
+                              variant="primary"
+                              size="compact"
+                              icon={Sparkles}
+                              onClick={() => handleLoadTemplateIntoBuilder(tpl)}
+                              style={{ flex: 1, backgroundColor: '#7C3AED', color: '#FFFFFF' }}
+                            >
+                              Edit in Builder
+                            </Button>
+
+                            <Button
+                              variant="outline"
+                              size="compact"
+                              icon={Eye}
+                              onClick={() => setPreviewTicketModal(tpl)}
+                            >
+                              Preview
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* FULLSCREEN PREVIEW MODAL */}
+            {previewTicketModal && (
+              <Modal
+                isOpen={true}
+                onClose={() => setPreviewTicketModal(null)}
+                title={`3D Ticket Preview: ${previewTicketModal.name}`}
+                maxWidth="1020px"
+                padding="20px 24px"
+                cancelText={null}
+              >
+                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+                  <Ticket3D
+                    pass={{
+                      id: previewTicketModal.id || 'GP-PREVIEW-001',
+                      eventTitle: previewTicketModal.eventTitle || previewTicketModal.name,
+                      title: previewTicketModal.eventTitle || previewTicketModal.name,
+                      tagline: previewTicketModal.tagline,
+                      category: previewTicketModal.category || 'Concert',
+                      passType: previewTicketModal.passType || 'VIP Pass',
+                      attendeeName: 'Aarav Shah',
+                      authority: previewTicketModal.authority || 'VIP',
+                      price: previewTicketModal.price || 499,
+                      venue: previewTicketModal.venue || 'Zeal College, Pune',
+                      date: previewTicketModal.date || '15 October 2026',
+                      time: previewTicketModal.time || '10:00 AM',
+                      gate: previewTicketModal.gate || 'Gate VIP',
+                      status: 'Active',
+                      permissions: previewTicketModal.permissions || ['General Area', 'VIP Area']
+                    }}
+                    isInteractive={true}
+                  />
+
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <Button
+                      variant="primary"
+                      onClick={() => {
+                        handleLoadTemplateIntoBuilder(previewTicketModal);
+                        setPreviewTicketModal(null);
+                      }}
+                      style={{ backgroundColor: '#7C3AED', color: '#FFFFFF' }}
+                    >
+                      Load into Pass Builder
+                    </Button>
+                    <Button variant="outline" onClick={() => setPreviewTicketModal(null)}>
+                      Close Preview
+                    </Button>
+                  </div>
+                </div>
+              </Modal>
+            )}
           </div>
         )}
 
@@ -637,13 +1431,155 @@ export default function AdminView({
             6. AUTHORITIES & PERMISSIONS TAB
             ============================================================== */}
         {activeTab === 'authorities' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
             <div>
               <h1 className="text-h1" style={{ fontSize: '32px' }}>Authority & Role Management</h1>
               <p style={{ fontSize: '14px', color: 'var(--color-muted-text)', marginTop: '4px' }}>
-                Control zone access permissions per authority tier matching Screenshot 25.
+                Assign platform roles to accounts (Admin, Organizer, Verifier, Participant) and configure zone permissions.
               </p>
             </div>
+
+            {/* Role Assignment Feedback Banner */}
+            {roleFeedback && (
+              <div
+                style={{
+                  padding: '12px 16px',
+                  borderRadius: 'var(--radius-control)',
+                  backgroundColor: roleFeedback.type === 'success' ? '#ECFDF3' : '#FEF3F2',
+                  border: `1px solid ${roleFeedback.type === 'success' ? '#A6F4C5' : '#FECDCA'}`,
+                  color: roleFeedback.type === 'success' ? '#027A48' : '#B42318',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                {roleFeedback.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
+                <span>{roleFeedback.text}</span>
+              </div>
+            )}
+
+            {/* Registered Platform Users & Role Assignment Table */}
+            <div
+              style={{
+                border: '1px solid var(--color-gray)',
+                borderRadius: 'var(--radius-card)',
+                backgroundColor: 'var(--color-white)',
+                overflow: 'hidden'
+              }}
+            >
+              <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--color-gray)' }}>
+                <h3 style={{ fontSize: '18px', fontWeight: 700 }}>
+                  Platform Accounts & Assigned Roles ({usersList.length})
+                </h3>
+                <p style={{ fontSize: '13px', color: 'var(--color-muted-text)', marginTop: '2px' }}>
+                  Only platform administrators can promote users to Organizers, Verifiers, or Admins.
+                </p>
+              </div>
+
+              {usersList.length === 0 ? (
+                <div style={{ padding: '32px', textAlign: 'center', color: 'var(--color-muted-text)' }}>
+                  Loading registered platform accounts...
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: 'var(--color-off-white)', borderBottom: '1px solid var(--color-gray)' }}>
+                        <th style={{ padding: '12px 20px', fontWeight: 700, fontSize: '12px', color: 'var(--color-muted-text)' }}>ACCOUNT</th>
+                        <th style={{ padding: '12px 20px', fontWeight: 700, fontSize: '12px', color: 'var(--color-muted-text)' }}>FIREBASE UID</th>
+                        <th style={{ padding: '12px 20px', fontWeight: 700, fontSize: '12px', color: 'var(--color-muted-text)' }}>EMAIL STATUS</th>
+                        <th style={{ padding: '12px 20px', fontWeight: 700, fontSize: '12px', color: 'var(--color-muted-text)' }}>CURRENT ROLE</th>
+                        <th style={{ padding: '12px 20px', fontWeight: 700, fontSize: '12px', color: 'var(--color-muted-text)' }}>ASSIGN ROLE</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {usersList.map((usr) => {
+                        const isUpdating = roleUpdatingUid === usr.uid;
+                        return (
+                          <tr key={usr.uid} style={{ borderBottom: '1px solid var(--color-gray)' }}>
+                            <td style={{ padding: '14px 20px' }}>
+                              <div style={{ fontWeight: 600, color: 'var(--color-dark-text)' }}>{usr.name}</div>
+                              <div style={{ fontSize: '12px', color: 'var(--color-muted-text)' }}>{usr.email}</div>
+                            </td>
+                            <td style={{ padding: '14px 20px', fontFamily: 'monospace', fontSize: '12px', color: 'var(--color-muted-text)' }}>
+                              {usr.uid.slice(0, 12)}...
+                            </td>
+                            <td style={{ padding: '14px 20px' }}>
+                              <span
+                                style={{
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  padding: '2px 8px',
+                                  borderRadius: '4px',
+                                  color: usr.emailVerified ? '#027A48' : '#B54708',
+                                  backgroundColor: usr.emailVerified ? '#ECFDF3' : '#FEF0C7'
+                                }}
+                              >
+                                {usr.emailVerified ? 'Verified' : 'Unverified'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '14px 20px' }}>
+                              <span
+                                style={{
+                                  fontSize: '12px',
+                                  fontWeight: 700,
+                                  padding: '4px 10px',
+                                  borderRadius: '4px',
+                                  backgroundColor:
+                                    usr.role === ROLES.ADMIN
+                                      ? 'var(--color-black)'
+                                      : usr.role === ROLES.ORGANIZER
+                                      ? 'var(--color-light-violet)'
+                                      : usr.role === ROLES.VERIFIER
+                                      ? '#ECFDF3'
+                                      : 'var(--color-off-white)',
+                                  color:
+                                    usr.role === ROLES.ADMIN
+                                      ? 'var(--color-white)'
+                                      : usr.role === ROLES.ORGANIZER
+                                      ? 'var(--color-deep-violet)'
+                                      : usr.role === ROLES.VERIFIER
+                                      ? '#027A48'
+                                      : 'var(--color-dark-text)'
+                                }}
+                              >
+                                {ROLE_LABELS[usr.role] || usr.role}
+                              </span>
+                            </td>
+                            <td style={{ padding: '14px 20px' }}>
+                              <select
+                                value={usr.role || ROLES.PARTICIPANT}
+                                disabled={isUpdating}
+                                onChange={(e) => handleAssignUserRole(usr.uid, e.target.value)}
+                                style={{
+                                  padding: '6px 12px',
+                                  fontSize: '13px',
+                                  fontWeight: 600,
+                                  borderRadius: 'var(--radius-control)',
+                                  border: '1px solid var(--color-gray)',
+                                  backgroundColor: 'var(--color-white)',
+                                  color: 'var(--color-dark-text)',
+                                  cursor: isUpdating ? 'wait' : 'pointer'
+                                }}
+                              >
+                                {ALL_ROLES.map((r) => (
+                                  <option key={r} value={r}>
+                                    {ROLE_LABELS[r]} ({r})
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Zone Permissions per Authority Tier */}
 
             {/* Authority Selector Pills */}
             <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>

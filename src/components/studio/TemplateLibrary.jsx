@@ -5,17 +5,12 @@ import {
   Edit3,
   Eye,
   Trash2,
-  Sparkles,
-  Layers,
-  CheckCircle,
-  Tag,
-  Search,
-  Filter
+  Search
 } from 'lucide-react';
 import Button from '../common/Button';
 import Input from '../common/Input';
 import Modal from '../common/Modal';
-import PassCanvas from './PassCanvas';
+import Ticket3D from '../pass/Ticket3D';
 import {
   getAllTemplates,
   TEMPLATE_CATEGORIES,
@@ -239,25 +234,38 @@ export default function TemplateLibrary({
                 transition: 'border-color 0.15s ease'
               }}
             >
-              {/* Scaled Mini Pass Preview */}
+              {/* Scaled Mini 3D Pass Preview */}
               <div
                 style={{
-                  backgroundColor: 'var(--color-off-white)',
+                  backgroundColor: '#0c0a17',
                   padding: '16px',
                   display: 'flex',
                   justifyContent: 'center',
                   alignItems: 'center',
-                  minHeight: '260px',
-                  borderBottom: '1px solid var(--color-gray)',
-                  position: 'relative'
+                  minHeight: '200px',
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}
               >
-                <div style={{ transform: 'scale(0.85)', transformOrigin: 'center center' }}>
-                  <PassCanvas
-                    template={tpl}
-                    data={SAMPLE_PASS_DATA}
+                <div style={{ transform: 'scale(0.46)', transformOrigin: 'center center' }}>
+                  <Ticket3D
+                    pass={{
+                      id: tpl.id,
+                      eventTitle: tpl.eventTitle || tpl.name,
+                      title: tpl.eventTitle || tpl.name,
+                      category: tpl.category || 'Concert',
+                      passType: tpl.passType || 'Standard Pass',
+                      attendeeName: 'Aarav Shah',
+                      authority: tpl.authority || 'Participant',
+                      date: tpl.date || '15 October 2026',
+                      time: tpl.time || '10:00 AM',
+                      venue: tpl.venue || 'Campus Auditorium',
+                      gate: tpl.gate || 'Gate A',
+                      status: 'Active',
+                      price: tpl.price || 499,
+                      permissions: tpl.permissions || ['General Area']
+                    }}
                     isInteractive={false}
-                    targetWidth={240}
                   />
                 </div>
 
@@ -269,11 +277,11 @@ export default function TemplateLibrary({
                       textTransform: 'uppercase',
                       padding: '3px 8px',
                       borderRadius: '4px',
-                      backgroundColor: tpl.isSystemTemplate ? 'var(--color-black)' : 'var(--color-violet)',
+                      backgroundColor: tpl.isSystemTemplate ? 'rgba(255, 255, 255, 0.15)' : '#7C3AED',
                       color: 'var(--color-white)'
                     }}
                   >
-                    {tpl.isSystemTemplate ? 'System Template' : `v${tpl.currentVersion || 1} Custom`}
+                    {tpl.isSystemTemplate ? 'System Preset' : `v${tpl.currentVersion || 1} Custom 3D`}
                   </span>
                 </div>
               </div>
@@ -386,25 +394,38 @@ export default function TemplateLibrary({
         </div>
       )}
 
-      {/* FULL SCREEN PREVIEW MODAL */}
+      {/* DYNAMIC 3D PASS PREVIEW MODAL */}
       {previewTemplate && (
         <Modal
           isOpen={true}
           onClose={() => setPreviewTemplate(null)}
-          title={`Preview Template: ${previewTemplate.name}`}
-          size="large"
+          title={`3D Pass Preview: ${previewTemplate.name}`}
+          maxWidth="1020px"
+          padding="20px 24px"
+          cancelText={null}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
-            <div style={{ transform: 'scale(0.85)', transformOrigin: 'top center' }}>
-              <PassCanvas
-                template={previewTemplate}
-                data={SAMPLE_PASS_DATA}
-                isInteractive={false}
-                targetWidth={380}
-              />
-            </div>
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+            <Ticket3D
+              pass={{
+                id: previewTemplate.id || 'GP-PREVIEW-001',
+                eventTitle: previewTemplate.eventTitle || previewTemplate.name,
+                title: previewTemplate.eventTitle || previewTemplate.name,
+                category: previewTemplate.category || 'Concert',
+                passType: previewTemplate.passType || 'Standard Pass',
+                attendeeName: 'Aarav Shah',
+                authority: previewTemplate.authority || 'Participant',
+                price: previewTemplate.price || 499,
+                venue: previewTemplate.venue || 'Campus Auditorium',
+                date: previewTemplate.date || '15 October 2026',
+                time: previewTemplate.time || '10:00 AM',
+                gate: previewTemplate.gate || 'Gate A',
+                status: 'Active',
+                permissions: previewTemplate.permissions || ['General Area']
+              }}
+              isInteractive={true}
+            />
 
-            <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
               <Button
                 variant="primary"
                 icon={Edit3}
@@ -413,8 +434,9 @@ export default function TemplateLibrary({
                   setPreviewTemplate(null);
                   if (onOpenEditor) onOpenEditor(target);
                 }}
+                style={{ backgroundColor: '#7C3AED', color: '#FFFFFF' }}
               >
-                Open in Template Editor
+                Open in Pass Studio
               </Button>
               <Button
                 variant="outline"

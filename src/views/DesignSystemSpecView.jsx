@@ -15,8 +15,13 @@ import QRScanner from '../components/scanner/QRScanner';
 import { INITIAL_EVENTS, INITIAL_PASSES, INITIAL_BOOKINGS } from '../data/mockData';
 import { Check, Download } from 'lucide-react';
 
-export default function DesignSystemSpecView() {
-  const [activeTab, setActiveTab] = useState('01-foundations');
+export default function DesignSystemSpecView({ initialTab }) {
+  const isTicketPath = typeof window !== 'undefined' && (
+    window.location.pathname.includes('/ticket') ||
+    window.location.pathname.includes('/3d-ticket') ||
+    window.location.hash.includes('ticket')
+  );
+  const [activeTab, setActiveTab] = useState(initialTab || (isTicketPath ? '08-qr' : '01-foundations'));
   const [modalOpen, setModalOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sampleAllowed, setSampleAllowed] = useState(true);
@@ -425,14 +430,37 @@ export default function DesignSystemSpecView() {
               </p>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 400px) minmax(320px, 420px)', gap: '40px', justifyContent: 'center' }}>
-              <div>
-                <h4 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '12px' }}>Official Digital Pass</h4>
-                <DigitalPass pass={INITIAL_PASSES[0]} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '48px', alignItems: 'center', width: '100%' }}>
+              <div style={{ width: '100%', maxWidth: '820px' }}>
+                <h4 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px', textAlign: 'center' }}>
+                  Premium 3D Digital Event Pass
+                </h4>
+                <DigitalPass
+                  pass={{
+                    id: 'GP-TF26-9481',
+                    eventTitle: 'Astral Nights',
+                    title: 'Astral Nights',
+                    category: 'Concert',
+                    passType: 'VIP Pass',
+                    attendeeName: 'Raj Murkute',
+                    authority: 'VIP',
+                    date: 'Sat, 24 May 2025',
+                    time: '7:00 PM',
+                    venue: 'Phoenix Arena, Bengaluru',
+                    gate: 'Gate A',
+                    status: 'Active',
+                    price: 499,
+                    bookingId: 'GAP12345678',
+                    permissions: ['General Area', 'VIP Lounge', 'Stagefront Access']
+                  }}
+                  showActions={true}
+                />
               </div>
 
-              <div>
-                <h4 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '12px' }}>Mobile QR Scanner Tool</h4>
+              <div style={{ width: '100%', maxWidth: '440px' }}>
+                <h4 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px', textAlign: 'center' }}>
+                  Mobile Optical QR Scanner Tool
+                </h4>
                 <QRScanner onAllowEntry={(chk) => alert(`Entry permitted for ${chk.participant}`)} />
               </div>
             </div>

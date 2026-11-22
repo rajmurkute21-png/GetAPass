@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, browserLocalPersistence, setPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 /**
@@ -87,6 +87,13 @@ if (!validation.isValid) {
     app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
+
+    // Ensure session persistence across browser reloads and tabs
+    if (typeof window !== "undefined" && auth) {
+      setPersistence(auth, browserLocalPersistence).catch((err) => {
+        console.warn("[GateApass Firebase] Auth persistence notice:", err);
+      });
+    }
   } catch (error) {
     console.error(
       `[GateApass Firebase Initialization Error]: Failed to initialize Firebase app: ${error?.message || error}`

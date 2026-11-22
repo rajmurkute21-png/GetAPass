@@ -43,20 +43,86 @@
   background-color: #b5251a !important;
 }
 
-/* Card hover subtle outline reinforcement (flat geometry) */
+/* ==========================================================================
+   GLASSMORPHISM DESIGN ENHANCEMENTS (FULL WEBSITE)
+   ========================================================================== */
+
+/* Glass Cards across the entire website */
 .getapass-card,
-.gateapass-card {
-  transition: border-color 0.15s ease;
+.gateapass-card,
+.gateapass-pass-card,
+.gateapass-event-card {
+  background: rgba(255, 255, 255, 0.84) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.9) !important;
+  border-radius: 18px !important;
+  box-shadow:
+    0 10px 32px -4px rgba(124, 58, 237, 0.07),
+    0 2px 6px rgba(0, 0, 0, 0.03),
+    0 0 0 1px rgba(255, 255, 255, 0.8) inset !important;
+  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 .getapass-card:hover,
-.gateapass-card:hover {
-  border-color: #cccccc;
+.gateapass-card:hover,
+.gateapass-pass-card:hover,
+.gateapass-event-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(168, 85, 247, 0.45) !important;
+  box-shadow:
+    0 18px 44px -8px rgba(124, 58, 237, 0.16),
+    0 4px 10px rgba(0, 0, 0, 0.04),
+    0 0 0 1px rgba(255, 255, 255, 0.95) inset !important;
 }
 
-/* Input focus ring */
-input:focus, select:focus {
-  border-color: var(--color-deep-violet) !important;
+/* Glass Header across the entire website */
+.gateapass-desktop-header {
+  background-color: rgba(255, 255, 255, 0.82) !important;
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.85) !important;
+  box-shadow: 0 4px 24px rgba(124, 58, 237, 0.05) !important;
+}
+
+/* Glass Modal Overlay & Dialog */
+.gateapass-modal-overlay {
+  background-color: rgba(15, 10, 30, 0.55) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.gateapass-modal {
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid rgba(255, 255, 255, 0.95) !important;
+  border-radius: 24px !important;
+  box-shadow:
+    0 28px 70px -12px rgba(124, 58, 237, 0.25),
+    0 0 0 1px rgba(255, 255, 255, 0.9) inset !important;
+}
+
+/* Frosted glass controls and inputs */
+input, select, textarea {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(210, 200, 235, 0.6) !important;
+  box-shadow: 0 2px 6px rgba(124, 58, 237, 0.03);
+  transition: all 0.2s ease;
+}
+
+input:focus, select:focus, textarea:focus {
+  background-color: #ffffff !important;
+  border-color: #7C3AED !important;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15) !important;
+  outline: none;
+}
+
+/* Card hover subtle outline reinforcement */
+.getapass-card:hover,
+.gateapass-card:hover {
+  border-color: rgba(168, 85, 247, 0.45);
 }
 
 /* Scrollbar styling */

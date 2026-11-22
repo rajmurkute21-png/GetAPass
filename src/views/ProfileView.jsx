@@ -16,7 +16,12 @@ import {
   CheckCircle,
   AlertCircle,
   ShieldCheck,
-  Copy
+  Copy,
+  BarChart3,
+  Users,
+  ArrowRight,
+  Lock,
+  Activity
 } from 'lucide-react';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
@@ -265,7 +270,8 @@ export default function ProfileView({
                     type="button"
                     onClick={() => {
                       if (item.id === 'admin-dashboard') {
-                        if (onOpenAdminDashboard) onOpenAdminDashboard();
+                        setActiveTab('admin-dashboard');
+                        setIsEditing(false);
                         return;
                       }
                       if (item.id === 'organizer-studio') {
@@ -685,6 +691,333 @@ export default function ProfileView({
                     >
                       List Your Event & Open Dashboard →
                     </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SUB-VIEW: PLATFORM ADMIN DASHBOARD (Strictly Authorized Platform Admins Only) */}
+            {activeTab === 'admin-dashboard' && isAdmin && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+                {/* Header */}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '16px',
+                    borderBottom: '1px solid var(--color-gray)',
+                    paddingBottom: '20px'
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '4px 10px',
+                          borderRadius: '9999px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          backgroundColor: 'rgba(124, 58, 237, 0.12)',
+                          color: '#7C3AED',
+                          border: '1px solid rgba(124, 58, 237, 0.28)'
+                        }}
+                      >
+                        <ShieldCheck size={13} />
+                        <span>AUTHORIZED PLATFORM ADMINISTRATOR</span>
+                      </span>
+
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          color: '#059669',
+                          backgroundColor: '#ECFDF3',
+                          padding: '3px 8px',
+                          borderRadius: '4px',
+                          border: '1px solid #A7F3D0'
+                        }}
+                      >
+                        ● Systems Operational
+                      </span>
+                    </div>
+
+                    <h2 className="text-h2" style={{ fontSize: '28px', color: 'var(--color-dark-text)', margin: 0 }}>
+                      Platform Administration
+                    </h2>
+                    <p style={{ fontSize: '14px', color: 'var(--color-muted-text)', marginTop: '4px' }}>
+                      Central oversight for 3D digital passes, campus events, user authority management, and turnstiles.
+                    </p>
+                  </div>
+
+                  <Button
+                    variant="primary"
+                    icon={Activity}
+                    onClick={() => onOpenAdminDashboard && onOpenAdminDashboard('dashboard')}
+                    style={{
+                      backgroundColor: 'var(--color-black)',
+                      color: 'var(--color-white)',
+                      boxShadow: '0 4px 14px rgba(0, 0, 0, 0.15)'
+                    }}
+                  >
+                    Open Full Admin Console →
+                  </Button>
+                </div>
+
+                {/* KPI Metrics Summary Grid */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: '16px'
+                  }}
+                >
+                  {[
+                    { label: 'Campus Events', val: '4 Active', sub: 'Across 3 institutions', color: '#7C3AED' },
+                    { label: '3D Passes Issued', val: '3,842', sub: '+18% this month', color: '#0284C7' },
+                    { label: 'Platform Revenue', val: '₹4,12,650', sub: 'Gross ticketing volume', color: '#059669' },
+                    { label: 'Turnstile Scan Rate', val: '76.4%', sub: '2,918 validated entries', color: '#D97706' }
+                  ].map((metric, i) => (
+                    <div
+                      key={i}
+                      className="glass-card"
+                      style={{
+                        padding: '18px 20px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px'
+                      }}
+                    >
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-muted-text)' }}>
+                        {metric.label}
+                      </span>
+                      <span style={{ fontSize: '24px', fontWeight: 800, color: metric.color, letterSpacing: '-0.5px' }}>
+                        {metric.val}
+                      </span>
+                      <span style={{ fontSize: '11px', color: 'var(--color-light-muted)', fontWeight: 500 }}>
+                        {metric.sub}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Quick Access Platform Operations Hub */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--color-dark-text)' }}>
+                    Admin Operations & Configuration Hub
+                  </h3>
+
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                      gap: '18px'
+                    }}
+                  >
+                    {/* Operation 1: Pass Builder */}
+                    <div
+                      className="glass-card"
+                      style={{
+                        padding: '24px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: '16px',
+                        borderRadius: '16px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div
+                          style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '10px',
+                            backgroundColor: 'rgba(124, 58, 237, 0.1)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#7C3AED'
+                          }}
+                        >
+                          <Ticket size={20} strokeWidth={2.2} />
+                        </div>
+                        <h4 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>
+                          Pass Builder & Dynamic Themes
+                        </h4>
+                        <p style={{ fontSize: '13px', color: 'var(--color-muted-text)', lineHeight: '19px', margin: 0 }}>
+                          Configure dynamic 3D ticket themes, select category artwork, define authority admission tiers, and publish to the Pass Library.
+                        </p>
+                      </div>
+
+                      <Button
+                        variant="primary"
+                        icon={ArrowRight}
+                        onClick={() => onOpenAdminDashboard && onOpenAdminDashboard('passes')}
+                        style={{
+                          backgroundColor: '#7C3AED',
+                          color: '#FFFFFF'
+                        }}
+                      >
+                        Open Pass Builder
+                      </Button>
+                    </div>
+
+                    {/* Operation 2: Roles & Authorities */}
+                    <div
+                      className="glass-card"
+                      style={{
+                        padding: '24px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: '16px',
+                        borderRadius: '16px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div
+                          style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '10px',
+                            backgroundColor: 'rgba(8, 145, 178, 0.1)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#0891B2'
+                          }}
+                        >
+                          <Users size={20} strokeWidth={2.2} />
+                        </div>
+                        <h4 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>
+                          User Roles & Authorities
+                        </h4>
+                        <p style={{ fontSize: '13px', color: 'var(--color-muted-text)', lineHeight: '19px', margin: 0 }}>
+                          Audit registered platform attendees and promote accounts to Event Organizers, Gate Verifiers, or Platform Administrators.
+                        </p>
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        icon={ArrowRight}
+                        onClick={() => onOpenAdminDashboard && onOpenAdminDashboard('authorities')}
+                      >
+                        Manage User Roles
+                      </Button>
+                    </div>
+
+                    {/* Operation 3: Turnstile Scanner */}
+                    <div
+                      className="glass-card"
+                      style={{
+                        padding: '24px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: '16px',
+                        borderRadius: '16px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div
+                          style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '10px',
+                            backgroundColor: 'rgba(5, 150, 105, 0.1)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#059669'
+                          }}
+                        >
+                          <QrCode size={20} strokeWidth={2.2} />
+                        </div>
+                        <h4 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>
+                          Gate Verifier Portal
+                        </h4>
+                        <p style={{ fontSize: '13px', color: 'var(--color-muted-text)', lineHeight: '19px', margin: 0 }}>
+                          Access turnstile gate scanners to validate 3D digital passes, audit entry timestamps, and enforce security policies.
+                        </p>
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        icon={ArrowRight}
+                        onClick={() => onOpenVerifierPortal && onOpenVerifierPortal()}
+                      >
+                        Open Gate Verifier
+                      </Button>
+                    </div>
+
+                    {/* Operation 4: Full Platform Console */}
+                    <div
+                      className="glass-card"
+                      style={{
+                        padding: '24px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: '16px',
+                        borderRadius: '16px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div
+                          style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '10px',
+                            backgroundColor: 'rgba(10, 10, 13, 0.08)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'var(--color-dark-text)'
+                          }}
+                        >
+                          <BarChart3 size={20} strokeWidth={2.2} />
+                        </div>
+                        <h4 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>
+                          Full Platform Console
+                        </h4>
+                        <p style={{ fontSize: '13px', color: 'var(--color-muted-text)', lineHeight: '19px', margin: 0 }}>
+                          Enter the full administrative workspace with live participants ledger, payment gateways, and system configuration.
+                        </p>
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        icon={ArrowRight}
+                        onClick={() => onOpenAdminDashboard && onOpenAdminDashboard('dashboard')}
+                      >
+                        Enter Admin Console
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Security Notice Card */}
+                <div
+                  style={{
+                    padding: '16px 20px',
+                    borderRadius: '12px',
+                    backgroundColor: 'rgba(124, 58, 237, 0.06)',
+                    border: '1px solid rgba(124, 58, 237, 0.2)',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '12px'
+                  }}
+                >
+                  <Lock size={18} color="#7C3AED" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div style={{ fontSize: '13px', lineHeight: '20px', color: '#4C1D95' }}>
+                    <strong>Administrative Security Boundary:</strong> You are logged in with verified administrator credentials. Any pass template modifications, event status updates, or role assignments are securely recorded and synchronized with Cloud Firestore in real time.
                   </div>
                 </div>
               </div>
@@ -1159,7 +1492,9 @@ export default function ProfileView({
         isOpen={Boolean(selectedPassForModal)}
         onClose={() => setSelectedPassForModal(null)}
         title="Official GetApass Digital Pass"
-        maxWidth="440px"
+        maxWidth="1020px"
+        padding="20px 24px"
+        cancelText={null}
       >
         {selectedPassForModal && (
           <DigitalPass

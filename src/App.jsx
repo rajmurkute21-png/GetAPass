@@ -10,13 +10,17 @@ import PaymentView from './views/PaymentView';
 import ProfileView from './views/ProfileView';
 import OrganizerStudioView from './views/OrganizerStudioView';
 import AdminView from './views/AdminView';
+import VerifierView from './views/VerifierView';
+import DesignSystemSpecView from './views/DesignSystemSpecView';
 import AuthModal from './components/auth/AuthModal';
+import ProtectedRoute from './components/auth/ProtectedRoute';
 import { useAuth } from './context/AuthContext';
 import { getPassTypesByEvent } from './data/passTypes';
 import { getTemplateById } from './data/passTemplates';
 import {
   canAccessAdminDashboard,
-  canAccessOrganizerDashboard
+  canAccessOrganizerDashboard,
+  canAccessVerifierPortal
 } from './services/permissionService';
 import {
   createBooking,
@@ -49,6 +53,7 @@ export default function App() {
   // 'participant' (public experience) | 'organizer-studio' (event admin & turnstile verifier) | 'admin' (global admin)
   const [portalMode, setPortalMode] = useState('participant');
   const [organizerInitialTab, setOrganizerInitialTab] = useState('dashboard');
+  const [adminInitialTab, setAdminInitialTab] = useState('dashboard');
   const [activeView, setActiveView] = useState('landing'); // 'landing' | 'events' | 'event-details' | 'booking' | 'payment' | 'profile' | 'how-it-works'
   const [profileSubTab, setProfileSubTab] = useState('profile');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -82,21 +87,111 @@ export default function App() {
   const [isMobile, setIsMobile] = useState(false);
 
   // Authentication Context integration
-  const { user: authUser, logout } = useAuth();
+  const { user: authUser, logout, openAuthModal, setAuthModalView } = useAuth();
   const currentUser = authUser || user;
 
-  // Route security guard: enforce verified server-role boundaries
+  // Route security guard: enforce verified server-role boundaries and email verification
   useEffect(() => {
-    if (portalMode === 'admin' && !canAccessAdminDashboard(currentUser)) {
+    const isUnverifiedEmail = Boolean(currentUser && !currentUser.isEmailVerified && !currentUser.isGoogle);
+
+    if (portalMode === 'admin' && (!canAccessAdminDashboard(currentUser) || isUnverifiedEmail)) {
       console.warn('[GateApass Security] Unauthorized attempt to access Admin Dashboard blocked.');
       setPortalMode('participant');
       setActiveView('events');
-    } else if (portalMode === 'organizer-studio' && !canAccessOrganizerDashboard(currentUser)) {
+      if (isUnverifiedEmail && setAuthModalView && openAuthModal) {
+        setAuthModalView('verify');
+        openAuthModal('verify');
+      }
+    } else if (portalMode === 'organizer-studio' && (!canAccessOrganizerDashboard(currentUser) || isUnverifiedEmail)) {
       console.warn('[GateApass Security] Unauthorized attempt to access Organizer Studio blocked.');
       setPortalMode('participant');
       setActiveView('events');
+      if (isUnverifiedEmail && setAuthModalView && openAuthModal) {
+        setAuthModalView('verify');
+        openAuthModal('verify');
+      }
+    } else if (portalMode === 'verifier' && (!canAccessVerifierPortal(currentUser) || isUnverifiedEmail)) {
+      console.warn('[GateApass Security] Unauthorized attempt to access Verifier Portal blocked.');
+      setPortalMode('participant');
+      setActiveView('events');
+      if (isUnverifiedEmail && setAuthModalView && openAuthModal) {
+        setAuthModalView('verify');
+        openAuthModal('verify');
+      }
     }
-  }, [portalMode, currentUser?.role, currentUser?.isAdmin, currentUser?.isOrganizer]);
+  }, [
+    portalMode,
+    currentUser?.role,
+    currentUser?.isAdmin,
+    currentUser?.isOrganizer,
+    currentUser?.isVerifier,
+    currentUser?.isEmailVerified,
+    currentUser?.isGoogle,
+    setAuthModalView,
+    openAuthModal
+  ]);
+
+  // Direct URL routing and browser history synchronization
+  useEffect(() => {
+    const handleUrlRoute = () => {
+      if (typeof window === 'undefined') return;
+      const path = (window.location.pathname || '').toLowerCase();
+      const hash = (window.location.hash || '').toLowerCase().replace('#', '');
+      const search = new URLSearchParams(window.location.search);
+      const portalParam = search.get('portal') || search.get('mode');
+      const viewParam = search.get('view');
+
+      if (path === '/admin' || hash === 'admin' || portalParam === 'admin') {
+        setPortalMode('admin');
+      } else if (path === '/organizer' || hash === 'organizer' || portalParam === 'organizer' || hash === 'organizer-studio') {
+        setPortalMode('organizer-studio');
+      } else if (path === '/verifier' || hash === 'verifier' || portalParam === 'verifier') {
+        setPortalMode('verifier');
+      } else if (
+        path === '/ticket' ||
+        path === '/3d-ticket' ||
+        path === '/design-system' ||
+        hash === 'ticket' ||
+        hash === '3d-ticket' ||
+        hash === 'design-system' ||
+        viewParam === 'ticket' ||
+        viewParam === 'design-system'
+      ) {
+        setPortalMode('participant');
+        setActiveView('design-system');
+      } else if (path === '/profile' || hash === 'profile' || viewParam === 'profile') {
+        setPortalMode('participant');
+        setActiveView('profile');
+      } else if (path === '/events' || hash === 'events' || viewParam === 'events') {
+        setPortalMode('participant');
+        setActiveView('events');
+      }
+    };
+
+    handleUrlRoute();
+    window.addEventListener('popstate', handleUrlRoute);
+    window.addEventListener('hashchange', handleUrlRoute);
+    return () => {
+      window.removeEventListener('popstate', handleUrlRoute);
+      window.removeEventListener('hashchange', handleUrlRoute);
+    };
+  }, []);
+
+  // Update browser URL on portal/view state changes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let target = '/';
+    if (portalMode === 'admin') target = '/admin';
+    else if (portalMode === 'organizer-studio') target = '/organizer';
+    else if (portalMode === 'verifier') target = '/verifier';
+    else if (activeView === 'profile') target = '/profile';
+    else if (activeView === 'events') target = '/events';
+    else if (activeView === 'design-system' || activeView === 'ticket') target = '/ticket';
+
+    if (window.location.pathname !== target && window.location.hash !== `#${target.replace('/', '')}`) {
+      window.history.replaceState({ portalMode, activeView }, '', target);
+    }
+  }, [portalMode, activeView]);
 
   // Account switch handling: wipe in-memory caches
   useEffect(() => {
@@ -243,6 +338,14 @@ export default function App() {
   };
 
   const handleBookEvent = (ev) => {
+    // Requirement 4: Require verified email for email/password accounts before granting access
+    if (currentUser && !currentUser.isEmailVerified && !currentUser.isGoogle) {
+      if (setAuthModalView && openAuthModal) {
+        setAuthModalView('verify');
+        openAuthModal('verify');
+      }
+      return;
+    }
     setSelectedEvent(ev);
     setActiveView('booking');
   };
@@ -282,7 +385,12 @@ export default function App() {
       passType: passType || 'General Pass',
       amount: Number(amount),
       status: 'Active',
-      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      date: selectedEvent?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      time: selectedEvent?.time || '09:00 AM – 06:00 PM',
+      venue: selectedEvent?.venue || 'Campus Auditorium',
+      category: selectedEvent?.category || 'Concert',
+      coverImage: selectedEvent?.coverImage || selectedEvent?.image || '',
+      eventCover: selectedEvent?.coverImage || selectedEvent?.image || '',
       paymentMethod: method,
       attendeeName: attendeeName || currentUser?.name || 'Attendee',
       authority: matchedPassType?.defaultAuthority || 'Participant',
@@ -426,6 +534,7 @@ export default function App() {
                 setOrganizerInitialTab('dashboard');
                 setPortalMode('organizer-studio');
               }}
+              onOpenVerifier={() => setPortalMode('verifier')}
             />
           )}
         </>
@@ -435,51 +544,92 @@ export default function App() {
       <div className="gateapass-content-wrapper" style={{ paddingBottom: isMobile && portalMode === 'participant' ? '72px' : 0 }}>
         {/* GLOBAL ADMINISTRATOR DASHBOARD */}
         {portalMode === 'admin' ? (
-          <AdminView
-            events={adminEvents.length > 0 ? adminEvents : events}
-            participants={adminParticipantsList}
-            onUpdateParticipants={setParticipants}
-            onCreateEvent={(newEvent) => {
-              const saved = saveEvent(newEvent, currentUser);
-              setSelectedEvent(saved);
+          <ProtectedRoute
+            allowedRoles={['admin']}
+            onNavigateHome={() => {
+              setPortalMode('participant');
+              setActiveView('events');
             }}
-            onLogout={handleLogout}
-            onBackToPortal={() => setPortalMode('participant')}
-            currentUser={currentUser}
-          />
+          >
+            <AdminView
+              initialTab={adminInitialTab}
+              events={adminEvents.length > 0 ? adminEvents : events}
+              participants={adminParticipantsList}
+              onUpdateParticipants={setParticipants}
+              onCreateEvent={(newEvent) => {
+                const saved = saveEvent(newEvent, currentUser);
+                setSelectedEvent(saved);
+              }}
+              onLogout={handleLogout}
+              onBackToPortal={() => {
+                setPortalMode('participant');
+                setActiveView('events');
+              }}
+              currentUser={currentUser}
+            />
+          </ProtectedRoute>
         ) : portalMode === 'organizer-studio' ? (
           /* ORGANIZER STUDIO (Event Management, Pass Studio & Turnstile Verifier) */
-          <OrganizerStudioView
-            key={organizerInitialTab}
-            initialTab={organizerInitialTab}
-            events={organizerEvents.length > 0 ? organizerEvents : events.filter((e) => e.organizerUid === currentUser?.uid)}
-            currentUser={currentUser}
-            onCreateEvent={(newEvent) => {
-              const saved = saveEvent(newEvent, currentUser);
-              setSelectedEvent(saved);
-            }}
-            onUpdateEvent={(updatedEvent) => {
-              const updated = updateEvent(updatedEvent.id, updatedEvent, currentUser);
-              if (selectedEvent?.id === updatedEvent.id) {
-                setSelectedEvent(updated);
-              }
-            }}
-            onDeleteEvent={(eventId) => {
-              deleteEvent(eventId, currentUser);
-              if (selectedEvent?.id === eventId) {
-                setSelectedEvent(null);
-              }
-            }}
-            participants={organizerParticipantsList}
-            onUpdateParticipants={setParticipants}
-            checkinHistory={checkinHistory}
-            onRecordCheckin={handleRecordCheckin}
-            onClearHistory={() => setCheckinHistory([])}
-            onBackToProfile={() => {
+          <ProtectedRoute
+            allowedRoles={['admin', 'organizer']}
+            onNavigateHome={() => {
               setPortalMode('participant');
-              setActiveView('profile');
+              setActiveView('events');
             }}
-          />
+          >
+            <OrganizerStudioView
+              key={organizerInitialTab}
+              initialTab={organizerInitialTab}
+              events={organizerEvents.length > 0 ? organizerEvents : events.filter((e) => e.organizerUid === currentUser?.uid)}
+              currentUser={currentUser}
+              onCreateEvent={(newEvent) => {
+                const saved = saveEvent(newEvent, currentUser);
+                setSelectedEvent(saved);
+              }}
+              onUpdateEvent={(updatedEvent) => {
+                const updated = updateEvent(updatedEvent.id, updatedEvent, currentUser);
+                if (selectedEvent?.id === updatedEvent.id) {
+                  setSelectedEvent(updated);
+                }
+              }}
+              onDeleteEvent={(eventId) => {
+                deleteEvent(eventId, currentUser);
+                if (selectedEvent?.id === eventId) {
+                  setSelectedEvent(null);
+                }
+              }}
+              participants={organizerParticipantsList}
+              onUpdateParticipants={setParticipants}
+              checkinHistory={checkinHistory}
+              onRecordCheckin={handleRecordCheckin}
+              onClearHistory={() => setCheckinHistory([])}
+              onBackToProfile={() => {
+                setPortalMode('participant');
+                setActiveView('profile');
+              }}
+            />
+          </ProtectedRoute>
+        ) : portalMode === 'verifier' ? (
+          /* TURNSTILE PASS VERIFIER PORTAL */
+          <ProtectedRoute
+            allowedRoles={['admin', 'organizer', 'verifier']}
+            onNavigateHome={() => {
+              setPortalMode('participant');
+              setActiveView('events');
+            }}
+          >
+            <VerifierView
+              events={events}
+              currentUser={currentUser}
+              checkinHistory={checkinHistory}
+              onRecordCheckin={handleRecordCheckin}
+              onClearHistory={() => setCheckinHistory([])}
+              onBackToPortal={() => {
+                setPortalMode('participant');
+                setActiveView('events');
+              }}
+            />
+          </ProtectedRoute>
         ) : (
           /* SEPARATED PUBLIC PARTICIPANT EXPERIENCE */
           <>
@@ -583,22 +733,43 @@ export default function App() {
             )}
 
             {activeView === 'profile' && (
-              <ProfileView
-                user={currentUser}
-                onUpdateUser={setUser}
-                passes={passes}
-                bookings={bookings}
-                notifications={notifications}
-                initialSubTab={profileSubTab}
-                onOpenOrganizerStudio={(tab = 'dashboard') => {
-                  setOrganizerInitialTab(tab);
-                  setPortalMode('organizer-studio');
-                }}
-                onOpenAdminDashboard={() => {
-                  setPortalMode('admin');
-                }}
-                onLogout={handleLogout}
-              />
+              <ProtectedRoute
+                allowedRoles={['admin', 'organizer', 'verifier', 'participant']}
+                onNavigateHome={() => setActiveView('events')}
+              >
+                <ProfileView
+                  user={currentUser}
+                  onUpdateUser={setUser}
+                  passes={passes}
+                  bookings={bookings}
+                  notifications={notifications}
+                  initialSubTab={profileSubTab}
+                  onOpenOrganizerStudio={(tab = 'dashboard') => {
+                    setOrganizerInitialTab(tab);
+                    setPortalMode('organizer-studio');
+                  }}
+                  onOpenAdminDashboard={(tab = 'dashboard') => {
+                    setAdminInitialTab(tab);
+                    setPortalMode('admin');
+                  }}
+                  onOpenVerifierPortal={() => {
+                    setPortalMode('verifier');
+                  }}
+                  onLogout={handleLogout}
+                />
+              </ProtectedRoute>
+            )}
+
+            {activeView === 'ticket' && (
+              <div style={{ padding: '32px 0 64px' }}>
+                <DesignSystemSpecView initialTab="08-qr" />
+              </div>
+            )}
+
+            {activeView === 'design-system' && (
+              <div style={{ padding: '32px 0 64px' }}>
+                <DesignSystemSpecView initialTab="01-foundations" />
+              </div>
             )}
           </>
         )}

@@ -1,19 +1,65 @@
 import React, { useState } from 'react';
 import QRScanner from '../components/scanner/QRScanner';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, ArrowLeft } from 'lucide-react';
+import { verifyAndCheckinPass } from '../services/bookingService';
 
 export default function VerifierView({
+  events = [],
+  currentUser = null,
   checkinHistory = [],
   onRecordCheckin,
-  onClearHistory
+  onClearHistory,
+  onBackToPortal
 }) {
   const [selectedGate, setSelectedGate] = useState('Gate A');
+  const [selectedEventId, setSelectedEventId] = useState(() => events[0]?.id || '');
+  const [liveVerificationNotice, setLiveVerificationNotice] = useState(null);
 
-  const handleAllowEntry = (checkinData) => {
-    onRecordCheckin({
-      ...checkinData,
-      gate: selectedGate
-    });
+  const selectedEvent = events.find((e) => e.id === selectedEventId) || events[0] || null;
+
+  const handleAllowEntry = async (checkinData) => {
+    let verificationResult = null;
+
+    if (checkinData.passId) {
+      try {
+        verificationResult = await verifyAndCheckinPass({
+          passCode: checkinData.passId,
+          eventId: selectedEvent?.id || null,
+          verifierUser: currentUser,
+          gate: selectedGate
+        });
+
+        if (verificationResult?.valid) {
+          setLiveVerificationNotice({
+            type: 'success',
+            text: `Pass ${checkinData.passId} verified: Access Granted for ${verificationResult.attendeeName}.`
+          });
+        } else {
+          setLiveVerificationNotice({
+            type: 'error',
+            text: `Pass ${checkinData.passId} check-in rejected: ${verificationResult?.reason || 'Invalid pass.'}`
+          });
+        }
+      } catch (err) {
+        console.warn('[GateApass Verifier] Check-in error:', err);
+        setLiveVerificationNotice({
+          type: 'error',
+          text: err?.message || 'Verification error occurred.'
+        });
+      }
+    }
+
+    if (onRecordCheckin) {
+      onRecordCheckin({
+        ...checkinData,
+        gate: selectedGate,
+        event: selectedEvent?.title || checkinData.event || 'Campus Event',
+        verifier: currentUser?.name || currentUser?.displayName || 'Gate Verifier',
+        verificationStatus: verificationResult?.valid ? 'Valid' : 'Warning'
+      });
+    }
+
+    setTimeout(() => setLiveVerificationNotice(null), 5000);
   };
 
   return (
@@ -36,38 +82,121 @@ export default function VerifierView({
           maxWidth: '420px',
           marginBottom: '16px',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          flexDirection: 'column',
+          gap: '12px',
           backgroundColor: 'var(--color-white)',
-          padding: '12px 16px',
+          padding: '14px 16px',
           border: '1px solid var(--color-gray)',
-          borderRadius: '4px'
+          borderRadius: 'var(--radius-card)'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <ShieldCheck size={18} style={{ color: 'var(--color-deep-violet)' }} />
-          <span style={{ fontSize: '13px', fontWeight: 600 }}>Station: Turnstile #1</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShieldCheck size={20} style={{ color: '#027A48' }} />
+            <div>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-dark-text)' }}>
+                Gate Verifier Station
+              </span>
+              <div style={{ fontSize: '11px', color: 'var(--color-muted-text)' }}>
+                Logged in as: {currentUser?.name || currentUser?.displayName || currentUser?.email || 'Verifier'}
+              </div>
+            </div>
+          </div>
+
+          {onBackToPortal && (
+            <button
+              type="button"
+              onClick={onBackToPortal}
+              style={{
+                padding: '4px 8px',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: 'var(--color-muted-text)',
+                backgroundColor: 'transparent',
+                border: '1px solid var(--color-gray)',
+                borderRadius: 'var(--radius-control)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              <ArrowLeft size={13} />
+              <span>Exit</span>
+            </button>
+          )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label style={{ fontSize: '12px', color: 'var(--color-muted-text)' }}>Gate:</label>
-          <select
-            value={selectedGate}
-            onChange={(e) => setSelectedGate(e.target.value)}
+        {/* Event Selector & Gate Selector */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          <div>
+            <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-muted-text)', display: 'block', marginBottom: '2px' }}>
+              Active Event:
+            </label>
+            <select
+              value={selectedEventId}
+              onChange={(e) => setSelectedEventId(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '4px 8px',
+                fontSize: '12px',
+                fontWeight: 600,
+                border: '1px solid var(--color-gray)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--color-white)'
+              }}
+            >
+              {events.length > 0 ? (
+                events.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.title}
+                  </option>
+                ))
+              ) : (
+                <option value="">All Campus Events</option>
+              )}
+            </select>
+          </div>
+
+          <div>
+            <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-muted-text)', display: 'block', marginBottom: '2px' }}>
+              Turnstile Gate:
+            </label>
+            <select
+              value={selectedGate}
+              onChange={(e) => setSelectedGate(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '4px 8px',
+                fontSize: '12px',
+                fontWeight: 600,
+                border: '1px solid var(--color-gray)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--color-white)'
+              }}
+            >
+              <option value="Gate A">Gate A (Main)</option>
+              <option value="Gate B">Gate B (Teams)</option>
+              <option value="Gate VIP">Gate VIP</option>
+            </select>
+          </div>
+        </div>
+
+        {liveVerificationNotice && (
+          <div
             style={{
-              padding: '2px 8px',
+              padding: '8px 12px',
+              borderRadius: '4px',
               fontSize: '12px',
               fontWeight: 600,
-              border: '1px solid var(--color-gray)',
-              borderRadius: '4px',
-              backgroundColor: 'var(--color-white)'
+              backgroundColor: liveVerificationNotice.type === 'success' ? '#ECFDF3' : '#FEF3F2',
+              color: liveVerificationNotice.type === 'success' ? '#027A48' : '#B42318',
+              border: `1px solid ${liveVerificationNotice.type === 'success' ? '#A6F4C5' : '#FECDCA'}`
             }}
           >
-            <option value="Gate A">Gate A (Main)</option>
-            <option value="Gate B">Gate B (Teams)</option>
-            <option value="Gate VIP">Gate VIP</option>
-          </select>
-        </div>
+            {liveVerificationNotice.text}
+          </div>
+        )}
       </div>
 
       {/* The Mobile QR Scanner Interface */}
@@ -94,7 +223,7 @@ export default function VerifierView({
           lineHeight: '16px'
         }}
       >
-        <strong>Verifier Notice:</strong> Optical scanners automatically verify the cryptographic SHA-256 signature embedded inside each attendee pass. Do not admit attendees showing unverified screenshots.
+        <strong>Verifier Notice:</strong> Only authorized gate verifiers, event organizers, and platform administrators can validate passes. Validated passes are marked as Used in Cloud Firestore immediately.
       </div>
     </div>
   );

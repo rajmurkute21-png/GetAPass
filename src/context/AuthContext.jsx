@@ -40,11 +40,17 @@ function mapFirebaseUser(rawUser, role = 'participant') {
   const displayName = rawUser.displayName || rawUser.email?.split('@')[0] || 'GateApass User';
   const email = rawUser.email || '';
   const photoURL = rawUser.photoURL || null;
-  const emailVerified = Boolean(rawUser.emailVerified);
   const uid = rawUser.uid; // Primary identity reference
 
   const providerData = rawUser.providerData?.[0];
   const providerId = providerData?.providerId || 'password';
+  const isGoogle = Boolean(
+    providerId === 'google.com' ||
+    rawUser.providerData?.some((p) => p.providerId === 'google.com')
+  );
+
+  // Requirement 4: Google accounts are verified by definition; email/password accounts require explicit email verification
+  const isEmailVerified = Boolean(rawUser.emailVerified || isGoogle);
 
   return {
     uid,
@@ -52,7 +58,9 @@ function mapFirebaseUser(rawUser, role = 'participant') {
     name: displayName, // Backward compatibility with mockData user.name
     email,
     photoURL,
-    emailVerified,
+    emailVerified: isEmailVerified,
+    isEmailVerified,
+    isGoogle,
     providerId,
     role, // Server-enforced role ('admin' | 'organizer' | 'participant')
     isAdmin: role === 'admin',
@@ -74,13 +82,14 @@ export function AuthProvider({ children }) {
     postLoginCallback: null
   });
 
-  // Listen to Firebase auth state changes with server-verified role resolution
+  // Listen to Firebase auth state changes with server-verified role resolution and profile sync
   useEffect(() => {
     if (!auth) {
+      setLoading(false);
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (rawUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (rawUser) => {
       if (!rawUser) {
         setFirebaseUser(null);
         setUser(null);
@@ -90,16 +99,11 @@ export function AuthProvider({ children }) {
 
       setFirebaseUser(rawUser);
 
-      // 1. Immediately set initial authenticated participant state (0ms delay).
-      // This unblocks the entire application, UI, and event subscription immediately.
-      setUser(mapFirebaseUser(rawUser, 'participant'));
-      setLoading(false);
-
-      // 2. Non-blocking background role resolution and user profile initialization
-      (async () => {
+      // Resolve role and create or update Firestore user profile
+      try {
         let serverRole = 'participant';
 
-        // Check cryptographically signed JWT Custom Claims (Fastest & most secure)
+        // 1. Check cryptographically signed JWT Custom Claims (Fastest & most secure)
         try {
           const tokenResult = await rawUser.getIdTokenResult();
           if (tokenResult.claims?.role) {
@@ -113,48 +117,64 @@ export function AuthProvider({ children }) {
           console.warn('[GateApass Auth] Could not inspect ID token claims:', err);
         }
 
-        // Check trusted Firestore /users/{uid} document if not an admin/organizer claim
-        if (db && serverRole === 'participant') {
+        // 2. Check trusted Firestore /users/{uid} document and sync profile fields
+        // Requirement 5: Create or update Firestore user profiles with UID, name, email, photoURL, role, emailVerified, createdAt and updatedAt
+        if (db) {
           try {
             const userDocRef = doc(db, 'users', rawUser.uid);
             const userDocSnap = await getDoc(userDocRef);
 
+            const isGoogle = Boolean(
+              rawUser.providerData?.some((p) => p.providerId === 'google.com') ||
+              rawUser.providerId === 'google.com'
+            );
+            const isVerified = Boolean(rawUser.emailVerified || isGoogle);
+            const resolvedName = rawUser.displayName || rawUser.email?.split('@')[0] || 'User';
+
             if (userDocSnap.exists()) {
-              const data = userDocSnap.data();
-              if (data?.role) {
-                serverRole = data.role;
+              const existingData = userDocSnap.data();
+              if (existingData?.role) {
+                serverRole = existingData.role;
               }
+
+              // Update profile without modifying role or createdAt (preserves role boundary)
+              const profileUpdate = {
+                uid: rawUser.uid,
+                name: resolvedName,
+                email: rawUser.email || existingData.email || '',
+                photoURL: rawUser.photoURL || existingData.photoURL || null,
+                emailVerified: isVerified,
+                updatedAt: Date.now()
+              };
+              await setDoc(userDocRef, profileUpdate, { merge: true });
             } else {
-              // First time login - initialize user document
-              // Server security rules ensure clients can only initialize role as 'participant'
+              // First time sign-in: Initialize user document
+              // Requirement 6: Public signup NEVER assigns admin, organizer or verifier roles
               const initialProfile = {
                 uid: rawUser.uid,
+                name: resolvedName,
                 email: rawUser.email || '',
-                displayName: rawUser.displayName || rawUser.email?.split('@')[0] || 'User',
+                photoURL: rawUser.photoURL || null,
                 role: 'participant',
+                emailVerified: isVerified,
                 createdAt: Date.now(),
                 updatedAt: Date.now()
               };
               await setDoc(userDocRef, initialProfile);
             }
           } catch (err) {
-            console.warn('[GateApass Auth] User profile document lookup notice:', err);
+            console.warn('[GateApass Auth] User profile document sync notice:', err);
           }
         }
 
-        // Update user state if an elevated role was resolved
-        if (serverRole !== 'participant') {
-          setUser(mapFirebaseUser(rawUser, serverRole));
-        }
-
-        // Diagnostic log (Requirement 5)
-        console.log('[GateApass Auth] Verified auth state:', {
-          uid: rawUser.uid,
-          role: serverRole
-        });
-      })().catch((err) => {
+        // Set verified user state with settled role
+        setUser(mapFirebaseUser(rawUser, serverRole));
+      } catch (err) {
         console.warn('[GateApass Auth] Background role resolution error:', err);
-      });
+        setUser(mapFirebaseUser(rawUser, 'participant'));
+      } finally {
+        setLoading(false);
+      }
     });
 
     return () => unsubscribe();
@@ -194,6 +214,15 @@ export function AuthProvider({ children }) {
 
   const handleLoginWithEmail = useCallback(async (email, password) => {
     const loggedUser = await loginUserWithEmail(email, password);
+    // Requirement 4: Require verified email for email/password accounts before granting application access
+    if (!loggedUser.emailVerified) {
+      setAuthModal({
+        isOpen: true,
+        view: 'verify',
+        postLoginCallback: null
+      });
+      return loggedUser;
+    }
     setAuthModal((prev) => {
       if (prev.postLoginCallback) {
         prev.postLoginCallback(loggedUser);
@@ -234,11 +263,28 @@ export function AuthProvider({ children }) {
     if (firebaseUser) {
       const refreshed = await reloadUserState(firebaseUser);
       setFirebaseUser(refreshed);
-      setUser(mapFirebaseUser(refreshed));
+      const isGoogle = refreshed?.providerData?.some((p) => p.providerId === 'google.com') || false;
+      const isVerified = Boolean(refreshed?.emailVerified || isGoogle);
+
+      if (isVerified && db && refreshed?.uid) {
+        // Sync verified state to Firestore user profile
+        try {
+          await setDoc(
+            doc(db, 'users', refreshed.uid),
+            { emailVerified: true, updatedAt: Date.now() },
+            { merge: true }
+          );
+        } catch (err) {
+          console.warn('[GateApass Auth] Could not sync emailVerified to profile:', err);
+        }
+      }
+
+      const updated = mapFirebaseUser(refreshed, user?.role || 'participant');
+      setUser(updated);
       return refreshed;
     }
     return null;
-  }, [firebaseUser]);
+  }, [firebaseUser, user?.role]);
 
   const value = useMemo(() => ({
     user,
@@ -246,6 +292,8 @@ export function AuthProvider({ children }) {
     loading,
     isFirebaseConfigured,
     isAuthenticated: Boolean(user),
+    isEmailVerified: Boolean(user?.isEmailVerified),
+    needsEmailVerification: Boolean(user && !user.isEmailVerified && !user.isGoogle),
     authModal,
     openAuthModal,
     closeAuthModal,
