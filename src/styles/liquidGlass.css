@@ -1,28 +1,35 @@
 /* ==========================================================================
-   GetAPass — Selective Mobile-First Liquid Glass UI System
-   Inspired by Apple Liquid Glass with GetAPass Electric Violet (#7C3AED)
+   GetAPass — Premium Mobile Liquid Glass UI System
+   Aesthetic: Frosted Glassmorphism with Luminous Backlighting
+   Palette: Primary Electric Violet (#7C3AED), Vibrant Purple (#9333EA),
+            Accent Pink (#EC4899), Soft Lavender (#C4B5FD), White (#FFFFFF)
    ========================================================================== */
 
 :root {
-  /* Liquid Glass Color & Lighting Tokens */
-  --liquid-glass-primary: #7C3AED;
-  --liquid-glass-accent: #8B5CF6;
-  --liquid-glass-deep: #6D28D9;
-  --liquid-glass-glow: rgba(124, 58, 237, 0.45);
-  --liquid-glass-glow-subtle: rgba(124, 58, 237, 0.18);
+  /* Brand Colours */
+  --liquid-glass-primary: #7C3AED;      /* Primary Electric Violet */
+  --liquid-glass-purple: #9333EA;       /* Vibrant Purple */
+  --liquid-glass-pink: #EC4899;         /* Accent Pink */
+  --liquid-glass-lavender: #C4B5FD;     /* Soft Lavender */
+  --liquid-glass-white: #FFFFFF;
+
+  /* Luminous Backlighting & Ambient Radiance */
+  --liquid-glass-glow-violet: rgba(124, 58, 237, 0.38);
+  --liquid-glass-glow-pink: rgba(236, 72, 153, 0.26);
+  --liquid-glass-glow-ambient: 0 8px 24px -4px rgba(147, 51, 234, 0.36), 0 0 16px -2px rgba(236, 72, 153, 0.22);
   
-  /* Translucent Glass Surfaces */
-  --liquid-glass-surface-dark: rgba(18, 13, 33, 0.82);
-  --liquid-glass-surface-light: rgba(255, 255, 255, 0.84);
-  --liquid-glass-surface-card: rgba(255, 255, 255, 0.88);
-  --liquid-glass-border-light: rgba(255, 255, 255, 0.22);
-  --liquid-glass-border-violet: rgba(168, 85, 247, 0.35);
+  /* Translucent & Frosted Glass Surfaces */
+  --liquid-glass-surface-dark: rgba(20, 14, 38, 0.84);
+  --liquid-glass-surface-light: rgba(255, 255, 255, 0.85);
+  --liquid-glass-surface-sheet: rgba(255, 255, 255, 0.95);
+  --liquid-glass-border-light: rgba(255, 255, 255, 0.24);
+  --liquid-glass-border-violet: rgba(196, 181, 253, 0.36);
   
   /* Specular Highlight & Inner Reflections */
-  --liquid-glass-specular: inset 0 1px 1px 0 rgba(255, 255, 255, 0.45);
-  --liquid-glass-shadow-nav: 0 16px 40px -8px rgba(0, 0, 0, 0.48), 0 0 20px rgba(124, 58, 237, 0.16);
-  --liquid-glass-shadow-btn: 0 8px 24px -4px rgba(124, 58, 237, 0.42);
-  --liquid-glass-shadow-fab: 0 10px 28px -4px rgba(124, 58, 237, 0.55), 0 0 0 4px rgba(124, 58, 237, 0.18);
+  --liquid-glass-specular: inset 0 1px 1px 0 rgba(255, 255, 255, 0.52);
+  --liquid-glass-shadow-nav: 0 16px 40px -8px rgba(12, 6, 26, 0.52), 0 0 24px rgba(147, 51, 234, 0.18), 0 0 12px rgba(236, 72, 153, 0.12);
+  --liquid-glass-shadow-btn: 0 8px 22px -4px rgba(124, 58, 237, 0.44), 0 0 14px -2px rgba(236, 72, 153, 0.24);
+  --liquid-glass-shadow-fab: 0 10px 28px -4px rgba(124, 58, 237, 0.54), 0 0 18px rgba(236, 72, 153, 0.32), 0 0 0 4px rgba(196, 181, 253, 0.2);
   
   /* Blur Radii */
   --liquid-glass-blur: blur(20px);
@@ -30,7 +37,7 @@
 }
 
 /* ==========================================================================
-   A. FLOATING BOTTOM NAVIGATION (GLASS EFFECT)
+   A. FLOATING BOTTOM NAVIGATION (FROSTED GLASS EFFECT)
    ========================================================================== */
 .liquid-glass-nav-container {
   position: fixed;
@@ -109,19 +116,19 @@
 }
 
 .liquid-glass-nav-item.is-active .liquid-glass-nav-icon-wrap {
-  background: rgba(139, 92, 246, 0.25);
-  box-shadow: 0 0 14px rgba(124, 58, 237, 0.5);
-  color: #C084FC;
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.3) 0%, rgba(236, 72, 153, 0.22) 100%);
+  box-shadow: 0 0 16px rgba(236, 72, 153, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+  color: #F472B6;
 }
 
-/* Floating Center QR Scan Action Button (FAB) */
+/* Floating Center QR Scan Action Button (FAB) with Luminous Backlighting */
 .liquid-glass-nav-fab {
   position: relative;
   width: 50px;
   height: 50px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #9333EA 0%, #7C3AED 50%, #6D28D9 100%);
-  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  background: linear-gradient(135deg, #9333EA 0%, #7C3AED 52%, #EC4899 100%);
+  border: 1.5px solid rgba(255, 255, 255, 0.48);
   box-shadow: var(--liquid-glass-shadow-fab), var(--liquid-glass-specular);
   display: flex;
   align-items: center;
@@ -136,7 +143,7 @@
 
 .liquid-glass-nav-fab:active {
   transform: scale(0.93);
-  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.6);
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.6), 0 0 12px rgba(236, 72, 153, 0.4);
 }
 
 .liquid-glass-nav-fab-pulse {
@@ -146,20 +153,20 @@
   right: -4px;
   bottom: -4px;
   border-radius: 50%;
-  background: rgba(168, 85, 247, 0.25);
+  background: rgba(236, 72, 153, 0.24);
   z-index: -1;
   pointer-events: none;
   animation: fabPulse 2.8s infinite ease-out;
 }
 
 @keyframes fabPulse {
-  0% { transform: scale(0.95); opacity: 0.8; }
-  50% { transform: scale(1.15); opacity: 0.2; }
-  100% { transform: scale(0.95); opacity: 0.8; }
+  0% { transform: scale(0.95); opacity: 0.85; background: rgba(147, 51, 234, 0.28); }
+  50% { transform: scale(1.18); opacity: 0.22; background: rgba(236, 72, 153, 0.32); }
+  100% { transform: scale(0.95); opacity: 0.85; background: rgba(147, 51, 234, 0.28); }
 }
 
 /* ==========================================================================
-   B. PRIMARY ACTION BUTTONS (GLASS STYLE)
+   B. LIQUID GLASS BUTTONS (VIBRANT PURPLE & PINK LUMINOUS GRADIENT)
    ========================================================================== */
 .gateapass-btn-liquid-glass {
   position: relative;
@@ -170,9 +177,9 @@
   padding: 0 24px;
   height: 48px;
   border-radius: 9999px !important;
-  background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 52%, #6D28D9 100%) !important;
+  background: linear-gradient(135deg, #9333EA 0%, #7C3AED 52%, #EC4899 100%) !important;
   color: #ffffff !important;
-  border: 1px solid rgba(255, 255, 255, 0.32) !important;
+  border: 1px solid rgba(255, 255, 255, 0.36) !important;
   box-shadow: var(--liquid-glass-shadow-btn), var(--liquid-glass-specular) !important;
   font-size: 15px !important;
   font-weight: 700 !important;
@@ -190,8 +197,8 @@
 
 .gateapass-btn-liquid-glass:hover {
   transform: translateY(-1.5px);
-  box-shadow: 0 12px 28px -4px rgba(124, 58, 237, 0.52), inset 0 1px 1px rgba(255, 255, 255, 0.6) !important;
-  border-color: rgba(255, 255, 255, 0.45) !important;
+  box-shadow: 0 12px 28px -4px rgba(124, 58, 237, 0.52), 0 0 20px rgba(236, 72, 153, 0.32), inset 0 1px 1px rgba(255, 255, 255, 0.65) !important;
+  border-color: rgba(255, 255, 255, 0.55) !important;
 }
 
 .gateapass-btn-liquid-glass:active {
@@ -199,7 +206,7 @@
   box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4), inset 0 1px 2px rgba(0, 0, 0, 0.2) !important;
 }
 
-/* Secondary Translucent Glass Action (e.g. Save Pass, Share) */
+/* Secondary Translucent Glass Action (e.g. Save Pass, Share, Flip) */
 .gateapass-btn-liquid-secondary {
   position: relative;
   display: inline-flex;
@@ -209,7 +216,7 @@
   padding: 0 20px;
   height: 48px;
   border-radius: 9999px !important;
-  background: rgba(255, 255, 255, 0.8) !important;
+  background: rgba(255, 255, 255, 0.82) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   color: #1F192F !important;
@@ -223,17 +230,17 @@
 }
 
 .gateapass-btn-liquid-secondary:hover {
-  background: rgba(255, 255, 255, 0.95) !important;
-  border-color: rgba(168, 85, 247, 0.35) !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  border-color: rgba(236, 72, 153, 0.35) !important;
   transform: translateY(-1px);
-  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.12) !important;
+  box-shadow: 0 8px 22px rgba(124, 58, 237, 0.12), 0 0 10px rgba(236, 72, 153, 0.08) !important;
 }
 
 .gateapass-btn-liquid-secondary:active {
   transform: scale(0.97) !important;
 }
 
-/* Mobile Sticky Bottom Floating Booking Bar */
+/* Mobile Sticky Bottom Floating Booking Bar with Luminous Rim */
 .liquid-glass-sticky-cta-bar {
   display: none;
 }
@@ -246,11 +253,11 @@
     left: 0;
     right: 0;
     z-index: 80;
-    background: rgba(255, 255, 255, 0.88);
+    background: rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
-    border-top: 1px solid rgba(255, 255, 255, 0.85);
-    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.08);
+    border-top: 1px solid rgba(255, 255, 255, 0.95);
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.08), 0 0 20px rgba(147, 51, 234, 0.06);
     padding: 12px 18px max(14px, env(safe-area-inset-bottom, 14px));
     align-items: center;
     justify-content: space-between;
@@ -265,10 +272,10 @@
 }
 
 /* ==========================================================================
-   C. MODALS & BOTTOM SHEETS (FROSTED GLASS)
+   C. MODALS & BOTTOM SHEETS (FROSTED GLASS EFFECT)
    ========================================================================== */
 .liquid-glass-modal-overlay {
-  background-color: rgba(12, 8, 24, 0.7) !important;
+  background-color: rgba(14, 8, 28, 0.72) !important;
   backdrop-filter: blur(20px) !important;
   -webkit-backdrop-filter: blur(20px) !important;
   transition: opacity 0.25s ease;
@@ -289,14 +296,14 @@
     max-height: 90vh !important;
     padding: 16px 20px max(24px, env(safe-area-inset-bottom, 24px)) !important;
     animation: modalSlideUpSheet 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
-    background: rgba(255, 255, 255, 0.94) !important;
+    background: rgba(255, 255, 255, 0.95) !important;
     backdrop-filter: var(--liquid-glass-blur-sheet) !important;
     -webkit-backdrop-filter: var(--liquid-glass-blur-sheet) !important;
     border-bottom: none !important;
     border-left: none !important;
     border-right: none !important;
     border-top: 1px solid rgba(255, 255, 255, 0.95) !important;
-    box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.24) !important;
+    box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.24), 0 0 32px rgba(147, 51, 234, 0.08) !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
   }
@@ -345,7 +352,8 @@
 }
 
 .liquid-glass-close-btn:hover {
-  background: rgba(0, 0, 0, 0.09);
+  background: rgba(236, 72, 153, 0.1);
+  color: #9333EA;
   transform: rotate(90deg);
 }
 
@@ -354,7 +362,7 @@
 }
 
 /* ==========================================================================
-   D. FLOATING FILTERS & CONTROLS (GLASS CHIPS)
+   D. FLOATING FILTERS & CONTROLS (GLASS CHIPS & SEARCH)
    ========================================================================== */
 .liquid-glass-chip {
   display: inline-flex;
@@ -367,12 +375,12 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  background: rgba(255, 255, 255, 0.76);
+  background: rgba(255, 255, 255, 0.78);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(255, 255, 255, 0.92);
   color: #372F48;
-  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.85);
   transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   user-select: none;
   -webkit-user-select: none;
@@ -380,10 +388,10 @@
 }
 
 .liquid-glass-chip:hover {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: rgba(168, 85, 247, 0.3);
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(236, 72, 153, 0.35);
   transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.12);
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.12), 0 0 8px rgba(236, 72, 153, 0.1);
 }
 
 .liquid-glass-chip:active {
@@ -391,10 +399,10 @@
 }
 
 .liquid-glass-chip.is-active {
-  background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+  background: linear-gradient(135deg, #9333EA 0%, #7C3AED 55%, #EC4899 100%);
   color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.35);
-  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.45);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 16px rgba(147, 51, 234, 0.35), 0 0 10px rgba(236, 72, 153, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.45);
 }
 
 /* Floating Glass Search Input */
@@ -411,7 +419,7 @@
   height: 46px;
   border-radius: 9999px;
   padding: 0 44px 0 42px;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.92);
@@ -424,8 +432,8 @@
 
 .liquid-glass-search-input:focus {
   background: #ffffff;
-  border-color: #8B5CF6;
-  box-shadow: 0 6px 24px rgba(124, 58, 237, 0.16), 0 0 0 3px rgba(124, 58, 237, 0.14);
+  border-color: #9333EA;
+  box-shadow: 0 6px 24px rgba(124, 58, 237, 0.16), 0 0 0 3px rgba(236, 72, 153, 0.16);
 }
 
 .liquid-glass-search-icon {
@@ -448,6 +456,12 @@
   justify-content: center;
   color: #666;
   cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.liquid-glass-search-clear:hover {
+  background: rgba(236, 72, 153, 0.15);
+  color: #9333EA;
 }
 
 /* Floating Suggestions Glass Card */
@@ -456,12 +470,12 @@
   top: 52px;
   left: 0;
   right: 0;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.95);
   border-radius: 20px;
-  box-shadow: 0 16px 40px rgba(124, 58, 237, 0.12), 0 2px 6px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 16px 40px rgba(124, 58, 237, 0.14), 0 0 20px rgba(236, 72, 153, 0.1);
   padding: 8px;
   z-index: 50;
   overflow: hidden;
@@ -484,7 +498,7 @@
     background: #ffffff !important;
   }
   .liquid-glass-modal-overlay {
-    background-color: rgba(12, 8, 24, 0.9) !important;
+    background-color: rgba(14, 8, 28, 0.9) !important;
   }
   .gateapass-modal {
     background: #ffffff !important;
@@ -509,3 +523,4 @@
     animation: none !important;
   }
 }
+

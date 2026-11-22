@@ -122,7 +122,7 @@ export default function EventsView({
               {/* Floating Suggestions Glass Card */}
               {searchFocused && (
                 <div className="liquid-glass-suggestions">
-                  <div style={{ padding: '6px 12px 4px', fontSize: '11px', fontWeight: 700, color: '#8B5CF6', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                  <div style={{ padding: '6px 12px 4px', fontSize: '11px', fontWeight: 700, color: '#9333EA', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
                     Quick Suggestions
                   </div>
                   {SUGGESTIONS.map((sug, i) => {
@@ -153,10 +153,10 @@ export default function EventsView({
                           textAlign: 'left',
                           transition: 'background 0.15s ease'
                         }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(124, 58, 237, 0.08)'; }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(236, 72, 153, 0.08)'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                       >
-                        <SugIcon size={15} style={{ color: '#7C3AED' }} />
+                        <SugIcon size={15} style={{ color: '#9333EA' }} />
                         <span>{sug.label}</span>
                       </button>
                     );
@@ -179,10 +179,10 @@ export default function EventsView({
                   backdropFilter: 'blur(14px)',
                   WebkitBackdropFilter: 'blur(14px)',
                   border: '1px solid rgba(255, 255, 255, 0.92)',
-                  boxShadow: '0 2px 8px rgba(124, 58, 237, 0.06)'
+                  boxShadow: '0 2px 8px rgba(124, 58, 237, 0.06), 0 0 10px rgba(236, 72, 153, 0.04)'
                 }}
               >
-                <ArrowUpDown size={14} style={{ color: '#7C3AED' }} />
+                <ArrowUpDown size={14} style={{ color: '#9333EA' }} />
                 <label htmlFor="events-sort-select" style={{ fontSize: '12px', color: '#666', fontWeight: 600 }}>Sort:</label>
                 <select
                   id="events-sort-select"
