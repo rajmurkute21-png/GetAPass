@@ -135,7 +135,7 @@ requiredPassTiers.forEach((tier) => {
 console.log('\n--- SECTION 4: Universal Ticket Architecture & Ticket3D ---');
 
 const ticket3DSrc = fs.readFileSync(path.join(rootDir, 'src/components/pass/Ticket3D.jsx'), 'utf-8');
-const ticket3DCss = fs.readFileSync(path.join(rootDir, 'src/components/pass/Ticket3D.css'), 'utf-8');
+const ticket3DCss = fs.readFileSync(path.join(rootDir, 'src/components/pass/Ticket3D.css'), 'utf-8').replace(/\r\n/g, '\n');
 
 check('Ticket3D imports resolvePassTypeTheme', () => {
   assert(ticket3DSrc.includes('resolvePassTypeTheme'));
