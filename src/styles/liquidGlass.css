@@ -482,7 +482,138 @@
 }
 
 /* ==========================================================================
-   E. ACCESSIBILITY & FALLBACKS
+   E. SMOOTH GLASSMORPHISM TOGGLE SWITCH (COOL BLUE & SERENE AMBIENCE)
+   ========================================================================== */
+.liquid-glass-toggle-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.liquid-glass-toggle-container.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.liquid-glass-toggle-track {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  cursor: pointer;
+  padding: 0 3px;
+  box-sizing: border-box;
+  outline: none;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.25), 0 4px 14px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Size: Medium (Default) */
+.liquid-glass-toggle-track.size-medium {
+  width: 54px;
+  height: 30px;
+}
+
+.liquid-glass-toggle-track.size-medium .liquid-glass-toggle-thumb {
+  width: 24px;
+  height: 24px;
+}
+
+.liquid-glass-toggle-track.size-medium.is-checked .liquid-glass-toggle-thumb {
+  transform: translateX(24px);
+}
+
+/* Size: Small */
+.liquid-glass-toggle-track.size-small {
+  width: 42px;
+  height: 24px;
+}
+
+.liquid-glass-toggle-track.size-small .liquid-glass-toggle-thumb {
+  width: 18px;
+  height: 18px;
+}
+
+.liquid-glass-toggle-track.size-small.is-checked .liquid-glass-toggle-thumb {
+  transform: translateX(18px);
+}
+
+/* Size: Large */
+.liquid-glass-toggle-track.size-large {
+  width: 64px;
+  height: 36px;
+}
+
+.liquid-glass-toggle-track.size-large .liquid-glass-toggle-thumb {
+  width: 28px;
+  height: 28px;
+}
+
+.liquid-glass-toggle-track.size-large.is-checked .liquid-glass-toggle-thumb {
+  transform: translateX(28px);
+}
+
+/* Cool Blue Serene Variant (Checked State) */
+.liquid-glass-toggle-track.variant-cool-blue.is-checked {
+  background: linear-gradient(135deg, rgba(2, 132, 199, 0.78) 0%, rgba(14, 165, 233, 0.88) 50%, rgba(56, 189, 248, 0.95) 100%);
+  border-color: rgba(224, 242, 254, 0.5);
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.36), 0 4px 14px rgba(2, 132, 199, 0.28), inset 0 1px 1px rgba(255, 255, 255, 0.6);
+}
+
+/* Violet-Pink Brand Variant (Checked State) */
+.liquid-glass-toggle-track.variant-violet-pink.is-checked {
+  background: linear-gradient(135deg, #9333EA 0%, #7C3AED 52%, #EC4899 100%);
+  border-color: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 0 20px rgba(236, 72, 153, 0.32), 0 4px 14px rgba(124, 58, 237, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.6);
+}
+
+/* Smooth Frosted Glass Thumb (Knob) */
+.liquid-glass-toggle-thumb {
+  display: block;
+  border-radius: 50%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(240, 249, 255, 0.92) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.16), inset 0 1px 1px #ffffff;
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.28s ease, background 0.28s ease;
+  pointer-events: none;
+}
+
+.liquid-glass-toggle-track.is-checked .liquid-glass-toggle-thumb {
+  box-shadow: 0 3px 10px rgba(2, 132, 199, 0.35), 0 0 8px rgba(56, 189, 248, 0.5), inset 0 1px 1px #ffffff;
+}
+
+.liquid-glass-toggle-track:hover:not(:disabled) .liquid-glass-toggle-thumb {
+  transform: scale(1.05);
+}
+
+.liquid-glass-toggle-track.is-checked:hover:not(:disabled) .liquid-glass-toggle-thumb {
+  transform: translateX(24px) scale(1.05);
+}
+
+.liquid-glass-toggle-track.size-small.is-checked:hover:not(:disabled) .liquid-glass-toggle-thumb {
+  transform: translateX(18px) scale(1.05);
+}
+
+.liquid-glass-toggle-track.size-large.is-checked:hover:not(:disabled) .liquid-glass-toggle-thumb {
+  transform: translateX(28px) scale(1.05);
+}
+
+.liquid-glass-toggle-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   F. ACCESSIBILITY & FALLBACKS
    ========================================================================== */
 @supports not (backdrop-filter: blur(1px)) {
   .liquid-glass-nav-pill {

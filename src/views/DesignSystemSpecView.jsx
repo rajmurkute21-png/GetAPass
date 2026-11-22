@@ -6,6 +6,7 @@ import StatusBadge from '../components/common/StatusBadge';
 import Tabs from '../components/common/Tabs';
 import Modal from '../components/common/Modal';
 import Drawer from '../components/common/Drawer';
+import GlassToggle from '../components/common/GlassToggle';
 import PermissionControl from '../components/permissions/PermissionControl';
 import EventCard from '../components/cards/EventCard';
 import PassCard from '../components/cards/PassCard';
@@ -25,6 +26,7 @@ export default function DesignSystemSpecView({ initialTab }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sampleAllowed, setSampleAllowed] = useState(true);
+  const [glassToggleVal, setGlassToggleVal] = useState(true);
 
   const sections = [
     { id: '01-foundations', label: '01 Foundations' },
@@ -358,6 +360,68 @@ export default function DesignSystemSpecView({ initialTab }) {
                 allowed={false}
                 disabled={true}
               />
+
+              {/* Smooth Glassmorphic Toggle Showcase */}
+              <div
+                style={{
+                  marginTop: '16px',
+                  padding: '20px',
+                  borderRadius: '16px',
+                  background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                  color: '#ffffff',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h5 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: '#f8fafc' }}>
+                      Glassmorphic Smooth Toggle (Cool Blue Palette)
+                    </h5>
+                    <p style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 0' }}>
+                      Frosted glassmorphism, soft gradients, and serene cool-blue lighting
+                    </p>
+                  </div>
+                  <GlassToggle
+                    checked={glassToggleVal}
+                    onChange={setGlassToggleVal}
+                    variant="cool-blue"
+                    size="medium"
+                    aria-label="Toggle serene mode"
+                  />
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '20px', paddingTop: '10px', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '12px', color: '#cbd5e1' }}>Small:</span>
+                    <GlassToggle
+                      checked={glassToggleVal}
+                      onChange={setGlassToggleVal}
+                      variant="cool-blue"
+                      size="small"
+                    />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '12px', color: '#cbd5e1' }}>Brand Violet:</span>
+                    <GlassToggle
+                      checked={glassToggleVal}
+                      onChange={setGlassToggleVal}
+                      variant="violet-pink"
+                      size="small"
+                    />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '12px', color: '#cbd5e1' }}>Large:</span>
+                    <GlassToggle
+                      checked={glassToggleVal}
+                      onChange={setGlassToggleVal}
+                      variant="cool-blue"
+                      size="large"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
