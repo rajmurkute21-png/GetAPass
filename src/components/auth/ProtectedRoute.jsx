@@ -2,6 +2,7 @@ import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { hasRole, getUserRole, ROLE_LABELS } from '../../services/permissionService';
 import Button from '../common/Button';
+import LogoLoader from '../common/LogoLoader';
 import { ShieldAlert, ArrowLeft } from 'lucide-react';
 
 /**
@@ -24,23 +25,13 @@ export default function ProtectedRoute({
 }) {
   const { isAuthenticated, user, loading, openAuthModal, setAuthModalView } = useAuth();
 
-  // 1. Loading state
+  // 1. Loading state (Signature GetAPass Official Logo Loader)
   if (loading) {
     return (
-      <div style={{ padding: '64px 20px', textAlign: 'center', color: 'var(--color-muted-text)' }}>
-        <div
-          style={{
-            display: 'inline-block',
-            width: '28px',
-            height: '28px',
-            border: '2px solid var(--color-violet)',
-            borderTopColor: 'transparent',
-            borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite'
-          }}
-        />
-        <p style={{ fontSize: '13px', marginTop: '12px' }}>Checking authorization session...</p>
-      </div>
+      <LogoLoader
+        variant="full-page"
+        text="Checking authorization session..."
+      />
     );
   }
 

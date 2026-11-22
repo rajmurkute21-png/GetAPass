@@ -18,6 +18,7 @@ import StatusBadge from '../components/common/StatusBadge';
 import DataTable from '../components/table/DataTable';
 import Modal from '../components/common/Modal';
 import Drawer from '../components/common/Drawer';
+import LogoLoader from '../components/common/LogoLoader';
 import PermissionControl from '../components/permissions/PermissionControl';
 import Ticket3D from '../components/pass/Ticket3D';
 import { resolveTicketTheme, TICKET_CATEGORIES } from '../constants/ticketThemes';
@@ -1478,9 +1479,7 @@ export default function AdminView({
               </div>
 
               {usersList.length === 0 ? (
-                <div style={{ padding: '32px', textAlign: 'center', color: 'var(--color-muted-text)' }}>
-                  Loading registered platform accounts...
-                </div>
+                <LogoLoader variant="section" text="Loading registered platform accounts..." />
               ) : (
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>

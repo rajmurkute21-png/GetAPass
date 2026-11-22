@@ -7,6 +7,7 @@ import Tabs from '../components/common/Tabs';
 import Modal from '../components/common/Modal';
 import Drawer from '../components/common/Drawer';
 import GlassToggle from '../components/common/GlassToggle';
+import LogoLoader from '../components/common/LogoLoader';
 import PermissionControl from '../components/permissions/PermissionControl';
 import EventCard from '../components/cards/EventCard';
 import PassCard from '../components/cards/PassCard';
@@ -419,6 +420,79 @@ export default function DesignSystemSpecView({ initialTab }) {
                       variant="cool-blue"
                       size="large"
                     />
+                  </div>
+                </div>
+              </div>
+
+              {/* GetAPass Official Logo Loader Showcase */}
+              <div
+                style={{
+                  marginTop: '16px',
+                  padding: '24px',
+                  borderRadius: '16px',
+                  background: 'linear-gradient(135deg, rgba(20, 14, 38, 0.95) 0%, rgba(12, 8, 24, 0.98) 100%)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  color: '#ffffff',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '20px'
+                }}
+              >
+                <div>
+                  <h5 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: '#f8fafc' }}>
+                    Signature Animated Official Logo Loader
+                  </h5>
+                  <p style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 0' }}>
+                    Compact, elegant 3D vertical flip, soft purple/pink glow, scale pulse, and 3-dot indicator.
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: '16px',
+                    alignItems: 'center'
+                  }}
+                >
+                  {/* Section Loader Preview */}
+                  <div
+                    style={{
+                      padding: '20px',
+                      borderRadius: '12px',
+                      background: 'rgba(255, 255, 255, 0.04)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)'
+                    }}
+                  >
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#C084FC', textTransform: 'uppercase' }}>
+                      Section Loader (38px)
+                    </span>
+                    <LogoLoader variant="section" text="Loading pass details..." />
+                  </div>
+
+                  {/* Button Loader Preview */}
+                  <div
+                    style={{
+                      padding: '20px',
+                      borderRadius: '12px',
+                      background: 'rgba(255, 255, 255, 0.04)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px'
+                    }}
+                  >
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#C084FC', textTransform: 'uppercase' }}>
+                      Button Loader (20px)
+                    </span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      <Button variant="liquid-glass" loading={true}>
+                        Confirm & Pay
+                      </Button>
+                      <Button variant="liquid-secondary" loading={true}>
+                        Processing Pass
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>

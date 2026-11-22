@@ -1,5 +1,5 @@
 import React from 'react';
-import { Loader2 } from 'lucide-react';
+import LogoLoader from './LogoLoader';
 
 export default function Button({
   children,
@@ -121,7 +121,7 @@ export default function Button({
     >
       {loading ? (
         <>
-          <Loader2 size={16} className="gateapass-spin" style={{ animation: 'spin 1s linear infinite' }} />
+          <LogoLoader variant="button" />
           <span>{children}</span>
         </>
       ) : (
