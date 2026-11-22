@@ -1,13 +1,8 @@
 import React, { useState } from 'react';
 import {
   Plus,
-  Ticket,
   Edit2,
   Trash2,
-  Shield,
-  Layers,
-  Sparkles,
-  ExternalLink,
   Check,
   Eye
 } from 'lucide-react';
@@ -17,16 +12,13 @@ import Ticket3D from '../pass/Ticket3D';
 import {
   getPassTypesByEvent,
   savePassType,
-  deletePassType,
-  assignTemplateToPassType
+  deletePassType
 } from '../../data/passTypes';
 import { getAllTemplates } from '../../data/passTemplates';
 import { AUTHORITIES, PERMISSION_AREAS } from '../../data/mockData';
 
 export default function PassTypeManager({
-  event,
-  onOpenStudioForTemplate,
-  onOpenLibrary
+  event
 }) {
   const [passTypes, setPassTypes] = useState(() => getPassTypesByEvent(event?.id));
   const [templates, setTemplates] = useState(getAllTemplates);
@@ -83,7 +75,7 @@ export default function PassTypeManager({
     e.preventDefault();
     if (!name.trim()) return;
 
-    const saved = savePassType({
+    savePassType({
       id: editingPassType?.id,
       eventId: event.id,
       name: name.trim(),
@@ -134,9 +126,6 @@ export default function PassTypeManager({
         </div>
 
         <div style={{ display: 'flex', gap: '10px' }}>
-          <Button variant="outline" icon={Layers} onClick={onOpenLibrary}>
-            Template Library
-          </Button>
           <Button variant="primary" icon={Plus} onClick={handleOpenCreateModal}>
             Create Pass Type
           </Button>
@@ -151,7 +140,7 @@ export default function PassTypeManager({
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase' }}>Pass Tier</th>
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase' }}>Price</th>
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase' }}>Capacity</th>
-              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase' }}>Assigned Template</th>
+              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase' }}>Dynamic 3D Pass</th>
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase' }}>Authority Tier</th>
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase' }}>Access Zones</th>
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase', textAlign: 'right' }}>Actions</th>
@@ -166,8 +155,6 @@ export default function PassTypeManager({
               </tr>
             ) : (
               passTypes.map((pt) => {
-                const assignedTpl = templates.find((t) => t.id === pt.templateId);
-
                 return (
                   <tr key={pt.id} style={{ borderBottom: '1px solid var(--color-gray)' }}>
                     <td style={{ padding: '16px' }}>
@@ -201,30 +188,26 @@ export default function PassTypeManager({
                     </td>
 
                     <td style={{ padding: '16px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontWeight: 600, color: 'var(--color-deep-violet)' }}>
-                          {assignedTpl?.name || pt.templateId}
-                        </span>
-                        {assignedTpl && (
-                          <button
-                            type="button"
-                            onClick={() => onOpenStudioForTemplate && onOpenStudioForTemplate(assignedTpl)}
-                            title="Open in Pass Studio"
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              padding: '2px',
-                              cursor: 'pointer',
-                              color: 'var(--color-muted-text)'
-                            }}
-                          >
-                            <ExternalLink size={13} />
-                          </button>
-                        )}
-                      </div>
-                      <span style={{ fontSize: '11px', color: 'var(--color-muted-text)' }}>
-                        Version {pt.templateVersion || 1}
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setPreview3DModalPass(pt)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 12px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          backgroundColor: 'rgba(124, 58, 237, 0.08)',
+                          color: '#7C3AED',
+                          border: '1px solid rgba(124, 58, 237, 0.25)',
+                          borderRadius: 'var(--radius-control)',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <Eye size={13} />
+                        <span>Preview 3D Pass</span>
+                      </button>
                     </td>
 
                     <td style={{ padding: '16px' }}>

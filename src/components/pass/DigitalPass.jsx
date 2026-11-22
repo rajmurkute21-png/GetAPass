@@ -76,7 +76,116 @@ export default function DigitalPass({
   const resolvedAttendee = participantName || attendeeName;
 
   const handlePrint = () => {
-    window.print();
+    // 1. Locate the live ticket DOM node
+    const ticketNode = document.getElementById('getapass-printable-ticket');
+    if (!ticketNode) {
+      window.print();
+      return;
+    }
+
+    // 2. Create an isolated offscreen iframe to ensure ZERO profile/avatar bleed
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.top = '-9999px';
+    iframe.style.left = '-9999px';
+    iframe.style.width = '1024px';
+    iframe.style.height = '600px';
+    iframe.style.border = 'none';
+    iframe.setAttribute('title', 'GetAPass Ticket Print Target');
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow.document;
+
+    // Collect all stylesheets from host document
+    const headStyles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map((el) => el.outerHTML)
+      .join('\n');
+
+    // Clone the ticket markup without 3D tilt or hover glare
+    const clonedTicket = ticketNode.cloneNode(true);
+    clonedTicket.classList.remove('is-floating');
+    clonedTicket.style.transform = 'none';
+    clonedTicket.style.transition = 'none';
+    clonedTicket.style.boxShadow = 'none';
+
+    // Build the isolated printable HTML containing ONLY the ticket
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>GetAPass Ticket - ${resolvedTitle} (${resolvedPassId})</title>
+          <meta charset="utf-8" />
+          ${headStyles}
+          <style>
+            @page {
+              size: landscape;
+              margin: 6mm;
+            }
+            * {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              width: 100% !important;
+              height: 100% !important;
+              display: flex !important;
+              align-items: center !important;
+              justify-content: center !important;
+            }
+            #getapass-printable-ticket {
+              width: 760px !important;
+              max-width: 760px !important;
+              height: 310px !important;
+              margin: 0 auto !important;
+              transform: none !important;
+              box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+              page-break-inside: avoid !important;
+            }
+            .ticket-flip-inner {
+              transform: none !important;
+            }
+            .ticket-face.ticket-front {
+              display: flex !important;
+              position: relative !important;
+            }
+            .ticket-face.ticket-back {
+              display: none !important;
+            }
+            .ticket-notch-top, .ticket-notch-bottom, .ticket-perforation-line,
+            .ticket-notch-outer-left, .ticket-notch-outer-right {
+              display: block !important;
+            }
+          </style>
+        </head>
+        <body>
+          <div style="width: 100%; display: flex; align-items: center; justify-content: center; min-height: 100vh;">
+            ${clonedTicket.outerHTML}
+          </div>
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    // Allow styles and QR image to initialize, then trigger print dialog
+    setTimeout(() => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (err) {
+        console.warn('[GetAPass Print] Iframe print fallback:', err);
+        window.print();
+      } finally {
+        setTimeout(() => {
+          if (iframe.parentNode) {
+            iframe.parentNode.removeChild(iframe);
+          }
+        }, 2000);
+      }
+    }, 350);
   };
 
   const handleShare = () => {

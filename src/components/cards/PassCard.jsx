@@ -2,7 +2,7 @@ import React from 'react';
 import { Calendar, MapPin, Eye, Ticket, Sparkles } from 'lucide-react';
 import StatusBadge from '../common/StatusBadge';
 import Button from '../common/Button';
-import { resolveTicketTheme } from '../../constants/ticketThemes';
+import { resolveTicketTheme, resolvePassTypeTheme } from '../../constants/ticketThemes';
 
 export default function PassCard({
   pass,
@@ -18,13 +18,14 @@ export default function PassCard({
     date,
     time,
     venue,
-    authority,
+    _authority,
     status = 'Active'
   } = pass || {};
 
   const resolvedId = passId || id;
   const resolvedTitle = title || eventTitle;
   const theme = resolveTicketTheme(category, resolvedTitle);
+  const passTierTheme = resolvePassTypeTheme(passType);
 
   return (
     <div
@@ -170,8 +171,8 @@ export default function PassCard({
         {/* Pass Access Token Pill */}
         <div
           style={{
-            backgroundColor: 'rgba(124, 58, 237, 0.05)',
-            border: '1px solid rgba(124, 58, 237, 0.16)',
+            backgroundColor: passTierTheme.badgeBg,
+            border: `1px solid ${passTierTheme.badgeBorder}`,
             borderRadius: '10px',
             padding: '10px 14px',
             display: 'flex',
@@ -181,13 +182,13 @@ export default function PassCard({
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Ticket size={16} color={theme.primary} />
+            <Ticket size={16} color={passTierTheme.primary} />
             <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-dark-text)', letterSpacing: '0.5px' }}>
               {resolvedId}
             </span>
           </div>
-          <span style={{ fontSize: '11px', fontWeight: 600, color: theme.primary }}>
-            {authority || 'Pass Holder'}
+          <span style={{ fontSize: '11px', fontWeight: 700, color: passTierTheme.primary }}>
+            {passTierTheme.tag || passType}
           </span>
         </div>
 

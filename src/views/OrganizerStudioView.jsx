@@ -18,8 +18,6 @@ import StatusBadge from '../components/common/StatusBadge';
 import QRScanner from '../components/scanner/QRScanner';
 import PermissionControl from '../components/permissions/PermissionControl';
 import Modal from '../components/common/Modal';
-import TemplateEditorView from './TemplateEditorView';
-import TemplateLibrary from '../components/studio/TemplateLibrary';
 import PassTypeManager from '../components/studio/PassTypeManager';
 import EventCreateWizard from '../components/events/EventCreateWizard';
 import {
@@ -46,7 +44,6 @@ export default function OrganizerStudioView({
 }) {
   // Organizer navigation tab
   const [activeTab, setActiveTab] = useState(initialTab);
-  const [activeStudioTemplate, setActiveStudioTemplate] = useState(null);
 
   // Enforce organizer UID ownership boundary (never show another organizer's events)
   const organizerEvents = React.useMemo(() => {
@@ -251,7 +248,6 @@ export default function OrganizerStudioView({
           { id: 'dashboard', label: 'Event Dashboard', icon: LayoutDashboard },
           { id: 'create-event', label: 'Create Event', icon: Plus },
           { id: 'passes', label: 'Pass Types & Tiers', icon: Ticket },
-          { id: 'templates', label: 'Templates', icon: Sparkles },
           { id: 'verifier', label: 'Gate QR Verifier', icon: QrCode, badge: 'Scanner' },
           { id: 'participants', label: 'Participants', icon: Users, count: eventParticipants.length },
           { id: 'permissions', label: 'Authorities & Zones', icon: ShieldAlert }
@@ -805,25 +801,11 @@ export default function OrganizerStudioView({
         {activeTab === 'passes' && currentEvent && (
           <PassTypeManager
             event={currentEvent}
-            onOpenStudioForTemplate={(tpl) => setActiveStudioTemplate(tpl)}
-            onOpenLibrary={() => setActiveTab('templates')}
           />
         )}
 
         {/* ==============================================================
-            6. TEMPLATES (CENTRAL TEMPLATE LIBRARY)
-            ============================================================== */}
-        {activeTab === 'templates' && (
-          <TemplateLibrary
-            onOpenEditor={(tpl) => setActiveStudioTemplate(tpl)}
-            onSelectTemplateForEvent={(tpl) => {
-              setActiveStudioTemplate(tpl);
-            }}
-          />
-        )}
-
-        {/* ==============================================================
-            7. AUTHORITIES & ZONES TAB
+            6. AUTHORITIES & ZONES TAB
             ============================================================== */}
         {activeTab === 'permissions' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -992,17 +974,6 @@ export default function OrganizerStudioView({
           />
         </div>
       </Modal>
-
-      {/* FULL-SCREEN TEMPLATE EDITOR */}
-      {activeStudioTemplate && (
-        <TemplateEditorView
-          template={activeStudioTemplate}
-          onClose={() => setActiveStudioTemplate(null)}
-          onSaveSuccess={() => {
-            // refreshed via library custom event
-          }}
-        />
-      )}
     </div>
   );
 }

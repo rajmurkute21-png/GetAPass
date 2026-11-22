@@ -20,9 +20,13 @@ import {
   Drama,
   Layers,
   Palette,
-  BookOpen
+  BookOpen,
+  Crown,
+  Heart,
+  Users,
+  Zap
 } from 'lucide-react';
-import { resolveTicketTheme } from '../../constants/ticketThemes';
+import { resolveTicketTheme, resolvePassTypeTheme } from '../../constants/ticketThemes';
 import './Ticket3D.css';
 
 // Centralized icon resolver helper for category badges
@@ -39,6 +43,18 @@ const CATEGORY_ICONS = {
   Layers,
   Palette,
   BookOpen
+};
+
+// Centralized icon resolver helper for pass tier badges
+const TIER_ICONS = {
+  Crown,
+  Heart,
+  Users,
+  GraduationCap,
+  Zap,
+  Cpu,
+  Ticket,
+  Sparkles
 };
 
 export default function Ticket3D({
@@ -113,6 +129,10 @@ export default function Ticket3D({
   const theme = resolveTicketTheme(activeCategory, resolvedTitle);
   const CategoryIconComponent = CATEGORY_ICONS[theme.iconName] || Music;
   const activeArtwork = coverImage || eventCover || theme.artworkUrl;
+
+  // Resolve predefined pass tier theme
+  const passTierTheme = resolvePassTypeTheme(resolvedPassType);
+  const TierIconComponent = TIER_ICONS[passTierTheme.iconName] || Sparkles;
 
   // Generate crisp, flat scannable QR Code (with unmount guard)
   useEffect(() => {
@@ -241,6 +261,7 @@ export default function Ticket3D({
       {/* 3D Ticket Container */}
       <div
         ref={cardRef}
+        id="getapass-printable-ticket"
         className={`getapass-3d-ticket ${!isHovered && !isFlipped ? 'is-floating' : ''}`}
         onMouseMove={handleMouseMove}
         onMouseEnter={handleMouseEnter}
@@ -341,8 +362,16 @@ export default function Ticket3D({
 
               {/* Bottom Attendee & Booking Bar */}
               <div className="ticket-bottom-bar">
-                <div className="ticket-pass-badge">
-                  <Sparkles size={12} strokeWidth={2.4} />
+                <div
+                  className="ticket-pass-badge"
+                  style={{
+                    backgroundColor: passTierTheme.badgeBg,
+                    border: `1px solid ${passTierTheme.badgeBorder}`,
+                    color: '#ffffff',
+                    boxShadow: `0 2px 8px ${passTierTheme.glow}`
+                  }}
+                >
+                  <TierIconComponent size={12} strokeWidth={2.4} style={{ color: passTierTheme.accent }} />
                   <span>{resolvedPassType}</span>
                 </div>
 
@@ -438,7 +467,7 @@ export default function Ticket3D({
                     {resolvedTitle} — Access Clearances
                   </h3>
                   <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', margin: '2px 0 0' }}>
-                    Gate: {gate} · Admittance Authority: {authority}
+                    Gate: {gate} · Admittance: {authority} · {passTierTheme.tag}
                   </p>
                 </div>
 

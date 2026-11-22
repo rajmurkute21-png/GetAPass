@@ -208,3 +208,136 @@ export function resolveTicketTheme(categoryName = '', eventTitle = '') {
   // Default to Concert / GetAPass Electric Violet theme
   return TICKET_CATEGORIES[0];
 }
+
+/**
+ * Predefined Pass Tier Visual Styling (8 Predefined Types)
+ * Automatically inherits distinct color accents, glowing borders, and tier badges.
+ */
+export const PASS_TYPE_THEMES = [
+  {
+    id: 'vip',
+    label: 'VIP Pass',
+    matchKeys: ['vip', 'gold', 'platinum', 'backstage', 'all-access', 'all access', 'patron'],
+    accent: '#F59E0B', // Gold / Amber
+    primary: '#D97706',
+    deep: '#78350F',
+    glow: 'rgba(245, 158, 11, 0.55)',
+    borderGlow: 'rgba(245, 158, 11, 0.85)',
+    badgeBg: 'rgba(245, 158, 11, 0.25)',
+    badgeBorder: 'rgba(245, 158, 11, 0.65)',
+    tag: 'VIP ACCESS',
+    iconName: 'Crown'
+  },
+  {
+    id: 'couple',
+    label: 'Couple Pass',
+    matchKeys: ['couple', 'duo', 'pair', 'two', 'romantic'],
+    accent: '#F43F5E', // Rose / Violet
+    primary: '#E11D48',
+    deep: '#881337',
+    glow: 'rgba(244, 63, 94, 0.55)',
+    borderGlow: 'rgba(244, 63, 94, 0.85)',
+    badgeBg: 'rgba(244, 63, 94, 0.25)',
+    badgeBorder: 'rgba(244, 63, 94, 0.65)',
+    tag: 'COUPLE ENTRY',
+    iconName: 'Heart'
+  },
+  {
+    id: 'group',
+    label: 'Group Pass',
+    matchKeys: ['group', 'squad', 'team', 'crew', 'delegation'],
+    accent: '#3B82F6', // Blue / Violet
+    primary: '#2563EB',
+    deep: '#1E3A8A',
+    glow: 'rgba(59, 130, 246, 0.55)',
+    borderGlow: 'rgba(59, 130, 246, 0.85)',
+    badgeBg: 'rgba(59, 130, 246, 0.25)',
+    badgeBorder: 'rgba(59, 130, 246, 0.65)',
+    tag: 'GROUP PASS',
+    iconName: 'Users'
+  },
+  {
+    id: 'student',
+    label: 'Student Pass',
+    matchKeys: ['student', 'campus', 'scholar', 'academic', 'college'],
+    accent: '#6366F1', // Indigo / Violet
+    primary: '#4F46E5',
+    deep: '#312E81',
+    glow: 'rgba(99, 102, 241, 0.55)',
+    borderGlow: 'rgba(99, 102, 241, 0.85)',
+    badgeBg: 'rgba(99, 102, 241, 0.25)',
+    badgeBorder: 'rgba(99, 102, 241, 0.65)',
+    tag: 'STUDENT PASS',
+    iconName: 'GraduationCap'
+  },
+  {
+    id: 'early-bird',
+    label: 'Early Bird Pass',
+    matchKeys: ['early', 'early bird', 'early-bird', 'presale', 'discount'],
+    accent: '#10B981', // Emerald
+    primary: '#059669',
+    deep: '#064E3B',
+    glow: 'rgba(16, 185, 129, 0.55)',
+    borderGlow: 'rgba(16, 185, 129, 0.85)',
+    badgeBg: 'rgba(16, 185, 129, 0.25)',
+    badgeBorder: 'rgba(16, 185, 129, 0.65)',
+    tag: 'EARLY BIRD',
+    iconName: 'Zap'
+  },
+  {
+    id: 'workshop',
+    label: 'Workshop Pass',
+    matchKeys: ['workshop', 'hands-on', 'lab', 'training', 'masterclass'],
+    accent: '#F97316', // Amber / Orange
+    primary: '#EA580C',
+    deep: '#7C2D12',
+    glow: 'rgba(249, 115, 22, 0.55)',
+    borderGlow: 'rgba(249, 115, 22, 0.85)',
+    badgeBg: 'rgba(249, 115, 22, 0.25)',
+    badgeBorder: 'rgba(249, 115, 22, 0.65)',
+    tag: 'WORKSHOP ACCESS',
+    iconName: 'Cpu'
+  },
+  {
+    id: 'general',
+    label: 'General Admission Pass',
+    matchKeys: ['general', 'ga', 'general admission', 'standard', 'entry', 'regular'],
+    accent: '#A855F7', // Classic Electric Violet
+    primary: '#7C3AED',
+    deep: '#4C1D95',
+    glow: 'rgba(168, 85, 247, 0.55)',
+    borderGlow: 'rgba(168, 85, 247, 0.85)',
+    badgeBg: 'rgba(124, 58, 237, 0.28)',
+    badgeBorder: 'rgba(168, 85, 247, 0.55)',
+    tag: 'GENERAL ADMISSION',
+    iconName: 'Ticket'
+  },
+  {
+    id: 'participant',
+    label: 'Participant Pass',
+    matchKeys: ['participant', 'attendee', 'delegate', 'guest', 'holder'],
+    accent: '#8B5CF6', // Electric Violet
+    primary: '#7C3AED',
+    deep: '#4C1D95',
+    glow: 'rgba(139, 92, 246, 0.55)',
+    borderGlow: 'rgba(139, 92, 246, 0.85)',
+    badgeBg: 'rgba(124, 58, 237, 0.25)',
+    badgeBorder: 'rgba(139, 92, 246, 0.55)',
+    tag: 'PARTICIPANT PASS',
+    iconName: 'Sparkles'
+  }
+];
+
+/**
+ * Resolves the predefined pass tier visual styling for any pass type name.
+ */
+export function resolvePassTypeTheme(passTypeName = '') {
+  const norm = String(passTypeName || '').trim().toLowerCase();
+  for (const tier of PASS_TYPE_THEMES) {
+    if (tier.matchKeys.some((k) => norm.includes(k))) {
+      return tier;
+    }
+  }
+  return PASS_TYPE_THEMES[6]; // General Admission default
+}
+

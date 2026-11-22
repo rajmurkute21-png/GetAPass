@@ -1017,79 +1017,67 @@
 /* Production Print & PDF Download Optimization */
 @page {
   size: landscape;
-  margin: 8mm;
+  margin: 6mm;
 }
 
 @media print {
-  /* Hide all surrounding UI, headers, action buttons, hints, and close buttons */
-  header,
-  nav,
-  .no-print,
-  .gateapass-header,
-  .gateapass-mobile-header,
-  .gateapass-sidebar,
-  .gateapass-stage-header,
-  .gateapass-stage-tagline-wrap,
-  .gateapass-modal-overlay > div > div:first-child,
-  .gateapass-modal button,
-  .getapass-ambient-glow,
-  .ticket-specular-glare,
-  .ticket-shimmer-sweep,
-  .ticket-category-bar {
-    display: none !important;
+  /* Complete Isolation: Hide everything in the body by default */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Expose exclusively the printable ticket container and its descendants */
+  #getapass-printable-ticket,
+  #getapass-printable-ticket * {
+    visibility: visible !important;
   }
 
   html, body {
     background: #ffffff !important;
     margin: 0 !important;
     padding: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  .gateapass-modal-overlay {
-    position: static !important;
-    background: transparent !important;
-    padding: 0 !important;
-    display: block !important;
-  }
-
-  .gateapass-modal {
-    box-shadow: none !important;
-    border: none !important;
-    background: transparent !important;
-    max-width: 100% !important;
-    padding: 0 !important;
-    margin: 0 auto !important;
-  }
-
-  .getapass-studio-stage {
-    box-shadow: none !important;
-    border: none !important;
-    background: transparent !important;
-    padding: 0 !important;
-    margin: 0 auto !important;
-  }
-
-  .getapass-3d-stage {
-    perspective: none !important;
-    padding: 0 !important;
-    margin: 0 auto !important;
-  }
-
-  .getapass-3d-ticket {
-    transform: none !important;
-    animation: none !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+  #getapass-printable-ticket {
+    position: fixed !important;
+    left: 50% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) !important;
     width: 760px !important;
+    max-width: 760px !important;
     height: 310px !important;
-    margin: 16px auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 20px !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+    z-index: 99999999 !important;
   }
 
-  .ticket-face {
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3) !important;
+  .ticket-flip-inner {
+    transform: none !important;
+  }
+
+  .ticket-face.ticket-front {
+    display: flex !important;
+    position: relative !important;
+  }
+
+  .ticket-face.ticket-back {
+    display: none !important;
+  }
+
+  .ticket-notch-top,
+  .ticket-notch-bottom,
+  .ticket-perforation-line,
+  .ticket-notch-outer-left,
+  .ticket-notch-outer-right {
+    display: block !important;
   }
 
   .ticket-qr-container {
