@@ -29,13 +29,6 @@
   --liquid-glass-blur-sheet: blur(28px);
 }
 
-/* Mobile Layout Base Spacing for Floating Nav */
-@media (max-width: 768px) {
-  body {
-    padding-bottom: calc(88px + env(safe-area-inset-bottom, 16px)) !important;
-  }
-}
-
 /* ==========================================================================
    A. FLOATING BOTTOM NAVIGATION (GLASS EFFECT)
    ========================================================================== */

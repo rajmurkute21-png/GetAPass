@@ -544,7 +544,7 @@ export default function App() {
       )}
 
       {/* Main View Area */}
-      <div className="gateapass-content-wrapper" style={{ paddingBottom: isMobile && portalMode === 'participant' ? '72px' : 0 }}>
+      <div className="gateapass-content-wrapper" style={{ paddingBottom: isMobile && portalMode === 'participant' ? 'calc(80px + env(safe-area-inset-bottom, 14px))' : 0 }}>
         {/* GLOBAL ADMINISTRATOR DASHBOARD */}
         {portalMode === 'admin' ? (
           <ProtectedRoute
