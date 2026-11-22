@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Search, Plus, Calendar, RefreshCw, X, Clock, Sparkles, ArrowUpDown } from 'lucide-react';
+import { Search, Plus, Calendar, RefreshCw, X, Clock, Sparkles, ArrowUpDown, SlidersHorizontal, LayoutGrid, List } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import EventCard from '../components/cards/EventCard';
+import EventSkeleton from '../components/events/EventSkeleton';
 import Button from '../components/common/Button';
 import { CATEGORIES } from '../data/mockData';
 
@@ -17,6 +19,9 @@ export default function EventsView({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [sortBy, setSortBy] = useState('date'); // 'date' | 'price' | 'name'
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [priceFilter, setPriceFilter] = useState('all'); // 'all' | 'under500' | 'above500'
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
 
   const SUGGESTIONS = [
     { label: 'Music Festival', icon: Clock, category: 'Festivals' },
@@ -29,6 +34,7 @@ export default function EventsView({
       const category = ev.category || '';
       const title = ev.title || ev.name || '';
       const venue = ev.venue || '';
+      const price = Number(ev.startingPrice || ev.price || 0);
 
       const matchesCategory =
         selectedCategory === 'All' || category.toLowerCase() === selectedCategory.toLowerCase();
@@ -36,7 +42,12 @@ export default function EventsView({
         title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         venue.toLowerCase().includes(searchQuery.toLowerCase()) ||
         category.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
+
+      let matchesPrice = true;
+      if (priceFilter === 'under500') matchesPrice = price <= 500;
+      if (priceFilter === 'above500') matchesPrice = price > 500;
+
+      return matchesCategory && matchesSearch && matchesPrice;
     })
     .sort((a, b) => {
       if (sortBy === 'price') {
@@ -165,8 +176,35 @@ export default function EventsView({
               )}
             </div>
 
-            {/* Sort Control */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {/* Sort & Filter Controls Row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              {/* Advanced Filter Toggle Button */}
+              <button
+                type="button"
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  height: '42px',
+                  padding: '0 14px',
+                  borderRadius: '9999px',
+                  background: showAdvancedFilters ? 'rgba(147, 51, 234, 0.12)' : 'rgba(255, 255, 255, 0.78)',
+                  backdropFilter: 'blur(14px)',
+                  WebkitBackdropFilter: 'blur(14px)',
+                  border: showAdvancedFilters ? '1px solid #9333EA' : '1px solid rgba(255, 255, 255, 0.92)',
+                  color: showAdvancedFilters ? '#9333EA' : '#2D2342',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <SlidersHorizontal size={14} />
+                <span>Filters {priceFilter !== 'all' && '• 1'}</span>
+              </button>
+
+              {/* Sort Control */}
               <div
                 style={{
                   display: 'inline-flex',
@@ -203,10 +241,141 @@ export default function EventsView({
                   <option value="name">Title: A to Z</option>
                 </select>
               </div>
+
+              {/* View Switcher Capsule (Matching Selective Liquid Glass Design Reference) */}
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  height: '42px',
+                  padding: '3px 4px',
+                  borderRadius: '9999px',
+                  background: 'rgba(20, 14, 38, 0.85)',
+                  backdropFilter: 'blur(16px)',
+                  WebkitBackdropFilter: 'blur(16px)',
+                  border: '1px solid rgba(255, 255, 255, 0.16)',
+                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.18)'
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setViewMode('grid')}
+                  aria-label="Grid view"
+                  style={{
+                    width: '34px',
+                    height: '34px',
+                    borderRadius: '50%',
+                    border: 'none',
+                    background: viewMode === 'grid' ? 'linear-gradient(135deg, #9333EA 0%, #7C3AED 100%)' : 'transparent',
+                    color: '#FFFFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    boxShadow: viewMode === 'grid' ? '0 0 12px rgba(147, 51, 234, 0.5)' : 'none'
+                  }}
+                >
+                  <LayoutGrid size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                  aria-label="List view"
+                  style={{
+                    width: '34px',
+                    height: '34px',
+                    borderRadius: '50%',
+                    border: 'none',
+                    background: viewMode === 'list' ? 'linear-gradient(135deg, #9333EA 0%, #7C3AED 100%)' : 'transparent',
+                    color: '#FFFFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    boxShadow: viewMode === 'list' ? '0 0 12px rgba(147, 51, 234, 0.5)' : 'none'
+                  }}
+                >
+                  <List size={15} />
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Liquid Glass Category Filter Chips (Pill shaped, subtle glass background) */}
+          {/* Expandable Advanced Filters Drawer with AnimatePresence */}
+          <AnimatePresence>
+            {showAdvancedFilters && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+                style={{
+                  overflow: 'hidden',
+                  background: 'rgba(255, 255, 255, 0.85)',
+                  backdropFilter: 'blur(18px)',
+                  WebkitBackdropFilter: 'blur(18px)',
+                  borderRadius: '16px',
+                  border: '1px solid rgba(226, 232, 240, 0.9)',
+                  padding: '16px 20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '24px',
+                  flexWrap: 'wrap'
+                }}
+              >
+                {/* Price Tier Filter */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Price:</span>
+                  {[
+                    { id: 'all', label: 'All Prices' },
+                    { id: 'under500', label: 'Under ₹500' },
+                    { id: 'above500', label: '₹500 & Above' }
+                  ].map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setPriceFilter(p.id)}
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: '12px',
+                        fontWeight: priceFilter === p.id ? 700 : 500,
+                        borderRadius: '9999px',
+                        border: priceFilter === p.id ? '1px solid #9333EA' : '1px solid rgba(203, 213, 225, 0.8)',
+                        background: priceFilter === p.id ? 'linear-gradient(135deg, #9333EA 0%, #EC4899 100%)' : '#FFFFFF',
+                        color: priceFilter === p.id ? '#FFFFFF' : '#334155',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                {priceFilter !== 'all' && (
+                  <button
+                    type="button"
+                    onClick={() => setPriceFilter('all')}
+                    style={{
+                      fontSize: '12px',
+                      color: '#9333EA',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      textDecoration: 'underline'
+                    }}
+                  >
+                    Reset Price Filter
+                  </button>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Liquid Glass Category Filter Chips with Sliding layoutId Indicator */}
           <div
             style={{
               display: 'flex',
@@ -222,8 +391,23 @@ export default function EventsView({
               type="button"
               onClick={() => onSelectCategory('All')}
               className={`liquid-glass-chip ${selectedCategory === 'All' ? 'is-active' : ''}`}
+              style={{ position: 'relative' }}
             >
-              All Events
+              {selectedCategory === 'All' && (
+                <motion.div
+                  layoutId="activeCategoryPill"
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: '9999px',
+                    background: 'linear-gradient(135deg, #9333EA 0%, #7C3AED 55%, #EC4899 100%)',
+                    zIndex: 0,
+                    boxShadow: '0 4px 16px rgba(147, 51, 234, 0.35), 0 0 10px rgba(236, 72, 153, 0.2)'
+                  }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                />
+              )}
+              <span style={{ position: 'relative', zIndex: 1 }}>All Events</span>
             </button>
             {CATEGORIES.map((cat) => {
               const isSel = selectedCategory.toLowerCase() === cat.toLowerCase();
@@ -233,8 +417,23 @@ export default function EventsView({
                   type="button"
                   onClick={() => onSelectCategory(cat)}
                   className={`liquid-glass-chip ${isSel ? 'is-active' : ''}`}
+                  style={{ position: 'relative' }}
                 >
-                  {cat}
+                  {isSel && (
+                    <motion.div
+                      layoutId="activeCategoryPill"
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        borderRadius: '9999px',
+                        background: 'linear-gradient(135deg, #9333EA 0%, #7C3AED 55%, #EC4899 100%)',
+                        zIndex: 0,
+                        boxShadow: '0 4px 16px rgba(147, 51, 234, 0.35), 0 0 10px rgba(236, 72, 153, 0.2)'
+                      }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                    />
+                  )}
+                  <span style={{ position: 'relative', zIndex: 1 }}>{cat}</span>
                 </button>
               );
             })}
@@ -259,37 +458,9 @@ export default function EventsView({
           </div>
         )}
 
-        {/* Events Grid */}
+        {/* Events Grid or Skeleton Loaders */}
         {loading && events.length === 0 ? (
-          <div
-            style={{
-              padding: '64px 20px',
-              textAlign: 'center',
-              backgroundColor: 'var(--color-white)',
-              border: '1px solid var(--color-gray)',
-              borderRadius: 'var(--radius-card)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '12px',
-              maxWidth: '600px',
-              margin: '0 auto'
-            }}
-          >
-            <RefreshCw
-              size={28}
-              style={{
-                color: 'var(--color-deep-violet)',
-                animation: 'spin 1.2s linear infinite'
-              }}
-            />
-            <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-dark-text)', margin: 0 }}>
-              Syncing Campus Events...
-            </h3>
-            <p style={{ fontSize: '13px', color: 'var(--color-muted-text)', margin: 0 }}>
-              Connecting to live database and loading published events.
-            </p>
-          </div>
+          <EventSkeleton count={6} />
         ) : events.length === 0 ? (
           <div
             style={{
@@ -357,6 +528,7 @@ export default function EventsView({
               icon={RefreshCw}
               onClick={() => {
                 setSearchQuery('');
+                setPriceFilter('all');
                 onSelectCategory('All');
               }}
             >
@@ -364,22 +536,33 @@ export default function EventsView({
             </Button>
           </div>
         ) : (
-          <div
+          <motion.div
+            layout
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+              gridTemplateColumns: viewMode === 'list' ? '1fr' : 'repeat(auto-fill, minmax(340px, 1fr))',
               gap: '24px'
             }}
           >
-            {filteredEvents.map((event) => (
-              <EventCard
-                key={event.id}
-                event={event}
-                onBook={() => onBookEvent(event)}
-                onViewDetails={() => onViewEventDetails(event)}
-              />
-            ))}
-          </div>
+            <AnimatePresence>
+              {filteredEvents.map((event) => (
+                <motion.div
+                  key={event.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <EventCard
+                    event={event}
+                    onBook={() => onBookEvent(event)}
+                    onViewDetails={() => onViewEventDetails(event)}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </motion.div>
         )}
       </div>
     </div>

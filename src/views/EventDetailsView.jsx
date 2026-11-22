@@ -1,13 +1,23 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar, MapPin, CheckCircle, ArrowLeft, Clock, ShieldCheck } from 'lucide-react';
 import Button from '../components/common/Button';
 import StatusBadge from '../components/common/StatusBadge';
+import StickyBookingSummary from '../components/events/StickyBookingSummary';
 
 export default function EventDetailsView({
   event,
   onBack,
   onBookNow
 }) {
+  const [showStickySummary, setShowStickySummary] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowStickySummary(window.scrollY > 300);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
   if (!event) {
     return (
       <div className="gateapass-event-details-view" style={{ textAlign: 'left', padding: '64px 0' }}>
@@ -56,6 +66,13 @@ export default function EventDetailsView({
 
   return (
     <div className="gateapass-event-details-view" style={{ textAlign: 'left', padding: '32px 0 64px' }}>
+      {/* Sticky Top Booking Summary Bar */}
+      <StickyBookingSummary
+        event={event}
+        visible={showStickySummary}
+        onBook={onBookNow}
+      />
+
       <div className="container-desktop">
         {/* Back Link */}
         <button

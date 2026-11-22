@@ -1492,6 +1492,7 @@ export default function ProfileView({
         isOpen={Boolean(selectedPassForModal)}
         onClose={() => setSelectedPassForModal(null)}
         title="Official GetApass Digital Pass"
+        variant="liquid-glass"
         maxWidth="1020px"
         padding="20px 24px"
         cancelText={null}

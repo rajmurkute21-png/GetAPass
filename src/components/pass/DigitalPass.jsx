@@ -256,11 +256,11 @@ export default function DigitalPass({
             gap: '6px',
             fontSize: '12px',
             fontWeight: 500,
-            color: '#6d5d85',
-            marginTop: '8px'
+            color: '#C4B5FD',
+            marginTop: '10px'
           }}
         >
-          <Info size={14} style={{ color: '#8E2CFC' }} />
+          <Info size={14} style={{ color: '#C084FC' }} />
           <span>Hover or move cursor to tilt 3D ticket · Click ticket to flip for entry clearances</span>
         </div>
       </div>

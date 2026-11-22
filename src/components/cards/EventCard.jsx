@@ -1,5 +1,6 @@
-import React from 'react';
-import { Calendar, MapPin, Check } from 'lucide-react';
+import React, { useState } from 'react';
+import { Calendar, MapPin, Check, Heart, ChevronDown, ChevronUp } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import StatusBadge from '../common/StatusBadge';
 import Button from '../common/Button';
 
@@ -20,9 +21,16 @@ export default function EventCard({
     description
   } = event;
 
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isImgHovered, setIsImgHovered] = useState(false);
+
   return (
-    <div
+    <motion.div
       className="gateapass-card gateapass-event-card"
+      whileHover={{ y: -4, boxShadow: '0 12px 28px -6px rgba(124, 58, 237, 0.12)' }}
+      whileTap={{ scale: 0.99 }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
       style={{
         backgroundColor: 'var(--color-white)',
         border: 'var(--border-default)',
@@ -31,10 +39,10 @@ export default function EventCard({
         display: 'flex',
         flexDirection: 'column',
         textAlign: 'left',
-        transition: 'border-color 0.15s ease'
+        position: 'relative'
       }}
     >
-      {/* Event media clipped to top 8px card */}
+      {/* Event media */}
       <div
         style={{
           width: '100%',
@@ -45,6 +53,8 @@ export default function EventCard({
           cursor: onViewDetails ? 'pointer' : 'default'
         }}
         onClick={onViewDetails}
+        onMouseEnter={() => setIsImgHovered(true)}
+        onMouseLeave={() => setIsImgHovered(false)}
       >
         <img
           src={bannerImage || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1200&auto=format&fit=crop&q=80'}
@@ -53,7 +63,9 @@ export default function EventCard({
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            display: 'block'
+            display: 'block',
+            transform: isImgHovered ? 'scale(1.04)' : 'scale(1)',
+            transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
           }}
           loading="lazy"
           onError={(e) => {
@@ -61,6 +73,39 @@ export default function EventCard({
             e.currentTarget.src = 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1200&auto=format&fit=crop&q=80';
           }}
         />
+
+        {/* Favorite Save Button */}
+        <motion.button
+          type="button"
+          aria-label={isFavorite ? 'Remove from saved' : 'Save event'}
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsFavorite(!isFavorite);
+          }}
+          whileTap={{ scale: 0.8 }}
+          whileHover={{ scale: 1.1 }}
+          style={{
+            position: 'absolute',
+            top: '12px',
+            right: '12px',
+            width: '36px',
+            height: '36px',
+            borderRadius: '50%',
+            backgroundColor: 'rgba(20, 14, 38, 0.65)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: '1px solid rgba(255, 255, 255, 0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            color: isFavorite ? '#EC4899' : '#FFFFFF',
+            zIndex: 2,
+            transition: 'background-color 0.2s ease'
+          }}
+        >
+          <Heart size={18} fill={isFavorite ? '#EC4899' : 'none'} strokeWidth={isFavorite ? 2.2 : 1.8} />
+        </motion.button>
       </div>
 
       {/* Internal Content (20px internal padding per spec) */}
@@ -96,7 +141,7 @@ export default function EventCard({
           <StatusBadge status={status} />
         </div>
 
-        {/* Title & Tagline */}
+        {/* Title & Description */}
         <div>
           <h3
             style={{
@@ -117,14 +162,39 @@ export default function EventCard({
               lineHeight: '20px',
               color: 'var(--color-muted-text)',
               marginTop: '4px',
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
+              display: isExpanded ? 'block' : '-webkit-box',
+              WebkitLineClamp: isExpanded ? 'unset' : 2,
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden'
             }}
           >
             {description}
           </p>
+
+          {description && description.length > 90 && (
+            <button
+              type="button"
+              onClick={() => setIsExpanded(!isExpanded)}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: '4px 0 0',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: 'var(--color-deep-violet)',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              {isExpanded ? (
+                <>Show less <ChevronUp size={14} /></>
+              ) : (
+                <>Read more <ChevronDown size={14} /></>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Date & Venue Metas */}
@@ -191,6 +261,6 @@ export default function EventCard({
           Book event
         </Button>
       </div>
-    </div>
+    </motion.div>
   );
 }

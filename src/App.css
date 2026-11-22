@@ -92,7 +92,7 @@
   -webkit-backdrop-filter: blur(16px);
 }
 
-.gateapass-modal {
+.gateapass-modal:not(.is-liquid-glass) {
   background: rgba(255, 255, 255, 0.92) !important;
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CreditCard, Smartphone, Building, Wallet, CheckCircle2, XCircle } from 'lucide-react';
+import AnimatedPaymentButton from '../booking/AnimatedPaymentButton';
 import Button from '../common/Button';
 import Input from '../common/Input';
 
@@ -40,7 +41,8 @@ export default function PaymentSummary({
             method: method.toUpperCase(),
             eventTitle: event?.title || 'TechFest 2026',
             attendeeName: attendee.name || 'Aarav Shah',
-            passType: selectedPasses[0]?.name || 'Participant Pass'
+            passType: selectedPasses[0]?.name || 'Participant Pass',
+            passes: selectedPasses
           });
         }
       }
@@ -303,16 +305,13 @@ export default function PaymentSummary({
         </div>
       </div>
 
-      {/* Primary Pay Action (Liquid Glass) */}
-      <Button
-        variant="liquid-glass"
-        size="large"
-        fullWidth
-        loading={isProcessing}
+      {/* Primary Pay Action (Animated Liquid Glass) */}
+      <AnimatedPaymentButton
+        amount={total}
+        isProcessing={isProcessing}
+        isSuccess={paymentStatus === 'success'}
         onClick={handlePay}
-      >
-        Pay ₹{total}
-      </Button>
+      />
 
       {/* Secondary Demo Error trigger for full testing */}
       <div style={{ textAlign: 'center' }}>

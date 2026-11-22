@@ -13,8 +13,12 @@ export default function Modal({
   confirmVariant = 'primary',
   confirmLoading = false,
   maxWidth = '520px',
-  padding = '24px 28px'
+  padding = '24px 28px',
+  variant = 'default',
+  liquidGlass = false
 }) {
+  const isLiquidGlass = Boolean(liquidGlass || variant === 'liquid-glass');
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' && isOpen) {
@@ -45,7 +49,7 @@ export default function Modal({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(12, 8, 24, 0.7)',
+        backgroundColor: isLiquidGlass ? 'rgba(10, 6, 22, 0.82)' : 'rgba(12, 8, 24, 0.7)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
         display: 'flex',
@@ -57,19 +61,23 @@ export default function Modal({
       }}
     >
       <div
-        className="gateapass-modal liquid-glass-modal-sheet"
+        className={`gateapass-modal liquid-glass-modal-sheet ${isLiquidGlass ? 'is-liquid-glass' : ''}`}
         role="dialog"
         aria-modal="true"
         style={{
           width: '100%',
           maxWidth: maxWidth ? (maxWidth.includes('px') ? `min(${maxWidth}, calc(100vw - 32px))` : maxWidth) : '520px',
-          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(28px)',
-          WebkitBackdropFilter: 'blur(28px)',
-          border: '1px solid rgba(255, 255, 255, 0.95)',
-          borderRadius: '24px',
           padding: padding,
-          boxShadow: '0 28px 70px -12px rgba(124, 58, 237, 0.22), 0 0 0 1px rgba(255, 255, 255, 0.9) inset',
+          borderRadius: '24px',
+          ...(isLiquidGlass
+            ? {}
+            : {
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                backdropFilter: 'blur(28px)',
+                WebkitBackdropFilter: 'blur(28px)',
+                border: '1px solid rgba(255, 255, 255, 0.95)',
+                boxShadow: '0 28px 70px -12px rgba(124, 58, 237, 0.22), 0 0 0 1px rgba(255, 255, 255, 0.9) inset'
+              }),
           display: 'flex',
           flexDirection: 'column',
           gap: '16px',
@@ -98,7 +106,7 @@ export default function Modal({
                 fontSize: '20px',
                 lineHeight: '26px',
                 fontWeight: 700,
-                color: 'var(--color-dark-text)',
+                color: isLiquidGlass ? '#FFFFFF' : 'var(--color-dark-text)',
                 letterSpacing: '-0.3px',
                 margin: 0
               }}
@@ -142,13 +150,16 @@ export default function Modal({
             }}
           >
             {cancelText && (
-              <Button variant="outline" onClick={onClose}>
+              <Button
+                variant={isLiquidGlass ? 'liquid-secondary' : 'outline'}
+                onClick={onClose}
+              >
                 {cancelText}
               </Button>
             )}
             {confirmText && (
               <Button
-                variant={confirmVariant}
+                variant={isLiquidGlass ? 'liquid-glass' : confirmVariant}
                 loading={confirmLoading}
                 onClick={onConfirm}
               >

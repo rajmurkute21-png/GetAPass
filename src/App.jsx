@@ -360,85 +360,119 @@ export default function App() {
     setActiveView('payment');
   };
 
-  const handlePaymentSuccess = async ({ amount, method, eventTitle, attendeeName, passType }) => {
+  const handlePaymentSuccess = async ({
+    amount,
+    method,
+    eventTitle,
+    attendeeName,
+    passType,
+    passes: bookedPasses,
+    autoNavigate = true
+  }) => {
     const rawTitle = eventTitle || selectedEvent?.title || 'GP';
     const prefix = rawTitle.replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || 'GP';
-    const newPassId = `GP-${prefix}26-${Math.floor(1000 + Math.random() * 9000)}`;
-    const newBookingId = `BK-${Math.floor(100000 + Math.random() * 900000)}`;
 
     const eventPassTypes = selectedEvent?.id ? getPassTypesByEvent(selectedEvent.id) : [];
-    const matchedPassType = eventPassTypes.find(
-      (pt) => pt.name.toLowerCase() === (passType || '').toLowerCase()
-    ) || eventPassTypes[0];
 
-    const assignedTemplate = matchedPassType
-      ? getTemplateById(matchedPassType.templateId)
-      : getTemplateById('tpl-classic-violet');
-
-    const bookingPayload = {
-      bookingId: newBookingId,
-      passId: newPassId,
-      eventId: selectedEvent?.id || '',
-      eventTitle: eventTitle || selectedEvent?.title || 'Campus Event',
-      organizerUid: selectedEvent?.organizerUid || '',
-      organizerEmail: selectedEvent?.organizerEmail || '',
-      passType: passType || 'General Pass',
-      amount: Number(amount),
-      status: 'Active',
-      date: selectedEvent?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      time: selectedEvent?.time || '09:00 AM – 06:00 PM',
-      venue: selectedEvent?.venue || 'Campus Auditorium',
-      category: selectedEvent?.category || 'Concert',
-      coverImage: selectedEvent?.coverImage || selectedEvent?.image || '',
-      eventCover: selectedEvent?.coverImage || selectedEvent?.image || '',
-      paymentMethod: method,
-      attendeeName: attendeeName || currentUser?.name || 'Attendee',
-      authority: matchedPassType?.defaultAuthority || 'Participant',
-      permissions: matchedPassType?.accessPermissions || ['General Area'],
-      templateId: matchedPassType?.templateId || 'tpl-classic-violet',
-      templateVersion: matchedPassType?.templateVersion || 1,
-      templateSnapshot: assignedTemplate
-    };
-
-    let createdPass = null;
-    let createdBooking = null;
-
-    if (currentUser?.uid) {
-      try {
-        const created = await createBooking(bookingPayload, currentUser, selectedEvent);
-        createdPass = created.pass;
-        createdBooking = created.booking;
-      } catch (err) {
-        console.error('[GateApass Bookings] Failed to save booking to Firestore:', err);
-      }
+    // Expand multiple passes if present, otherwise single pass
+    const passItems = [];
+    if (bookedPasses && bookedPasses.length > 0) {
+      bookedPasses.forEach((bp) => {
+        const qty = bp.qty || 1;
+        for (let i = 0; i < qty; i++) {
+          passItems.push(bp);
+        }
+      });
+    } else {
+      passItems.push({ name: passType || 'General Pass', price: Number(amount) });
     }
 
-    if (!createdBooking) {
-      createdBooking = bookingPayload;
-      createdPass = {
-        id: newPassId,
-        ...bookingPayload
+    const createdPassesList = [];
+    let primaryBooking = null;
+    const primaryBookingId = `BK-${Math.floor(100000 + Math.random() * 900000)}`;
+
+    for (let i = 0; i < passItems.length; i++) {
+      const pItem = passItems[i];
+      const newPassId = `GP-${prefix}26-${Math.floor(1000 + Math.random() * 9000)}-${i + 1}`;
+      const matchedPassType = eventPassTypes.find(
+        (pt) => pt.name.toLowerCase() === (pItem.name || '').toLowerCase()
+      ) || eventPassTypes[0];
+
+      const assignedTemplate = matchedPassType
+        ? getTemplateById(matchedPassType.templateId)
+        : getTemplateById('tpl-classic-violet');
+
+      const bookingPayload = {
+        bookingId: i === 0 ? primaryBookingId : `BK-${Math.floor(100000 + Math.random() * 900000)}`,
+        passId: newPassId,
+        eventId: selectedEvent?.id || '',
+        eventTitle: eventTitle || selectedEvent?.title || 'Campus Event',
+        organizerUid: selectedEvent?.organizerUid || '',
+        organizerEmail: selectedEvent?.organizerEmail || '',
+        passType: pItem.name || passType || 'General Pass',
+        amount: Number(pItem.price || amount),
+        status: 'Active',
+        date: selectedEvent?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        time: selectedEvent?.time || '09:00 AM – 06:00 PM',
+        venue: selectedEvent?.venue || 'Campus Auditorium',
+        category: selectedEvent?.category || 'Concert',
+        coverImage: selectedEvent?.coverImage || selectedEvent?.image || '',
+        eventCover: selectedEvent?.coverImage || selectedEvent?.image || '',
+        paymentMethod: method,
+        attendeeName: attendeeName || currentUser?.name || 'Attendee',
+        authority: matchedPassType?.defaultAuthority || 'Participant',
+        permissions: matchedPassType?.accessPermissions || ['General Area'],
+        templateId: matchedPassType?.templateId || 'tpl-classic-violet',
+        templateVersion: matchedPassType?.templateVersion || 1,
+        templateSnapshot: assignedTemplate
       };
+
+      let createdPass = null;
+      let createdBooking = null;
+
+      if (currentUser?.uid) {
+        try {
+          const created = await createBooking(bookingPayload, currentUser, selectedEvent);
+          createdPass = created.pass;
+          createdBooking = created.booking;
+        } catch (err) {
+          console.error('[GateApass Bookings] Failed to save booking to Firestore:', err);
+        }
+      }
+
+      if (!createdBooking) {
+        createdBooking = bookingPayload;
+        createdPass = {
+          id: newPassId,
+          ...bookingPayload
+        };
+      }
+
+      createdPassesList.push(createdPass);
+      if (i === 0) primaryBooking = createdBooking;
     }
 
-    setPasses((prev) => [createdPass, ...prev.filter((p) => p.id !== newPassId)]);
-    setBookings((prev) => [createdBooking, ...prev.filter((b) => b.bookingId !== newBookingId)]);
+    setPasses((prev) => [...createdPassesList, ...prev.filter((p) => !createdPassesList.some((cp) => cp.id === p.id))]);
+    setBookings((prev) => [primaryBooking, ...prev.filter((b) => b.bookingId !== primaryBooking.bookingId)]);
 
     const newNotif = {
       id: `notif-${Date.now()}`,
       title: 'Payment confirmed',
-      message: `₹${amount} received for ${eventTitle || selectedEvent?.title}. Your digital GateApass is ready.`,
+      message: `₹${amount} received for ${eventTitle || selectedEvent?.title}. ${createdPassesList.length} digital ${createdPassesList.length === 1 ? 'pass is' : 'passes are'} ready.`,
       type: 'success',
       time: 'Just now',
       actionText: 'View pass'
     };
     setNotifications((prev) => [newNotif, ...prev]);
 
-    // Transition to Profile > My Passes
-    setTimeout(() => {
-      setActiveView('profile');
-      setProfileSubTab('my-passes');
-    }, 1200);
+    if (autoNavigate) {
+      setTimeout(() => {
+        setActiveView('profile');
+        setProfileSubTab('my-passes');
+      }, 1200);
+    }
+
+    return { bookingId: primaryBookingId, passes: createdPassesList };
   };
 
   const handleRecordCheckin = (checkinItem) => {
@@ -724,6 +758,12 @@ export default function App() {
                 attendee={currentUser}
                 onBack={() => setActiveView('event-details')}
                 onProceedToPayment={handleProceedToPayment}
+                onPaymentSuccess={handlePaymentSuccess}
+                onViewMyPasses={() => {
+                  setActiveView('profile');
+                  setProfileSubTab('my-passes');
+                }}
+                onExploreMore={() => setActiveView('events')}
               />
             )}
 
