@@ -18,12 +18,23 @@ export default function PassCard({
     date,
     time,
     venue,
+    price,
+    unitPrice,
+    amount,
+    bookingId: _bookingId,
+    ticketIndex,
+    totalTickets,
     _authority,
     status = 'Active'
   } = pass || {};
 
   const resolvedId = passId || id;
   const resolvedTitle = title || eventTitle;
+  const resolvedPrice = (price !== undefined && price !== null)
+    ? price
+    : (unitPrice !== undefined && unitPrice !== null
+        ? unitPrice
+        : (amount !== undefined ? amount : 0));
   const theme = resolveTicketTheme(category, resolvedTitle);
   const passTierTheme = resolvePassTypeTheme(passType);
 
@@ -97,7 +108,7 @@ export default function PassCard({
             {resolvedTitle}
           </h3>
           <p style={{ fontSize: '13px', color: 'var(--color-muted-text)', marginTop: '4px', fontWeight: 500 }}>
-            {passType} · 1 participant
+            {passType} · ₹{resolvedPrice}{totalTickets && totalTickets > 1 ? ` · Ticket ${ticketIndex || 1} of ${totalTickets}` : ' · 1 participant'}
           </p>
         </div>
 
@@ -187,9 +198,14 @@ export default function PassCard({
               {resolvedId}
             </span>
           </div>
-          <span style={{ fontSize: '11px', fontWeight: 700, color: passTierTheme.primary }}>
-            {passTierTheme.tag || passType}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-dark-text)' }}>
+              ₹{resolvedPrice}
+            </span>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: passTierTheme.primary }}>
+              {passTierTheme.tag || passType}
+            </span>
+          </div>
         </div>
 
         {/* Action Button */}

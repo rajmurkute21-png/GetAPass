@@ -1230,45 +1230,64 @@ export default function ProfileView({
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {userBookings.map((b) => (
-                      <div
-                        key={b.bookingId}
-                        style={{
-                          padding: '16px 20px',
-                          border: '1px solid var(--color-gray)',
-                          borderRadius: 'var(--radius-control)',
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '12px'
-                        }}
-                      >
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontWeight: 700, fontSize: '15px' }}>{b.eventTitle}</span>
-                            <StatusBadge status={b.status} />
-                          </div>
-                          <div style={{ fontSize: '13px', color: 'var(--color-muted-text)', marginTop: '2px' }}>
-                            {b.passType} · Booked on {b.date} · {b.bookingId}
-                          </div>
-                        </div>
+                    {userBookings.map((b) => {
+                      const totalTix = b.totalTickets || b.passes?.length || b.quantity || 1;
+                      const relatedPasses = userPasses.filter(
+                        (p) => p.bookingId === b.bookingId || p.id === b.passId || (b.passIds && b.passIds.includes(p.id))
+                      );
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                          <span style={{ fontWeight: 700, fontSize: '16px' }}>₹{b.amount}</span>
-                          <Button
-                            variant="outline"
-                            size="compact"
-                            onClick={() => {
-                              const foundPass = userPasses.find((p) => p.id === b.passId) || userPasses[0];
-                              if (foundPass) setSelectedPassForModal(foundPass);
-                            }}
-                          >
-                            View Pass
-                          </Button>
+                      return (
+                        <div
+                          key={b.bookingId}
+                          style={{
+                            padding: '16px 20px',
+                            border: '1px solid var(--color-gray)',
+                            borderRadius: 'var(--radius-control)',
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '12px'
+                          }}
+                        >
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontWeight: 700, fontSize: '15px' }}>{b.eventTitle}</span>
+                              <StatusBadge status={b.status} />
+                              <span
+                                style={{
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  backgroundColor: 'rgba(124, 58, 237, 0.08)',
+                                  color: 'var(--color-primary-purple, #7c3aed)',
+                                  padding: '2px 8px',
+                                  borderRadius: '9999px'
+                                }}
+                              >
+                                {totalTix} {totalTix === 1 ? 'Ticket' : 'Tickets'}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '13px', color: 'var(--color-muted-text)', marginTop: '2px' }}>
+                              {b.passType} · Booked on {b.date} · {b.bookingId}
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            <span style={{ fontWeight: 700, fontSize: '16px' }}>₹{b.amount}</span>
+                            <Button
+                              variant="outline"
+                              size="compact"
+                              onClick={() => {
+                                const foundPass = relatedPasses[0] || userPasses.find((p) => p.id === b.passId) || userPasses[0];
+                                if (foundPass) setSelectedPassForModal(foundPass);
+                              }}
+                            >
+                              {totalTix > 1 ? `View Passes (${totalTix})` : 'View Pass'}
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

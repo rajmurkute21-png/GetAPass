@@ -118,7 +118,11 @@ export default function Ticket3D({
   const resolvedTitle = title || eventTitle || 'GetAPass Event';
   const resolvedAttendee = participantName || attendeeName || 'Pass Holder';
   const resolvedBookingId = bookingId || `BK-${String(resolvedPassId).replace(/[^0-9]/g, '').slice(-6) || '849102'}`;
-  const resolvedPrice = amount !== undefined ? amount : price;
+  const resolvedPrice = (price !== undefined && price !== null)
+    ? price
+    : (unitPrice !== undefined && unitPrice !== null
+        ? unitPrice
+        : (amount !== undefined ? amount : 0));
   const resolvedPassType = passType || authority || 'Standard Pass';
   const resolvedDate = date || 'Date TBA';
   const resolvedTime = time || 'Time TBA';
@@ -372,7 +376,7 @@ export default function Ticket3D({
                   }}
                 >
                   <TierIconComponent size={12} strokeWidth={2.4} style={{ color: passTierTheme.accent }} />
-                  <span>{resolvedPassType}</span>
+                  <span>{resolvedPassType} · ₹{resolvedPrice}</span>
                 </div>
 
                 <div className="ticket-attendee-info">
@@ -513,9 +517,9 @@ export default function Ticket3D({
                 </div>
 
                 <div className="ticket-back-field">
-                  <span className="ticket-back-label">Settlement Amount</span>
+                  <span className="ticket-back-label">Ticket Price</span>
                   <span className="ticket-back-val">
-                    ₹{resolvedPrice} ({paymentMethod})
+                    ₹{resolvedPrice} ({paymentMethod || 'Paid'})
                   </span>
                 </div>
 

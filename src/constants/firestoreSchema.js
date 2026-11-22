@@ -120,8 +120,18 @@ export function validateEventPayload(payload) {
 /**
  * Validation rules for Booking records
  * Ensures unit price and total amount are verified numbers, never trusted blindly from client input.
+ * Supports both single-category bookings and multi-category / multi-ticket orders.
  */
-export function validateBookingPayload({ eventData, passTypeData, quantity = 1, clientAmount: _clientAmount, currentUser }) {
+export function validateBookingPayload({
+  eventData,
+  passTypeData,
+  quantity = 1,
+  items = null,
+  bookedPasses = null,
+  passes = null,
+  clientAmount: _clientAmount,
+  currentUser
+}) {
   const errors = [];
 
   if (!currentUser?.uid) {
@@ -132,9 +142,72 @@ export function validateBookingPayload({ eventData, passTypeData, quantity = 1, 
     errors.push('Valid event reference required.');
   }
 
+  // Check if multiple items/tiers were provided
+  const rawItems = items || bookedPasses || (Array.isArray(passes) ? passes : null);
+
+  if (rawItems && Array.isArray(rawItems) && rawItems.length > 0) {
+    let totalQty = 0;
+    let authoritativeTotal = 0;
+    const normalizedItems = [];
+
+    rawItems.forEach((it, index) => {
+      const itQty = Number(it.qty || it.quantity || 1);
+      if (isNaN(itQty) || itQty < 1) {
+        errors.push(`Item ${index + 1} has invalid quantity.`);
+        return;
+      }
+      totalQty += itQty;
+
+      // Match against event's defined pass tiers if available
+      const eventTier = Array.isArray(eventData?.passTypes)
+        ? eventData.passTypes.find((pt) =>
+            (pt.name && it.name && pt.name.toLowerCase() === it.name.toLowerCase()) ||
+            (pt.id && it.id && pt.id === it.id)
+          )
+        : null;
+
+      const unitPrice = eventTier?.price !== undefined
+        ? Number(eventTier.price)
+        : Number(it.price !== undefined ? it.price : (it.unitPrice !== undefined ? it.unitPrice : (eventData?.startingPrice ?? 0)));
+
+      if (isNaN(unitPrice) || unitPrice < 0) {
+        errors.push(`Item "${it.name || index + 1}" has an invalid unit price.`);
+        return;
+      }
+
+      const subtotal = unitPrice * itQty;
+      authoritativeTotal += subtotal;
+
+      normalizedItems.push({
+        name: it.name || it.passType || 'Standard Pass',
+        passType: it.passType || it.name || 'Standard Pass',
+        unitPrice,
+        price: unitPrice,
+        quantity: itQty,
+        qty: itQty,
+        subtotal,
+        templateId: it.templateId || eventTier?.templateId || 'tpl-classic-violet'
+      });
+    });
+
+    if (totalQty < 1 || totalQty > 50) {
+      errors.push('Total ticket quantity must be between 1 and 50.');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+      unitPrice: normalizedItems[0]?.unitPrice ?? 0,
+      authoritativeAmount: authoritativeTotal,
+      quantity: totalQty,
+      items: normalizedItems
+    };
+  }
+
+  // Single-item fallback path
   const qty = Number(quantity);
-  if (isNaN(qty) || qty < 1 || qty > 10) {
-    errors.push('Ticket quantity must be between 1 and 10.');
+  if (isNaN(qty) || qty < 1 || qty > 50) {
+    errors.push('Ticket quantity must be between 1 and 50.');
   }
 
   // Authoritative price resolution from event/passType (never trusting clientAmount)
@@ -153,6 +226,16 @@ export function validateBookingPayload({ eventData, passTypeData, quantity = 1, 
     errors,
     unitPrice: resolvedUnitPrice,
     authoritativeAmount: authoritativeTotal,
-    quantity: qty
+    quantity: qty,
+    items: [{
+      name: passTypeData?.name || 'Standard Pass',
+      passType: passTypeData?.name || 'Standard Pass',
+      unitPrice: resolvedUnitPrice,
+      price: resolvedUnitPrice,
+      quantity: qty,
+      qty,
+      subtotal: authoritativeTotal,
+      templateId: passTypeData?.templateId || 'tpl-classic-violet'
+    }]
   };
 }

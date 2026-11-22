@@ -30,6 +30,8 @@ export async function createDigitalPass({
   attendeeName,
   attendeeEmail = '',
   passType = 'Standard Pass',
+  price = 0,
+  unitPrice = 0,
   authority = 'Participant',
   permissions = ['General Area'],
   date = '',
@@ -39,13 +41,20 @@ export async function createDigitalPass({
   category = 'Concert',
   coverImage = '',
   eventCover = '',
-  customPassId = null
+  customPassId = null,
+  ticketIndex = 1,
+  totalTickets = 1,
+  templateId = 'tpl-classic-violet',
+  templateVersion = 1,
+  templateSnapshot = null
 }) {
   const passId = customPassId || generatePassId(eventTitle);
   const now = Date.now();
 
   // Simple deterministic signature for optical turnstiles
-  const qrSignature = `GP-${passId}-${eventId.slice(0, 6)}-${now.toString(36)}`;
+  const qrSignature = `GP-${passId}-${eventId ? eventId.slice(0, 6) : 'GP'}-${now.toString(36)}`;
+
+  const resolvedPrice = Number(price !== undefined ? price : (unitPrice !== undefined ? unitPrice : 0));
 
   const passPayload = {
     passId,
@@ -58,6 +67,10 @@ export async function createDigitalPass({
     attendeeName,
     attendeeEmail,
     passType,
+    price: resolvedPrice,
+    unitPrice: resolvedPrice,
+    ticketIndex: Number(ticketIndex) || 1,
+    totalTickets: Number(totalTickets) || 1,
     authority,
     permissions,
     date,
@@ -67,6 +80,9 @@ export async function createDigitalPass({
     category,
     coverImage,
     eventCover,
+    templateId,
+    templateVersion,
+    templateSnapshot,
     qrSignature,
     status: STATUS_ENUMS.PASS.ACTIVE,
     checkedIn: false,

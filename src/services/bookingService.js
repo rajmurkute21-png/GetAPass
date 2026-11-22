@@ -160,11 +160,14 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
     throw new Error('Authentication required: You must be signed in to purchase a pass.');
   }
 
-  // 1. Authoritative price resolution & validation (Never trust client prices)
+  // 1. Authoritative price resolution & multi-tier item validation (Never trust client prices)
   const validation = validateBookingPayload({
     eventData,
     passTypeData: bookingData.passTypeData,
-    quantity: bookingData.quantity || 1,
+    quantity: bookingData.quantity || (bookingData.passes ? bookingData.passes.length : 1),
+    items: bookingData.items,
+    bookedPasses: bookingData.bookedPasses,
+    passes: bookingData.passes,
     clientAmount: bookingData.amount,
     currentUser
   });
@@ -175,29 +178,178 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
 
   const authoritativeAmount = validation.authoritativeAmount || Number(bookingData.amount || 0);
   const bookingId = bookingData.bookingId || generateBookingId();
-  const passId = bookingData.passId || generatePassId(eventData?.title || bookingData.eventTitle || 'GP');
   const eventId = bookingData.eventId || eventData?.id || '';
   const eventTitle = bookingData.eventTitle || eventData?.title || eventData?.name || 'Campus Event';
   const organizerUid = bookingData.organizerUid || eventData?.organizerUid || '';
   const organizerEmail = bookingData.organizerEmail || eventData?.organizerEmail || '';
   const now = Date.now();
+  const rawPrefix = String(eventTitle).replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || 'GP';
+
+  // 2. Build canonical individual pass list (1 distinct pass per purchased ticket)
+  const passList = [];
+
+  if (Array.isArray(bookingData.passes) && bookingData.passes.length > 0) {
+    // If pre-constructed individual pass records were passed (e.g. from handlePaymentSuccess)
+    bookingData.passes.forEach((p, idx) => {
+      const ticketNum = idx + 1;
+      const passId = p.passId || p.id || `GP-${rawPrefix}26-${Math.floor(1000 + Math.random() * 9000)}-${ticketNum}`;
+      const itemPrice = Number(p.price !== undefined ? p.price : (p.unitPrice !== undefined ? p.unitPrice : 0));
+
+      passList.push({
+        ...p,
+        id: passId,
+        passId,
+        bookingId,
+        ticketIndex: ticketNum,
+        totalTickets: bookingData.passes.length,
+        eventId,
+        eventTitle,
+        organizerUid,
+        participantUid: currentUser.uid,
+        participantEmail: currentUser.email || '',
+        attendeeName: p.attendeeName || bookingData.attendeeName || currentUser.displayName || currentUser.name || 'Participant',
+        passType: p.passType || p.name || 'Standard Pass',
+        authority: p.authority || bookingData.authority || 'Participant',
+        date: p.date || eventData?.date || bookingData.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        time: p.time || eventData?.time || bookingData.time || '09:00 AM – 06:00 PM',
+        venue: p.venue || eventData?.venue || bookingData.venue || 'Campus Venue',
+        category: p.category || eventData?.category || bookingData.category || 'Concert',
+        coverImage: p.coverImage || eventData?.coverImage || eventData?.image || bookingData.coverImage || '',
+        eventCover: p.eventCover || eventData?.coverImage || eventData?.image || bookingData.eventCover || '',
+        gate: p.gate || bookingData.gate || 'Gate A',
+        status: STATUS_ENUMS.PASS.ACTIVE,
+        checkedIn: false,
+        checkedInAt: null,
+        checkedInBy: null,
+        price: itemPrice,
+        unitPrice: itemPrice,
+        paymentMethod: bookingData.paymentMethod || 'UPI',
+        issuedAt: 'Just now',
+        permissions: p.permissions || bookingData.permissions || ['General Area'],
+        templateId: p.templateId || bookingData.templateId || 'tpl-classic-violet',
+        templateVersion: p.templateVersion || 1,
+        templateSnapshot: p.templateSnapshot || bookingData.templateSnapshot || null,
+        createdAt: p.createdAt || now,
+        updatedAt: p.updatedAt || now
+      });
+    });
+  } else if (validation.items && validation.items.length > 0) {
+    // Unroll directly from validated items array
+    let ticketNum = 1;
+    const totalTickets = validation.quantity;
+
+    validation.items.forEach((item) => {
+      const qty = item.quantity || item.qty || 1;
+      const itemPrice = Number(item.unitPrice !== undefined ? item.unitPrice : item.price);
+
+      for (let q = 0; q < qty; q++) {
+        const passId = `GP-${rawPrefix}26-${Math.floor(1000 + Math.random() * 9000)}-${ticketNum}`;
+        passList.push({
+          id: passId,
+          passId,
+          bookingId,
+          ticketIndex: ticketNum,
+          totalTickets,
+          eventId,
+          eventTitle,
+          organizerUid,
+          participantUid: currentUser.uid,
+          participantEmail: currentUser.email || '',
+          attendeeName: bookingData.attendeeName || currentUser.displayName || currentUser.name || 'Participant',
+          passType: item.passType || item.name || 'Standard Pass',
+          authority: bookingData.authority || 'Participant',
+          date: eventData?.date || bookingData.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+          time: eventData?.time || bookingData.time || '09:00 AM – 06:00 PM',
+          venue: eventData?.venue || bookingData.venue || 'Campus Venue',
+          category: eventData?.category || bookingData.category || 'Concert',
+          coverImage: eventData?.coverImage || eventData?.image || bookingData.coverImage || '',
+          eventCover: eventData?.coverImage || eventData?.image || bookingData.eventCover || '',
+          gate: bookingData.gate || 'Gate A',
+          status: STATUS_ENUMS.PASS.ACTIVE,
+          checkedIn: false,
+          checkedInAt: null,
+          checkedInBy: null,
+          price: itemPrice,
+          unitPrice: itemPrice,
+          paymentMethod: bookingData.paymentMethod || 'UPI',
+          issuedAt: 'Just now',
+          permissions: bookingData.permissions || ['General Area'],
+          templateId: item.templateId || bookingData.templateId || 'tpl-classic-violet',
+          templateVersion: 1,
+          templateSnapshot: bookingData.templateSnapshot || null,
+          createdAt: now,
+          updatedAt: now
+        });
+        ticketNum++;
+      }
+    });
+  } else {
+    // Single ticket fallback
+    const passId = bookingData.passId || `GP-${rawPrefix}26-${Math.floor(1000 + Math.random() * 9000)}-1`;
+    passList.push({
+      id: passId,
+      passId,
+      bookingId,
+      ticketIndex: 1,
+      totalTickets: 1,
+      eventId,
+      eventTitle,
+      organizerUid,
+      participantUid: currentUser.uid,
+      participantEmail: currentUser.email || '',
+      attendeeName: bookingData.attendeeName || currentUser.displayName || currentUser.name || 'Participant',
+      passType: bookingData.passType || 'Standard Pass',
+      authority: bookingData.authority || 'Participant',
+      date: eventData?.date || bookingData.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      time: eventData?.time || bookingData.time || '09:00 AM – 06:00 PM',
+      venue: eventData?.venue || bookingData.venue || 'Campus Venue',
+      category: eventData?.category || bookingData.category || 'Concert',
+      coverImage: eventData?.coverImage || eventData?.image || bookingData.coverImage || '',
+      eventCover: eventData?.coverImage || eventData?.image || bookingData.eventCover || '',
+      gate: bookingData.gate || 'Gate A',
+      status: STATUS_ENUMS.PASS.ACTIVE,
+      checkedIn: false,
+      checkedInAt: null,
+      checkedInBy: null,
+      price: validation.unitPrice,
+      unitPrice: validation.unitPrice,
+      paymentMethod: bookingData.paymentMethod || 'UPI',
+      issuedAt: 'Just now',
+      permissions: bookingData.permissions || ['General Area'],
+      templateId: bookingData.templateId || 'tpl-classic-violet',
+      templateVersion: 1,
+      templateSnapshot: bookingData.templateSnapshot || null,
+      createdAt: now,
+      updatedAt: now
+    });
+  }
+
+  // 3. Construct unified parent Booking record (One order covering all purchased passes)
+  const passTypeSummary = passList.length === 1
+    ? passList[0].passType
+    : `${passList.length} Passes (${[...new Set(passList.map((p) => p.passType))].join(', ')})`;
 
   const newBooking = {
     ...bookingData,
     id: bookingId,
     bookingId,
-    passId,
+    passId: passList[0]?.passId || '', // backward compatibility pointer
+    passIds: passList.map((p) => p.passId),
     eventId,
     eventTitle,
     organizerUid,
     organizerEmail,
     participantUid: currentUser.uid,
     participantEmail: currentUser.email || '',
-    participantName: currentUser.displayName || currentUser.name || 'Participant',
-    passType: bookingData.passType || 'Standard Pass',
+    participantName: currentUser.displayName || currentUser.name || bookingData.attendeeName || 'Participant',
+    passType: passTypeSummary,
     unitPrice: validation.unitPrice,
-    quantity: validation.quantity,
+    quantity: passList.length,
+    totalTickets: passList.length,
     amount: authoritativeAmount,
+    items: validation.items || [],
+    passes: passList,
+    pass: passList[0], // backward compatibility
     status: STATUS_ENUMS.BOOKING.ACTIVE,
     paymentMethod: bookingData.paymentMethod || 'UPI',
     date: bookingData.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
@@ -205,67 +357,37 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
     updatedAt: now
   };
 
-  const newPass = {
-    id: passId,
-    passId,
-    bookingId,
-    eventId,
-    eventTitle,
-    organizerUid,
-    participantUid: currentUser.uid,
-    participantEmail: currentUser.email || '',
-    attendeeName: newBooking.participantName,
-    passType: newBooking.passType,
-    authority: bookingData.authority || 'Participant',
-    date: eventData?.date || newBooking.date,
-    time: eventData?.time || '09:00 AM – 06:00 PM',
-    venue: eventData?.venue || 'Campus Venue',
-    category: eventData?.category || bookingData.category || 'Concert',
-    coverImage: eventData?.coverImage || eventData?.image || bookingData.coverImage || '',
-    eventCover: eventData?.coverImage || eventData?.image || bookingData.eventCover || '',
-    gate: bookingData.gate || 'Gate A',
-    status: STATUS_ENUMS.PASS.ACTIVE,
-    price: authoritativeAmount,
-    paymentMethod: newBooking.paymentMethod,
-    issuedAt: 'Just now',
-    permissions: bookingData.permissions || ['General Area'],
-    templateId: bookingData.templateId || 'tpl-classic-violet',
-    templateVersion: bookingData.templateVersion || 1,
-    templateSnapshot: bookingData.templateSnapshot || null,
-    createdAt: now,
-    updatedAt: now
-  };
-
-  newBooking.pass = newPass;
-
-  // 1. Immediately update local storage cache for instant UI
+  // 4. Update local storage caches for instant zero-latency UI
   const localBookings = getStoredUserBookings(currentUser.uid);
   const updatedBookings = [newBooking, ...localBookings.filter((b) => b.bookingId !== bookingId)];
   saveStoredUserBookings(currentUser.uid, updatedBookings);
 
   const localPasses = getStoredUserPasses(currentUser.uid);
-  const updatedPasses = [newPass, ...localPasses.filter((p) => p.passId !== passId)];
+  const newPassIds = new Set(passList.map((p) => p.passId));
+  const updatedPasses = [...passList, ...localPasses.filter((p) => !newPassIds.has(p.passId))];
   saveStoredUserPasses(currentUser.uid, updatedPasses);
 
-  // 2. Coordinated persistence to Firestore: /bookings, /passes, /transactions, /notifications
+  // 5. Coordinated persistence to Firestore: /bookings, /passes, /transactions, /notifications
   let createdTransaction = null;
   if (db) {
     try {
-      // 2a. Save Booking
+      // 5a. Save Booking into /bookings collection
       const cleanBooking = sanitizeForFirestore(newBooking);
       await setDoc(doc(db, BOOKINGS_COLLECTION, bookingId), cleanBooking);
 
-      // 2b. Save Pass into dedicated /passes collection
-      try {
-        await createDigitalPass({
-          ...newPass,
-          customPassId: passId
-        });
-      } catch (passErr) {
-        console.warn('[GateApass Bookings] Coordinated pass write notice:', passErr);
+      // 5b. Save each individual Pass into dedicated /passes collection
+      for (const passItem of passList) {
+        try {
+          await createDigitalPass({
+            ...passItem,
+            customPassId: passItem.passId
+          });
+        } catch (passErr) {
+          console.warn('[GateApass Bookings] Coordinated pass write notice:', passErr);
+        }
       }
 
-      // 2c. Save Transaction into dedicated /transactions collection
+      // 5c. Save Transaction into dedicated /transactions collection
       try {
         createdTransaction = await createTransaction({
           bookingId,
@@ -280,12 +402,12 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
         console.warn('[GateApass Bookings] Coordinated transaction write notice:', txErr);
       }
 
-      // 2d. Dispatch confirmation notification
+      // 5d. Dispatch confirmation notification
       try {
         await createNotification({
           recipientUid: currentUser.uid,
-          title: 'Ticket Confirmed!',
-          message: `Your booking for ${eventTitle} (₹${authoritativeAmount}) is confirmed. Digital pass is ready in your wallet.`,
+          title: 'Tickets Confirmed!',
+          message: `Your booking for ${eventTitle} (₹${authoritativeAmount}) with ${passList.length} digital ${passList.length === 1 ? 'pass' : 'passes'} is confirmed. Digital tickets are ready in your wallet.`,
           type: 'ticket',
           actionUrl: '/profile'
         });
@@ -293,13 +415,13 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
         console.warn('[GateApass Bookings] Coordinated notification write notice:', notifErr);
       }
 
-      console.log(`[GateApass Bookings] Successfully created booking ${bookingId} across collections.`);
+      console.log(`[GateApass Bookings] Successfully created booking ${bookingId} with ${passList.length} individual passes.`);
     } catch (err) {
       console.error('[GateApass Bookings] Error storing booking in Firestore:', err);
     }
   }
 
-  return { booking: newBooking, pass: newPass, transaction: createdTransaction };
+  return { booking: newBooking, passes: passList, pass: passList[0], transaction: createdTransaction };
 }
 
 /**
@@ -367,20 +489,164 @@ export function subscribeToParticipantBookings(participantUid, onUpdate, onError
       q,
       (snapshot) => {
         const bookings = [];
-        const passes = [];
+        const passMap = new Map();
 
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
           const bookingItem = { ...data, id: docSnap.id };
           bookings.push(bookingItem);
 
-          if (data.pass) {
-            passes.push(data.pass);
-          } else {
-            passes.push({
-              id: data.passId || docSnap.id,
-              passId: data.passId || docSnap.id,
+          // 1. If booking has an array of individual passes (Multi-pass architecture)
+          if (Array.isArray(data.passes) && data.passes.length > 0) {
+            data.passes.forEach((p, idx) => {
+              const passId = p.passId || p.id || `${data.bookingId || docSnap.id}-${idx + 1}`;
+              const individualPrice = p.price !== undefined
+                ? Number(p.price)
+                : (p.unitPrice !== undefined
+                    ? Number(p.unitPrice)
+                    : Math.round(Number(data.amount || 0) / data.passes.length));
+
+              passMap.set(passId, {
+                ...p,
+                id: passId,
+                passId,
+                bookingId: data.bookingId || docSnap.id,
+                eventId: data.eventId,
+                eventTitle: data.eventTitle,
+                organizerUid: data.organizerUid,
+                participantUid: data.participantUid,
+                attendeeName: p.attendeeName || data.participantName || 'Attendee',
+                passType: p.passType || p.name || 'Standard Pass',
+                price: individualPrice,
+                unitPrice: individualPrice,
+                ticketIndex: p.ticketIndex || idx + 1,
+                totalTickets: p.totalTickets || data.passes.length,
+                date: p.date || data.date,
+                time: p.time || data.time || '09:00 AM – 06:00 PM',
+                venue: p.venue || data.venue || 'Campus Venue',
+                gate: p.gate || data.gate || 'Gate A',
+                status: p.status || data.status || STATUS_ENUMS.PASS.ACTIVE,
+                paymentMethod: p.paymentMethod || data.paymentMethod,
+                category: p.category || data.category || 'Concert',
+                coverImage: p.coverImage || data.coverImage || '',
+                eventCover: p.eventCover || data.coverImage || '',
+                createdAt: p.createdAt || data.createdAt || Date.now(),
+                updatedAt: p.updatedAt || data.updatedAt || Date.now()
+              });
+            });
+          }
+          // 2. Legacy booking with itemized breakdown but without data.passes
+          else if (Array.isArray(data.items) && data.items.length > 0) {
+            let passIndex = 1;
+            const totalTickets = data.items.reduce((acc, it) => acc + Number(it.quantity || it.qty || 1), 0);
+
+            data.items.forEach((it) => {
+              const qty = Number(it.quantity || it.qty || 1);
+              const itemPrice = Number(it.unitPrice !== undefined ? it.unitPrice : (it.price !== undefined ? it.price : 0));
+
+              for (let q = 0; q < qty; q++) {
+                const passId = `${data.bookingId || docSnap.id}-${passIndex}`;
+                passMap.set(passId, {
+                  id: passId,
+                  passId,
+                  bookingId: data.bookingId || docSnap.id,
+                  ticketIndex: passIndex,
+                  totalTickets,
+                  eventId: data.eventId,
+                  eventTitle: data.eventTitle,
+                  organizerUid: data.organizerUid,
+                  participantUid: data.participantUid,
+                  attendeeName: data.participantName || 'Attendee',
+                  passType: it.passType || it.name || 'Standard Pass',
+                  authority: 'Participant',
+                  date: data.date,
+                  time: data.time || '09:00 AM – 06:00 PM',
+                  venue: data.venue || 'Campus Venue',
+                  gate: data.gate || 'Gate A',
+                  status: data.status || STATUS_ENUMS.PASS.ACTIVE,
+                  checkedIn: false,
+                  price: itemPrice,
+                  unitPrice: itemPrice,
+                  paymentMethod: data.paymentMethod,
+                  permissions: ['General Area'],
+                  category: data.category || 'Concert',
+                  coverImage: data.coverImage || '',
+                  eventCover: data.coverImage || '',
+                  createdAt: data.createdAt || Date.now()
+                });
+                passIndex++;
+              }
+            });
+          }
+          // 3. Legacy booking with quantity > 1
+          else if (Number(data.quantity) > 1) {
+            const qty = Number(data.quantity);
+            const unitPrice = Number(data.unitPrice !== undefined ? data.unitPrice : Math.round(Number(data.amount || 0) / qty));
+
+            for (let q = 1; q <= qty; q++) {
+              const passId = `${data.passId || docSnap.id}-${q}`;
+              passMap.set(passId, {
+                id: passId,
+                passId,
+                bookingId: data.bookingId || docSnap.id,
+                ticketIndex: q,
+                totalTickets: qty,
+                eventId: data.eventId,
+                eventTitle: data.eventTitle,
+                organizerUid: data.organizerUid,
+                participantUid: data.participantUid,
+                attendeeName: data.participantName || 'Attendee',
+                passType: data.passType || 'Standard Pass',
+                authority: data.authority || 'Participant',
+                date: data.date,
+                time: data.time || '09:00 AM – 06:00 PM',
+                venue: data.venue || 'Campus Venue',
+                gate: data.gate || 'Gate A',
+                status: data.status || STATUS_ENUMS.PASS.ACTIVE,
+                checkedIn: false,
+                price: unitPrice,
+                unitPrice: unitPrice,
+                paymentMethod: data.paymentMethod,
+                permissions: data.permissions || ['General Area'],
+                category: data.category || 'Concert',
+                coverImage: data.coverImage || '',
+                eventCover: data.coverImage || '',
+                createdAt: data.createdAt || Date.now()
+              });
+            }
+          }
+          // 4. Single pass inside data.pass
+          else if (data.pass) {
+            const p = data.pass;
+            const passId = p.passId || p.id || data.passId || docSnap.id;
+            const individualPrice = p.price !== undefined
+              ? Number(p.price)
+              : (p.unitPrice !== undefined
+                  ? Number(p.unitPrice)
+                  : (data.unitPrice !== undefined ? Number(data.unitPrice) : Number(data.amount || 0)));
+
+            passMap.set(passId, {
+              ...p,
+              id: passId,
+              passId,
               bookingId: data.bookingId || docSnap.id,
+              ticketIndex: 1,
+              totalTickets: 1,
+              price: individualPrice,
+              unitPrice: individualPrice
+            });
+          }
+          // 5. Bare single pass fallback
+          else {
+            const passId = data.passId || docSnap.id;
+            const individualPrice = data.unitPrice !== undefined ? Number(data.unitPrice) : Number(data.amount || 0);
+
+            passMap.set(passId, {
+              id: passId,
+              passId,
+              bookingId: data.bookingId || docSnap.id,
+              ticketIndex: 1,
+              totalTickets: 1,
               eventId: data.eventId,
               eventTitle: data.eventTitle,
               organizerUid: data.organizerUid,
@@ -389,18 +655,24 @@ export function subscribeToParticipantBookings(participantUid, onUpdate, onError
               passType: data.passType || 'Standard Pass',
               authority: data.authority || 'Participant',
               date: data.date,
-              time: data.time || '09:00 AM',
+              time: data.time || '09:00 AM – 06:00 PM',
               venue: data.venue || 'Campus Venue',
               gate: data.gate || 'Gate A',
               status: data.status || STATUS_ENUMS.PASS.ACTIVE,
-              price: data.amount,
+              checkedIn: false,
+              price: individualPrice,
+              unitPrice: individualPrice,
               paymentMethod: data.paymentMethod,
               permissions: data.permissions || ['General Area'],
-              createdAt: data.createdAt
+              category: data.category || 'Concert',
+              coverImage: data.coverImage || '',
+              eventCover: data.coverImage || '',
+              createdAt: data.createdAt || Date.now()
             });
           }
         });
 
+        const passes = Array.from(passMap.values());
         bookings.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         passes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
@@ -516,64 +788,92 @@ export async function verifyAndCheckinPass({
   }
 
   const cleanCode = String(passCode).trim();
+  const now = Date.now();
 
-  // Try finding in /passes or /bookings
+  // 1. Try finding in Firestore /passes or /bookings
   if (db) {
     try {
+      // 1a. Check dedicated /passes collection first
       let targetDocSnap = await getDoc(doc(db, COLLECTIONS.PASSES, cleanCode));
-      let docRef = doc(db, COLLECTIONS.PASSES, cleanCode);
+      let isDedicatedPass = targetDocSnap.exists();
+      let docRef = isDedicatedPass ? doc(db, COLLECTIONS.PASSES, cleanCode) : null;
+      let matchedPassData = null;
+      let parentBookingData = null;
 
-      if (!targetDocSnap.exists()) {
+      if (isDedicatedPass) {
+        matchedPassData = targetDocSnap.data();
+      } else {
+        // 1b. Check if cleanCode matches a direct booking doc
         targetDocSnap = await getDoc(doc(db, BOOKINGS_COLLECTION, cleanCode));
-        docRef = doc(db, BOOKINGS_COLLECTION, cleanCode);
-      }
+        if (targetDocSnap.exists()) {
+          docRef = doc(db, BOOKINGS_COLLECTION, cleanCode);
+          parentBookingData = targetDocSnap.data();
+          matchedPassData = Array.isArray(parentBookingData.passes) && parentBookingData.passes.length > 0
+            ? parentBookingData.passes[0]
+            : (parentBookingData.pass || parentBookingData);
+        } else {
+          // 1c. Search /bookings where passId == cleanCode or passIds contains cleanCode
+          const qPass = query(collection(db, BOOKINGS_COLLECTION), where('passId', '==', cleanCode));
+          let passSnap = await getDocs(qPass);
 
-      if (!targetDocSnap.exists()) {
-        const qPass = query(collection(db, BOOKINGS_COLLECTION), where('passId', '==', cleanCode));
-        const passSnap = await getDocs(qPass);
-        if (!passSnap.empty) {
-          targetDocSnap = passSnap.docs[0];
-          docRef = targetDocSnap.ref;
+          if (passSnap.empty) {
+            const qPassIds = query(collection(db, BOOKINGS_COLLECTION), where('passIds', 'array-contains', cleanCode));
+            passSnap = await getDocs(qPassIds);
+          }
+
+          if (!passSnap.empty) {
+            targetDocSnap = passSnap.docs[0];
+            docRef = targetDocSnap.ref;
+            parentBookingData = targetDocSnap.data();
+
+            if (Array.isArray(parentBookingData.passes)) {
+              matchedPassData = parentBookingData.passes.find(
+                (p) => p.passId === cleanCode || p.id === cleanCode
+              ) || parentBookingData.passes[0];
+            } else {
+              matchedPassData = parentBookingData.pass || parentBookingData;
+            }
+          }
         }
       }
 
-      if (targetDocSnap.exists()) {
-        const data = targetDocSnap.data();
+      if (matchedPassData) {
+        const passRecord = matchedPassData;
 
-        // 1. Event scope check
-        if (eventId && data.eventId && data.eventId !== eventId) {
+        // Check Event scope
+        if (eventId && passRecord.eventId && passRecord.eventId !== eventId) {
           await recordCheckInAuditLog({
-            passId: data.passId || cleanCode,
-            bookingId: data.bookingId,
-            eventId: data.eventId,
-            eventTitle: data.eventTitle,
-            attendeeName: data.attendeeName || data.participantName,
-            participantUid: data.participantUid,
-            organizerUid: data.organizerUid,
+            passId: passRecord.passId || cleanCode,
+            bookingId: passRecord.bookingId,
+            eventId: passRecord.eventId,
+            eventTitle: passRecord.eventTitle,
+            attendeeName: passRecord.attendeeName || passRecord.participantName,
+            participantUid: passRecord.participantUid,
+            organizerUid: passRecord.organizerUid,
             verifierUid: verifierUser?.uid,
             verifierName: verifierUser?.name || verifierUser?.displayName,
             gate,
             status: STATUS_ENUMS.CHECK_IN.DENIED,
-            reason: `Wrong event: expected ${eventId}, pass was for ${data.eventId}`
+            reason: `Wrong event: expected ${eventId}, pass was for ${passRecord.eventId}`
           }).catch(() => {});
 
           return {
             valid: false,
-            reason: `Pass belongs to different event: "${data.eventTitle || data.eventId}".`,
-            booking: data
+            reason: `Pass belongs to different event: "${passRecord.eventTitle || passRecord.eventId}".`,
+            booking: passRecord
           };
         }
 
-        // 2. Duplicate / already checked-in check
-        if (data.checkedIn || data.status === STATUS_ENUMS.PASS.USED) {
+        // Duplicate / already checked-in check
+        if (passRecord.checkedIn || passRecord.status === STATUS_ENUMS.PASS.USED) {
           await recordCheckInAuditLog({
-            passId: data.passId || cleanCode,
-            bookingId: data.bookingId,
-            eventId: data.eventId,
-            eventTitle: data.eventTitle,
-            attendeeName: data.attendeeName || data.participantName,
-            participantUid: data.participantUid,
-            organizerUid: data.organizerUid,
+            passId: passRecord.passId || cleanCode,
+            bookingId: passRecord.bookingId,
+            eventId: passRecord.eventId,
+            eventTitle: passRecord.eventTitle,
+            attendeeName: passRecord.attendeeName || passRecord.participantName,
+            participantUid: passRecord.participantUid,
+            organizerUid: passRecord.organizerUid,
             verifierUid: verifierUser?.uid,
             verifierName: verifierUser?.name || verifierUser?.displayName,
             gate,
@@ -583,38 +883,37 @@ export async function verifyAndCheckinPass({
 
           return {
             valid: false,
-            reason: `Pass already used. Checked in at ${data.checkedInAt ? new Date(data.checkedInAt).toLocaleTimeString() : 'earlier today'} at ${data.gate || 'Gate'}.`,
-            booking: data,
+            reason: `Pass already used. Checked in at ${passRecord.checkedInAt ? new Date(passRecord.checkedInAt).toLocaleTimeString() : 'earlier today'} at ${passRecord.gate || 'Gate'}.`,
+            booking: passRecord,
             alreadyUsed: true
           };
         }
 
-        // 3. Status check
-        if (data.status && data.status !== STATUS_ENUMS.PASS.ACTIVE) {
+        // Status check
+        if (passRecord.status && passRecord.status !== STATUS_ENUMS.PASS.ACTIVE) {
           await recordCheckInAuditLog({
-            passId: data.passId || cleanCode,
-            bookingId: data.bookingId,
-            eventId: data.eventId,
-            eventTitle: data.eventTitle,
-            attendeeName: data.attendeeName || data.participantName,
-            participantUid: data.participantUid,
-            organizerUid: data.organizerUid,
+            passId: passRecord.passId || cleanCode,
+            bookingId: passRecord.bookingId,
+            eventId: passRecord.eventId,
+            eventTitle: passRecord.eventTitle,
+            attendeeName: passRecord.attendeeName || passRecord.participantName,
+            participantUid: passRecord.participantUid,
+            organizerUid: passRecord.organizerUid,
             verifierUid: verifierUser?.uid,
             verifierName: verifierUser?.name || verifierUser?.displayName,
             gate,
             status: STATUS_ENUMS.CHECK_IN.DENIED,
-            reason: `Pass status is ${data.status}`
+            reason: `Pass status is ${passRecord.status}`
           }).catch(() => {});
 
           return {
             valid: false,
-            reason: `Pass status is "${data.status}" (expected Active).`,
-            booking: data
+            reason: `Pass status is "${passRecord.status}" (expected Active).`,
+            booking: passRecord
           };
         }
 
-        // 4. Valid check-in: Update record and write audit log
-        const now = Date.now();
+        // Authorized: Update ONLY this individual pass
         const checkinUpdate = {
           checkedIn: true,
           checkedInAt: now,
@@ -625,17 +924,72 @@ export async function verifyAndCheckinPass({
           updatedAt: now
         };
 
-        await updateDoc(docRef, checkinUpdate);
+        // If it was in /passes, update /passes document
+        if (isDedicatedPass && docRef) {
+          await updateDoc(docRef, checkinUpdate);
+
+          // Also synchronize matching pass inside parent booking in /bookings
+          if (passRecord.bookingId) {
+            try {
+              const bRef = doc(db, BOOKINGS_COLLECTION, passRecord.bookingId);
+              const bSnap = await getDoc(bRef);
+              if (bSnap.exists()) {
+                const bData = bSnap.data();
+                if (Array.isArray(bData.passes)) {
+                  const updatedPasses = bData.passes.map((p) =>
+                    (p.passId === cleanCode || p.id === cleanCode) ? { ...p, ...checkinUpdate } : p
+                  );
+                  await updateDoc(bRef, { passes: updatedPasses, updatedAt: now });
+                }
+              }
+            } catch (syncErr) {
+              console.warn('[GateApass Bookings] Booking pass status sync notice:', syncErr);
+            }
+          }
+        } else if (docRef && parentBookingData) {
+          // If updated from parent booking directly
+          if (Array.isArray(parentBookingData.passes)) {
+            const updatedPasses = parentBookingData.passes.map((p) =>
+              (p.passId === cleanCode || p.id === cleanCode) ? { ...p, ...checkinUpdate } : p
+            );
+            await updateDoc(docRef, { passes: updatedPasses, updatedAt: now });
+          } else {
+            await updateDoc(docRef, checkinUpdate);
+          }
+        }
+
+        // Synchronize local memory & storage caches
+        if (passRecord.participantUid) {
+          const userPasses = getStoredUserPasses(passRecord.participantUid);
+          const updatedUserPasses = userPasses.map((p) =>
+            (p.passId === cleanCode || p.id === cleanCode) ? { ...p, ...checkinUpdate } : p
+          );
+          saveStoredUserPasses(passRecord.participantUid, updatedUserPasses);
+
+          const userBookings = getStoredUserBookings(passRecord.participantUid);
+          const updatedUserBookings = userBookings.map((b) => {
+            if (b.bookingId === passRecord.bookingId && Array.isArray(b.passes)) {
+              return {
+                ...b,
+                passes: b.passes.map((p) =>
+                  (p.passId === cleanCode || p.id === cleanCode) ? { ...p, ...checkinUpdate } : p
+                )
+              };
+            }
+            return b;
+          });
+          saveStoredUserBookings(passRecord.participantUid, updatedUserBookings);
+        }
 
         // Record immutable audit log in /checkIns
         await recordCheckInAuditLog({
-          passId: data.passId || cleanCode,
-          bookingId: data.bookingId,
-          eventId: data.eventId,
-          eventTitle: data.eventTitle,
-          attendeeName: data.attendeeName || data.participantName,
-          participantUid: data.participantUid,
-          organizerUid: data.organizerUid,
+          passId: passRecord.passId || cleanCode,
+          bookingId: passRecord.bookingId,
+          eventId: passRecord.eventId,
+          eventTitle: passRecord.eventTitle,
+          attendeeName: passRecord.attendeeName || passRecord.participantName,
+          participantUid: passRecord.participantUid,
+          organizerUid: passRecord.organizerUid,
           verifierUid: verifierUser?.uid,
           verifierName: verifierUser?.name || verifierUser?.displayName,
           gate,
@@ -646,11 +1000,11 @@ export async function verifyAndCheckinPass({
         return {
           valid: true,
           message: 'Entry Authorized',
-          attendeeName: data.participantName || data.attendeeName || 'Attendee',
-          eventTitle: data.eventTitle,
-          passType: data.passType || 'Standard Pass',
-          authority: data.authority || 'Participant',
-          booking: { ...data, ...checkinUpdate }
+          attendeeName: passRecord.participantName || passRecord.attendeeName || 'Attendee',
+          eventTitle: passRecord.eventTitle,
+          passType: passRecord.passType || 'Standard Pass',
+          authority: passRecord.authority || 'Participant',
+          booking: { ...passRecord, ...checkinUpdate }
         };
       }
     } catch (err) {
@@ -658,32 +1012,50 @@ export async function verifyAndCheckinPass({
     }
   }
 
-  // Fallback to local memory cache for mock/offline passes
-  const localMatch = memoryBookingsCache.find(
-    (b) => b.passId === cleanCode || b.bookingId === cleanCode || b.id === cleanCode
+  // 2. Fallback to memory and local storage cache for offline/mock passes
+  let localPass = memoryPassesCache.find(
+    (p) => p.passId === cleanCode || p.id === cleanCode
   );
 
-  if (localMatch) {
-    if (localMatch.checkedIn || localMatch.status === STATUS_ENUMS.PASS.USED) {
+  if (!localPass) {
+    for (const b of memoryBookingsCache) {
+      if (Array.isArray(b.passes)) {
+        const found = b.passes.find((p) => p.passId === cleanCode || p.id === cleanCode);
+        if (found) {
+          localPass = found;
+          break;
+        }
+      }
+      if (b.passId === cleanCode || b.bookingId === cleanCode || b.id === cleanCode) {
+        localPass = b.pass || b;
+        break;
+      }
+    }
+  }
+
+  if (localPass) {
+    if (localPass.checkedIn || localPass.status === STATUS_ENUMS.PASS.USED) {
       return {
         valid: false,
         reason: 'Pass already used.',
-        booking: localMatch,
+        booking: localPass,
         alreadyUsed: true
       };
     }
-    localMatch.checkedIn = true;
-    localMatch.status = STATUS_ENUMS.PASS.USED;
-    localMatch.checkedInAt = Date.now();
-    localMatch.gate = gate;
+
+    localPass.checkedIn = true;
+    localPass.status = STATUS_ENUMS.PASS.USED;
+    localPass.checkedInAt = Date.now();
+    localPass.gate = gate;
+
     return {
       valid: true,
       message: 'Entry Authorized',
-      attendeeName: localMatch.participantName || localMatch.attendeeName || 'Attendee',
-      eventTitle: localMatch.eventTitle,
-      passType: localMatch.passType,
-      authority: localMatch.authority,
-      booking: localMatch
+      attendeeName: localPass.participantName || localPass.attendeeName || 'Attendee',
+      eventTitle: localPass.eventTitle,
+      passType: localPass.passType,
+      authority: localPass.authority,
+      booking: localPass
     };
   }
 
