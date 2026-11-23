@@ -99,9 +99,9 @@ export default function OrganizerStudioView({
   const handleDeleteEvent = (ev) => {
     if (!ev) return;
     const title = ev.title || ev.name || 'this event';
-    if (window.confirm(`Are you sure you want to delete "${title}"? This will remove the event across all devices.`)) {
+    if (window.confirm(`Are you sure you want to delete "${title}"? This will terminate the event and delete associated passes from attendees' My Passes.`)) {
       if (onDeleteEvent) {
-        onDeleteEvent(ev.id);
+        onDeleteEvent(ev.id, title);
       }
     }
   };
@@ -550,6 +550,36 @@ export default function OrganizerStudioView({
                                 <Edit2 size={12} /> Edit
                               </button>
 
+                              {ev.status !== 'Cancelled' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const title = ev.title || ev.name || 'this event';
+                                    if (window.confirm(`Terminate "${title}"? This will cancel the event and automatically delete associated passes from attendees' My Passes.`)) {
+                                      if (onUpdateEvent) {
+                                        onUpdateEvent({ ...ev, status: 'Cancelled' });
+                                      }
+                                    }
+                                  }}
+                                  title="Terminate Event & Invalidate Passes"
+                                  style={{
+                                    padding: '6px 10px',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    borderRadius: 'var(--radius-control)',
+                                    border: '1px solid #FEDF89',
+                                    backgroundColor: '#FFFAEB',
+                                    color: '#B54708',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                >
+                                  <ShieldAlert size={12} /> Terminate
+                                </button>
+                              )}
+
                               {onDeleteEvent && (
                                 <button
                                   type="button"
@@ -932,6 +962,7 @@ export default function OrganizerStudioView({
                 >
                   <option value="Active">Active (Published to Attendees)</option>
                   <option value="Draft">Draft (Private / Hidden)</option>
+                  <option value="Cancelled">Cancelled / Terminated (Removes passes from My Passes)</option>
                 </select>
               </div>
             </div>

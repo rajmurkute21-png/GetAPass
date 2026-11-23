@@ -1,12 +1,13 @@
 import React from 'react';
-import { Calendar, MapPin, Eye, Ticket, Sparkles } from 'lucide-react';
+import { Calendar, MapPin, Eye, Ticket, Sparkles, Trash2, CheckCircle2, Clock } from 'lucide-react';
 import StatusBadge from '../common/StatusBadge';
 import Button from '../common/Button';
 import { resolveTicketTheme, resolvePassTypeTheme } from '../../constants/ticketThemes';
 
 export default function PassCard({
   pass,
-  onViewPass
+  onViewPass,
+  onDeletePass
 }) {
   const {
     id,
@@ -208,20 +209,100 @@ export default function PassCard({
           </div>
         </div>
 
-        {/* Action Button */}
-        <Button
-          variant="outline"
-          icon={Eye}
-          fullWidth
-          onClick={onViewPass}
-          style={{
-            marginTop: 'auto',
-            borderColor: 'var(--color-gray)',
-            fontWeight: 600
-          }}
-        >
-          View Pass
-        </Button>
+        {/* Check-in verification notice if used */}
+        {String(status).toLowerCase() === 'used' && (
+          <div
+            style={{
+              padding: '8px 12px',
+              borderRadius: '8px',
+              backgroundColor: 'rgba(124, 58, 237, 0.08)',
+              border: '1px solid rgba(124, 58, 237, 0.2)',
+              fontSize: '11px',
+              fontWeight: 600,
+              color: '#6D28D9',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '6px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <CheckCircle2 size={13} color="#7C3AED" />
+              <span>Checked In · Gate {pass.checkedInGate || pass.gate || 'A'}</span>
+            </div>
+            {pass.checkedInAt && (
+              <span style={{ fontSize: '10px', opacity: 0.85 }}>
+                {new Date(pass.checkedInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Concluded notice if expired */}
+        {String(status).toLowerCase() === 'expired' && (
+          <div
+            style={{
+              padding: '8px 12px',
+              borderRadius: '8px',
+              backgroundColor: '#F3F4F6',
+              border: '1px solid #E5E7EB',
+              fontSize: '11px',
+              fontWeight: 500,
+              color: '#6B7280',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <Clock size={13} color="#6B7280" />
+            <span>Event has concluded</span>
+          </div>
+        )}
+
+        {/* Action Button Row */}
+        <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
+          <Button
+            variant="outline"
+            icon={Eye}
+            fullWidth
+            onClick={onViewPass}
+            style={{
+              borderColor: 'var(--color-gray)',
+              fontWeight: 600
+            }}
+          >
+            View Pass
+          </Button>
+
+          {onDeletePass && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm(`Delete pass "${resolvedId}"?`)) {
+                  onDeletePass(resolvedId);
+                }
+              }}
+              title="Delete pass"
+              style={{
+                width: '40px',
+                height: '40px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 'var(--radius-control)',
+                border: '1px solid #FECDCA',
+                backgroundColor: '#FEF3F2',
+                color: '#B42318',
+                cursor: 'pointer',
+                flexShrink: 0,
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

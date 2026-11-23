@@ -21,7 +21,10 @@ import {
   Users,
   ArrowRight,
   Lock,
-  Activity
+  Activity,
+  History,
+  Clock,
+  Filter
 } from 'lucide-react';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
@@ -37,10 +40,59 @@ import {
   isParticipantOnly
 } from '../services/permissionService';
 
+/**
+ * Determine if an event date or pass date has expired
+ */
+function isEventExpired(dateStr, timeStr) {
+  if (!dateStr) return false;
+  let targetDateStr = String(dateStr).trim();
+  if (targetDateStr.includes('–')) {
+    const parts = targetDateStr.split('–').map((s) => s.trim());
+    targetDateStr = parts[parts.length - 1];
+  } else if (targetDateStr.includes(' - ')) {
+    const parts = targetDateStr.split(' - ').map((s) => s.trim());
+    targetDateStr = parts[parts.length - 1];
+  }
+
+  let d = new Date(targetDateStr);
+  if (isNaN(d.getTime())) {
+    const cleaned = targetDateStr.replace(/^[A-Za-z]+,\s*/, '');
+    d = new Date(cleaned);
+  }
+  if (isNaN(d.getTime())) return false;
+
+  const now = new Date();
+  if (d.toDateString() === now.toDateString() && timeStr) {
+    let endTimeStr = String(timeStr).trim();
+    if (endTimeStr.includes('–')) {
+      const parts = endTimeStr.split('–').map((s) => s.trim());
+      endTimeStr = parts[parts.length - 1];
+    } else if (endTimeStr.includes(' - ')) {
+      const parts = endTimeStr.split(' - ').map((s) => s.trim());
+      endTimeStr = parts[parts.length - 1];
+    }
+    const match = endTimeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    if (match) {
+      let hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      const ampm = (match[3] || '').toUpperCase();
+      if (ampm === 'PM' && hours < 12) hours += 12;
+      if (ampm === 'AM' && hours === 12) hours = 0;
+      d.setHours(hours, minutes, 0, 0);
+      return d.getTime() < now.getTime();
+    }
+  }
+
+  d.setHours(23, 59, 59, 999);
+  return d.getTime() < now.getTime();
+}
+
 export default function ProfileView({
   user,
   onUpdateUser,
   passes = [],
+  events = [],
+  onDeletePass,
   bookings = [],
   notifications = [],
   initialSubTab = 'profile',
@@ -49,7 +101,9 @@ export default function ProfileView({
   onOpenAdminDashboard
 }) {
   const { user: authUser, isAuthenticated, openAuthModal, reloadUser, resendVerification } = useAuth();
-  const [activeTab, setActiveTab] = useState(initialSubTab); // 'profile' | 'my-passes' | 'my-bookings' | 'payments' | 'list-event' | 'notifications' | 'settings' | 'help'
+  const [activeTab, setActiveTab] = useState(initialSubTab); // 'profile' | 'my-passes' | 'pass-history' | 'my-bookings' | 'payments' | ...
+  const [passSubFilter, setPassSubFilter] = useState('active'); // 'active' | 'history' (inside my-passes tab)
+  const [historyCategoryFilter, setHistoryCategoryFilter] = useState('all'); // 'all' | 'used' | 'expired'
   const [isEditing, setIsEditing] = useState(false);
   const [selectedPassForModal, setSelectedPassForModal] = useState(null);
   const [selectedReceiptForModal, setSelectedReceiptForModal] = useState(null);
@@ -57,6 +111,12 @@ export default function ProfileView({
   const [resendingVerification, setResendingVerification] = useState(false);
   const [verificationFeedback, setVerificationFeedback] = useState('');
   const [copiedUid, setCopiedUid] = useState(false);
+
+  React.useEffect(() => {
+    if (initialSubTab) {
+      setActiveTab(initialSubTab);
+    }
+  }, [initialSubTab]);
 
   const activeUser = authUser || user;
 
@@ -86,6 +146,78 @@ export default function ProfileView({
     return passes.filter((p) => !p.participantUid || p.participantUid === activeUser.uid);
   }, [passes, activeUser]);
 
+  // Classify passes into Active vs History (Used, Expired) vs Terminated
+  const { activePasses, usedPasses, expiredPasses, historyPasses } = React.useMemo(() => {
+    const active = [];
+    const used = [];
+    const expired = [];
+    const history = [];
+
+    userPasses.forEach((p) => {
+      const pStatus = String(p.status || '').toLowerCase();
+      const isUsed = pStatus === 'used' || p.checkedIn === true || pStatus === 'redeemed';
+
+      // Cross-reference matched event from database/context
+      const matchedEvent = (events || []).find(
+        (e) => (p.eventId && e.id === p.eventId) ||
+               (p.eventTitle && e.title?.toLowerCase() === p.eventTitle?.toLowerCase()) ||
+               (p.event && e.title?.toLowerCase() === p.event?.toLowerCase())
+      );
+
+      // 1. Check if event was terminated / cancelled by the organizer or deleted
+      const isTerminated = pStatus === 'cancelled' ||
+        pStatus === 'terminated' ||
+        (matchedEvent && (
+          String(matchedEvent.status || '').toLowerCase() === 'cancelled' ||
+          String(matchedEvent.status || '').toLowerCase() === 'terminated'
+        )) ||
+        (Boolean(events && events.length > 0 && p.eventId && !matchedEvent));
+
+      // 2. Check if event is expired (past date/time)
+      const dateToCheck = p.date || matchedEvent?.date || matchedEvent?.startDate;
+      const timeToCheck = p.time || matchedEvent?.time;
+      const isExpired = pStatus === 'expired' || isEventExpired(dateToCheck, timeToCheck);
+
+      // RULE 1: If organizer terminated the event -> Exclude/delete from active passes!
+      if (isTerminated) {
+        history.push({
+          ...p,
+          status: 'Cancelled',
+          terminationNotice: 'Event terminated by organizer'
+        });
+        return;
+      }
+
+      // RULE 2: If pass is Used -> Exclude from active passes, store in History option!
+      if (isUsed) {
+        const usedItem = {
+          ...p,
+          status: 'Used',
+          checkedIn: true
+        };
+        used.push(usedItem);
+        history.push(usedItem);
+        return;
+      }
+
+      // RULE 3: If event is Expired -> Exclude from active passes, store in History option!
+      if (isExpired) {
+        const expiredItem = {
+          ...p,
+          status: 'Expired'
+        };
+        expired.push(expiredItem);
+        history.push(expiredItem);
+        return;
+      }
+
+      // RULE 4: Valid upcoming pass ready for turnstile verification -> Active Pass
+      active.push(p);
+    });
+
+    return { activePasses: active, usedPasses: used, expiredPasses: expired, historyPasses: history };
+  }, [userPasses, events]);
+
   const userBookings = React.useMemo(() => {
     if (!activeUser?.uid) return bookings;
     return bookings.filter((b) => !b.participantUid || b.participantUid === activeUser.uid);
@@ -94,7 +226,8 @@ export default function ProfileView({
   const menuItems = React.useMemo(() => {
     const items = [
       { id: 'profile', label: 'My Profile', icon: User },
-      { id: 'my-passes', label: 'My Passes', icon: Ticket, count: userPasses.length },
+      { id: 'my-passes', label: 'My Passes', icon: Ticket, count: activePasses.length },
+      { id: 'pass-history', label: 'Pass History', icon: History, count: historyPasses.length },
       { id: 'my-bookings', label: 'My Bookings', icon: ShoppingBag, count: userBookings.length },
       { id: 'payments', label: 'Payments', icon: CreditCard }
     ];
@@ -113,7 +246,7 @@ export default function ProfileView({
     );
 
     return items;
-  }, [isAdmin, isOrganizer, userPasses.length, userBookings.length, notifications.length]);
+  }, [isAdmin, isOrganizer, activePasses.length, historyPasses.length, userBookings.length, notifications.length]);
 
   const handleSaveProfile = (e) => {
     e.preventDefault();
@@ -1143,54 +1276,304 @@ export default function ProfileView({
             {/* SUB-VIEW 2: MY PASSES (CRITICAL: Only accessible through profile) */}
             {activeTab === 'my-passes' && (
               <div>
-                <div style={{ marginBottom: '24px' }}>
+                <div style={{ marginBottom: '20px' }}>
                   <h2 className="text-h2" style={{ fontSize: '28px', color: 'var(--color-dark-text)' }}>
                     My Digital Passes
                   </h2>
                   <p style={{ fontSize: '14px', color: 'var(--color-muted-text)', marginTop: '4px' }}>
-                    Active tickets ready for gate validation. Click "View pass" to inspect the high-resolution QR pass.
+                    Active tickets ready for gate validation. Expired or terminated passes are moved to Pass History.
                   </p>
                 </div>
 
-                {userPasses.length === 0 ? (
-                  <div
+                {/* Sub-tab Switcher: Active Passes vs Pass History */}
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    padding: '4px',
+                    backgroundColor: '#FFFFFF',
+                    border: '1px solid #E9E5F0',
+                    borderRadius: '9999px',
+                    gap: '4px',
+                    marginBottom: '24px',
+                    boxShadow: '0 2px 8px rgba(24, 21, 38, 0.04)'
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setPassSubFilter('active')}
                     style={{
-                      padding: '48px 24px',
-                      textAlign: 'center',
-                      backgroundColor: 'var(--color-off-white)',
-                      border: '1px solid var(--color-gray)',
-                      borderRadius: 'var(--radius-card)',
+                      padding: '8px 18px',
+                      borderRadius: '9999px',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      backgroundColor: passSubFilter === 'active' ? '#7C3AED' : 'transparent',
+                      color: passSubFilter === 'active' ? '#FFFFFF' : '#181526',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.18s ease',
                       display: 'flex',
-                      flexDirection: 'column',
                       alignItems: 'center',
-                      gap: '12px'
+                      gap: '6px'
                     }}
                   >
-                    <Ticket size={32} style={{ color: 'var(--color-violet)' }} />
-                    <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-dark-text)' }}>
-                      No active passes
-                    </h3>
-                    <p style={{ fontSize: '13px', color: 'var(--color-muted-text)', maxWidth: '360px' }}>
-                      Passes booked or assigned to you will appear here with instant gate QR verification.
-                    </p>
-                  </div>
-                ) : (
-                  <div
+                    <Ticket size={14} />
+                    <span>Active Passes ({activePasses.length})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPassSubFilter('history')}
                     style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                      gap: '20px'
+                      padding: '8px 18px',
+                      borderRadius: '9999px',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      backgroundColor: passSubFilter === 'history' ? '#7C3AED' : 'transparent',
+                      color: passSubFilter === 'history' ? '#FFFFFF' : '#181526',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.18s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
                     }}
                   >
-                    {userPasses.map((p) => (
-                      <PassCard
-                        key={p.id}
-                        pass={p}
-                        onViewPass={() => setSelectedPassForModal(p)}
-                      />
-                    ))}
+                    <History size={14} />
+                    <span>Pass History ({historyPasses.length})</span>
+                  </button>
+                </div>
+
+                {passSubFilter === 'active' ? (
+                  activePasses.length === 0 ? (
+                    <div
+                      style={{
+                        padding: '48px 24px',
+                        textAlign: 'center',
+                        backgroundColor: '#FFFFFF',
+                        border: '1px solid #E9E5F0',
+                        borderRadius: '20px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '12px'
+                      }}
+                    >
+                      <Ticket size={36} style={{ color: '#7C3AED' }} />
+                      <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#181526' }}>
+                        No active passes
+                      </h3>
+                      <p style={{ fontSize: '13px', color: '#777487', maxWidth: '380px', lineHeight: 1.5 }}>
+                        Passes for upcoming events appear here ready for gate validation. Terminated, expired, or used passes are automatically removed from this section.
+                      </p>
+                      {historyPasses.length > 0 && (
+                        <Button
+                          variant="outline"
+                          icon={History}
+                          onClick={() => setPassSubFilter('history')}
+                          style={{ marginTop: '8px' }}
+                        >
+                          View Pass History ({historyPasses.length})
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                        gap: '20px'
+                      }}
+                    >
+                      {activePasses.map((p) => (
+                        <PassCard
+                          key={p.id || p.passId}
+                          pass={p}
+                          onViewPass={() => setSelectedPassForModal(p)}
+                          onDeletePass={onDeletePass}
+                        />
+                      ))}
+                    </div>
+                  )
+                ) : (
+                  /* Pass History nested view inside My Passes */
+                  <div>
+                    {/* Category Filter Pills inside History */}
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                      {[
+                        { id: 'all', label: `All History (${historyPasses.length})` },
+                        { id: 'used', label: `Used Passes (${usedPasses.length})` },
+                        { id: 'expired', label: `Expired (${expiredPasses.length})` }
+                      ].map((chip) => (
+                        <button
+                          key={chip.id}
+                          type="button"
+                          onClick={() => setHistoryCategoryFilter(chip.id)}
+                          style={{
+                            padding: '6px 14px',
+                            borderRadius: '9999px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            border: historyCategoryFilter === chip.id ? '1px solid #7C3AED' : '1px solid #E9E5F0',
+                            backgroundColor: historyCategoryFilter === chip.id ? 'rgba(124, 58, 237, 0.08)' : '#FFFFFF',
+                            color: historyCategoryFilter === chip.id ? '#7C3AED' : '#181526',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          {chip.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {(() => {
+                      const list = historyCategoryFilter === 'used'
+                        ? usedPasses
+                        : historyCategoryFilter === 'expired'
+                        ? expiredPasses
+                        : historyPasses;
+
+                      if (list.length === 0) {
+                        return (
+                          <div
+                            style={{
+                              padding: '48px 24px',
+                              textAlign: 'center',
+                              backgroundColor: '#FFFFFF',
+                              border: '1px solid #E9E5F0',
+                              borderRadius: '20px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: '12px'
+                            }}
+                          >
+                            <History size={36} style={{ color: '#777487' }} />
+                            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#181526' }}>
+                              No pass history in this view
+                            </h3>
+                            <p style={{ fontSize: '13px', color: '#777487', maxWidth: '360px', lineHeight: 1.5 }}>
+                              When you check in at event turnstiles or events conclude, your passes will be archived here.
+                            </p>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                            gap: '20px'
+                          }}
+                        >
+                          {list.map((p) => (
+                            <PassCard
+                              key={p.id || p.passId}
+                              pass={p}
+                              onViewPass={() => setSelectedPassForModal(p)}
+                              onDeletePass={onDeletePass}
+                            />
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* SUB-VIEW 2B: PASS HISTORY (Direct Navigation from Menu) */}
+            {activeTab === 'pass-history' && (
+              <div>
+                <div style={{ marginBottom: '20px' }}>
+                  <h2 className="text-h2" style={{ fontSize: '28px', color: 'var(--color-dark-text)' }}>
+                    Pass History
+                  </h2>
+                  <p style={{ fontSize: '14px', color: 'var(--color-muted-text)', marginTop: '4px' }}>
+                    Archived passes: redeemed tickets with gate check-in timestamps, concluded events, and historical records.
+                  </p>
+                </div>
+
+                {/* Category Filter Pills */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                  {[
+                    { id: 'all', label: `All History (${historyPasses.length})` },
+                    { id: 'used', label: `Used Passes (${usedPasses.length})` },
+                    { id: 'expired', label: `Expired (${expiredPasses.length})` }
+                  ].map((chip) => (
+                    <button
+                      key={chip.id}
+                      type="button"
+                      onClick={() => setHistoryCategoryFilter(chip.id)}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: '9999px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        border: historyCategoryFilter === chip.id ? '1px solid #7C3AED' : '1px solid #E9E5F0',
+                        backgroundColor: historyCategoryFilter === chip.id ? 'rgba(124, 58, 237, 0.08)' : '#FFFFFF',
+                        color: historyCategoryFilter === chip.id ? '#7C3AED' : '#181526',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+
+                {(() => {
+                  const list = historyCategoryFilter === 'used'
+                    ? usedPasses
+                    : historyCategoryFilter === 'expired'
+                    ? expiredPasses
+                    : historyPasses;
+
+                  if (list.length === 0) {
+                    return (
+                      <div
+                        style={{
+                          padding: '48px 24px',
+                          textAlign: 'center',
+                          backgroundColor: '#FFFFFF',
+                          border: '1px solid #E9E5F0',
+                          borderRadius: '20px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: '12px'
+                        }}
+                      >
+                        <History size={36} style={{ color: '#777487' }} />
+                        <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#181526' }}>
+                          No pass history recorded
+                        </h3>
+                        <p style={{ fontSize: '13px', color: '#777487', maxWidth: '360px', lineHeight: 1.5 }}>
+                          Used passes and concluded event records will automatically appear here.
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                        gap: '20px'
+                      }}
+                    >
+                      {list.map((p) => (
+                        <PassCard
+                          key={p.id || p.passId}
+                          pass={p}
+                          onViewPass={() => setSelectedPassForModal(p)}
+                          onDeletePass={onDeletePass}
+                        />
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 

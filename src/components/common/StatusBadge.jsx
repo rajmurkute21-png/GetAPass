@@ -24,6 +24,11 @@ export default function StatusBadge({
   } else if (normalized === 'failed' || normalized === 'invalid' || normalized === 'cancelled' || normalized === 'suspended') {
     dotColor = 'var(--color-error)';
     textColor = 'var(--color-error)';
+  } else if (normalized === 'used' || normalized === 'redeemed' || normalized === 'checked-in') {
+    dotColor = '#7C3AED';
+    textColor = '#6D28D9';
+    bgColor = 'rgba(124, 58, 237, 0.08)';
+    borderColor = 'rgba(124, 58, 237, 0.25)';
   } else if (normalized === 'expired' || normalized === 'inactive' || normalized === 'refunded') {
     dotColor = 'var(--color-light-muted)';
     textColor = 'var(--color-muted-text)';

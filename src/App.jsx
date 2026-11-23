@@ -27,7 +27,9 @@ import {
   subscribeToParticipantBookings,
   subscribeToOrganizerBookings,
   subscribeToAllBookingsAdmin,
-  clearSessionBookingCache
+  clearSessionBookingCache,
+  getStoredUserPasses,
+  saveStoredUserPasses
 } from './services/bookingService';
 import {
   INITIAL_PASSES,
@@ -534,6 +536,96 @@ export default function App() {
 
   const handleRecordCheckin = (checkinItem) => {
     setCheckinHistory((prev) => [{ id: `chk-${Date.now()}`, ...checkinItem }, ...prev]);
+    // Immediately mark the checked in pass as Used in passes state
+    if (checkinItem?.passId) {
+      const code = String(checkinItem.passId).trim();
+      setPasses((prev) =>
+        prev.map((p) =>
+          (p.id === code || p.passId === code)
+            ? {
+                ...p,
+                status: 'Used',
+                checkedIn: true,
+                checkedInAt: Date.now(),
+                checkedInGate: checkinItem.gate || 'Gate A'
+              }
+            : p
+        )
+      );
+      if (currentUser?.uid) {
+        const stored = getStoredUserPasses(currentUser.uid);
+        const updated = stored.map((p) =>
+          (p.id === code || p.passId === code)
+            ? {
+                ...p,
+                status: 'Used',
+                checkedIn: true,
+                checkedInAt: Date.now(),
+                checkedInGate: checkinItem.gate || 'Gate A'
+              }
+            : p
+        );
+        saveStoredUserPasses(currentUser.uid, updated);
+      }
+    }
+  };
+
+  const handleDeletePass = (passId) => {
+    if (!passId) return;
+    setPasses((prev) => prev.filter((p) => (p.passId || p.id) !== passId));
+    if (currentUser?.uid) {
+      const stored = getStoredUserPasses(currentUser.uid);
+      const cleaned = stored.filter((p) => (p.passId || p.id) !== passId);
+      saveStoredUserPasses(currentUser.uid, cleaned);
+    }
+  };
+
+  const handleEventTerminationOrDeletion = (eventId, eventTitle, isDelete = true) => {
+    if (isDelete) {
+      deleteEvent(eventId, currentUser);
+      setEvents((prev) => prev.filter((e) => e.id !== eventId));
+      setOrganizerEvents((prev) => prev.filter((e) => e.id !== eventId));
+      if (selectedEvent?.id === eventId) {
+        setSelectedEvent(null);
+      }
+    } else {
+      updateEvent(eventId, { status: 'Cancelled' }, currentUser);
+      setEvents((prev) => prev.map((e) => (e.id === eventId ? { ...e, status: 'Cancelled' } : e)));
+      setOrganizerEvents((prev) => prev.map((e) => (e.id === eventId ? { ...e, status: 'Cancelled' } : e)));
+    }
+
+    // Purge passes linked to this event from attendee passes
+    const normTitle = (eventTitle || '').toLowerCase();
+    setPasses((prev) =>
+      prev.filter((p) => {
+        const matchesId = p.eventId && p.eventId === eventId;
+        const matchesTitle = normTitle && (p.eventTitle || p.event || '').toLowerCase() === normTitle;
+        return !matchesId && !matchesTitle;
+      })
+    );
+
+    if (currentUser?.uid) {
+      const stored = getStoredUserPasses(currentUser.uid);
+      const cleaned = stored.filter((p) => {
+        const matchesId = p.eventId && p.eventId === eventId;
+        const matchesTitle = normTitle && (p.eventTitle || p.event || '').toLowerCase() === normTitle;
+        return !matchesId && !matchesTitle;
+      });
+      saveStoredUserPasses(currentUser.uid, cleaned);
+    }
+
+    if (eventTitle) {
+      setNotifications((prev) => [
+        {
+          id: `notif-${Date.now()}`,
+          title: 'Event Terminated',
+          message: `The event "${eventTitle}" was terminated by the organizer. Associated pass(es) have been removed from My Passes.`,
+          type: 'warning',
+          time: 'Just now'
+        },
+        ...prev
+      ]);
+    }
   };
 
   const handleMobileNavSelect = (id) => {
@@ -685,12 +777,14 @@ export default function App() {
                 if (selectedEvent?.id === updatedEvent.id) {
                   setSelectedEvent(updated);
                 }
-              }}
-              onDeleteEvent={(eventId) => {
-                deleteEvent(eventId, currentUser);
-                if (selectedEvent?.id === eventId) {
-                  setSelectedEvent(null);
+                if (updatedEvent.status === 'Cancelled' || updatedEvent.status === 'Terminated') {
+                  handleEventTerminationOrDeletion(updatedEvent.id, updatedEvent.title, false);
                 }
+              }}
+              onDeleteEvent={(eventId, eventTitle) => {
+                const ev = events.find((e) => e.id === eventId);
+                const title = eventTitle || ev?.title || '';
+                handleEventTerminationOrDeletion(eventId, title, true);
               }}
               participants={organizerParticipantsList}
               onUpdateParticipants={setParticipants}
@@ -841,6 +935,8 @@ export default function App() {
                   user={currentUser}
                   onUpdateUser={setUser}
                   passes={passes}
+                  events={events}
+                  onDeletePass={handleDeletePass}
                   bookings={bookings}
                   notifications={notifications}
                   initialSubTab={profileSubTab}
