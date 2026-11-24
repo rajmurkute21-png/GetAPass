@@ -60,7 +60,7 @@ export default function DigitalPass({
   const [isFlipped, setIsFlipped] = useState(false);
 
   const {
-    id = 'GP-TF26-9481',
+    id = '',
     passId,
     eventTitle = 'Campus Event',
     title,

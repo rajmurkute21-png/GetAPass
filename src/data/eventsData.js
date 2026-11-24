@@ -22,14 +22,22 @@ import {
   canCreateEvents,
   PUBLISHED_STATUSES,
   normalizeEventStatus,
+  subscribeToEventById,
   subscribeToOrganizerEvents,
-  subscribeToAllEventsAdmin
+  subscribeToAllEventsAdmin,
+  authorizeEvent,
+  rejectEvent,
+  disableEvent,
+  removeUnauthorizedEvent,
+  logEventAudit,
+  getEventAuditLogs
 } from '../services/eventService';
 import { INITIAL_EVENTS } from './mockData';
 
 export {
   EVENTS_STORAGE_KEY,
   subscribeToEvents,
+  subscribeToEventById,
   subscribeToOrganizerEvents,
   subscribeToAllEventsAdmin,
   fetchPublishedEvents,
@@ -41,7 +49,13 @@ export {
   canManageEvent,
   canCreateEvents,
   PUBLISHED_STATUSES,
-  normalizeEventStatus
+  normalizeEventStatus,
+  authorizeEvent,
+  rejectEvent,
+  disableEvent,
+  removeUnauthorizedEvent,
+  logEventAudit,
+  getEventAuditLogs
 };
 
 /**
@@ -67,18 +81,34 @@ export function getEventById(id) {
  */
 export function saveEvent(eventData, currentUser = null) {
   if (!eventData) throw new Error('Event data is required.');
+  if (!currentUser || !currentUser.uid) {
+    throw new Error('Authentication required: You must be signed in with a valid account to create an event.');
+  }
+  if (!canCreateEvents(currentUser)) {
+    throw new Error('Authorization required: Only authorized organizers or administrators can create events.');
+  }
 
   const uniqueId = eventData.id || `evt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  const title = eventData.title || eventData.name || 'Untitled Event';
+  const title = String(eventData.title || eventData.name || '').trim() || 'Untitled Event';
+
+  const isAdminUser = Boolean(currentUser.role === 'admin' || currentUser.isAdmin);
+  let resolvedStatus = 'Pending';
+  if (isAdminUser) {
+    resolvedStatus = eventData.status ? normalizeEventStatus(eventData.status) : 'Active';
+  } else {
+    const requestedStatus = normalizeEventStatus(eventData.status);
+    resolvedStatus = requestedStatus === 'Draft' ? 'Draft' : 'Pending';
+  }
 
   const newEvent = {
     ...eventData,
     id: uniqueId,
     title,
     name: title,
-    status: normalizeEventStatus(eventData.status),
-    organizerUid: currentUser?.uid || eventData.organizerUid || '',
-    organizerEmail: currentUser?.email || eventData.organizerEmail || '',
+    status: resolvedStatus,
+    organizerUid: currentUser.uid,
+    organizerEmail: currentUser.email || '',
+    organizerName: eventData.organizerName || currentUser.displayName || currentUser.name || 'Event Organizer',
     createdAt: eventData.createdAt || Date.now(),
     updatedAt: Date.now()
   };

@@ -7,15 +7,15 @@
  */
 
 import { where } from 'firebase/firestore';
-import { COLLECTIONS, STATUS_ENUMS, generateDocId } from '../constants/firestoreSchema';
+import { COLLECTIONS, STATUS_ENUMS, generateDocId } from '../constants/firestoreSchema.js';
 import {
   fetchPaginatedCollection,
   getDocumentById,
   writeDocument,
   updateDocumentFields,
   subscribeToCollection
-} from './firestoreService';
-import { canManageEvents } from './permissionService';
+} from './firestoreService.js';
+import { canManageEvents } from './permissionService.js';
 
 /**
  * Assigns a staff member / verifier to an event.
@@ -190,5 +190,207 @@ export function subscribeToEventCheckIns(eventId, onUpdate, onError) {
     limitCount: 50,
     onUpdate,
     onError
+  });
+}
+
+export const OFFLINE_PASS_ROSTER_KEY = 'gateapass_offline_pass_roster';
+export const OFFLINE_CHECKINS_QUEUE_KEY = 'gateapass_offline_checkins_queue';
+
+/**
+ * Caches a roster of passes in local storage for offline gate scanning.
+ */
+export function cachePassRosterForOffline(eventId, passesList) {
+  if (!eventId || !Array.isArray(passesList)) return false;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const rosterKey = `${OFFLINE_PASS_ROSTER_KEY}_${eventId}`;
+      window.localStorage.setItem(rosterKey, JSON.stringify(passesList));
+      return true;
+    }
+  } catch (err) {
+    console.warn('[GateApass Offline] Failed to cache roster:', err);
+  }
+  return false;
+}
+
+/**
+ * Validates a pass against the offline cached roster when network is unavailable.
+ */
+export function verifyPassOffline(passCode, targetEventId = null) {
+  if (!passCode) {
+    return { valid: false, status: 'Invalid', reason: 'Missing pass code' };
+  }
+  const cleanCode = String(passCode).trim();
+  const cleanLower = cleanCode.toLowerCase();
+
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      // Find across cached rosters or global bookings
+      let foundPass = null;
+      let eventRosterKey = targetEventId ? `${OFFLINE_PASS_ROSTER_KEY}_${targetEventId}` : null;
+
+      if (eventRosterKey) {
+        const raw = window.localStorage.getItem(eventRosterKey);
+        if (raw) {
+          const roster = JSON.parse(raw);
+          foundPass = roster.find((p) =>
+            (p.passId && p.passId.toLowerCase() === cleanLower) ||
+            (p.id && p.id.toLowerCase() === cleanLower) ||
+            (p.qrPayload && p.qrPayload.toLowerCase() === cleanLower)
+          );
+        }
+      }
+
+      // If not in targeted roster, search all offline keys and general bookings cache
+      if (!foundPass) {
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const k = window.localStorage.key(i);
+          if (k && (k.startsWith(OFFLINE_PASS_ROSTER_KEY) || k === 'gateapass_user_bookings' || k === 'getapass_bookings')) {
+            try {
+              const data = JSON.parse(window.localStorage.getItem(k));
+              if (Array.isArray(data)) {
+                for (const item of data) {
+                  if (item.passId?.toLowerCase() === cleanLower || item.id?.toLowerCase() === cleanLower) {
+                    foundPass = item;
+                    break;
+                  }
+                  if (Array.isArray(item.passes)) {
+                    const match = item.passes.find(
+                      (p) => p.passId?.toLowerCase() === cleanLower || p.id?.toLowerCase() === cleanLower
+                    );
+                    if (match) {
+                      foundPass = { ...match, eventTitle: item.eventTitle, eventId: item.eventId };
+                      break;
+                    }
+                  }
+                }
+              }
+            } catch {}
+          }
+          if (foundPass) break;
+        }
+      }
+
+      if (!foundPass) {
+        return {
+          valid: false,
+          status: 'Invalid',
+          reason: 'Pass not recognized in local offline roster or digital registry.'
+        };
+      }
+
+      // Check event match
+      if (targetEventId && foundPass.eventId && foundPass.eventId !== targetEventId) {
+        return {
+          valid: false,
+          status: 'Wrong-event',
+          reason: `Pass is for "${foundPass.eventTitle || foundPass.eventId}", not the current event.`,
+          pass: foundPass
+        };
+      }
+
+      // Check used status
+      if (foundPass.checkedIn || foundPass.status === 'Used') {
+        return {
+          valid: false,
+          status: 'Already-used',
+          reason: 'This pass was already scanned and used for entry.',
+          pass: foundPass
+        };
+      }
+
+      // Check cancelled / expired
+      if (foundPass.status === 'Cancelled' || foundPass.status === 'Refunded') {
+        return {
+          valid: false,
+          status: 'Cancelled',
+          reason: 'This pass has been cancelled or refunded.',
+          pass: foundPass
+        };
+      }
+      if (foundPass.status === 'Expired') {
+        return {
+          valid: false,
+          status: 'Expired',
+          reason: 'This pass has expired.',
+          pass: foundPass
+        };
+      }
+
+      // Valid
+      return {
+        valid: true,
+        status: 'Valid',
+        reason: 'Verified against local secure roster.',
+        pass: foundPass,
+        attendeeName: foundPass.attendeeName || foundPass.name || 'Attendee',
+        passType: foundPass.passType || 'Standard',
+        eventTitle: foundPass.eventTitle || 'Campus Event'
+      };
+    }
+  } catch (err) {
+    console.warn('[GateApass Offline Verifier] Error checking offline:', err);
+  }
+
+  return { valid: false, status: 'Invalid', reason: 'Offline verification error' };
+}
+
+/**
+ * Queues an offline check-in log to be synced when internet connectivity returns.
+ */
+export function queueOfflineCheckin(checkinData) {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = window.localStorage.getItem(OFFLINE_CHECKINS_QUEUE_KEY);
+      const queue = raw ? JSON.parse(raw) : [];
+      queue.push({
+        ...checkinData,
+        queuedAt: Date.now()
+      });
+      window.localStorage.setItem(OFFLINE_CHECKINS_QUEUE_KEY, JSON.stringify(queue));
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+/**
+ * Real-time subscription to turnstile check-in logs based on the user's platform role.
+ * - Admin: Platform-wide turnstile check-ins
+ * - Organizer: Check-ins for events owned by this organizer
+ * - Verifier: Check-ins logged by this verifier
+ */
+export function subscribeToRoleCheckIns(actor, onUpdate, onError) {
+  if (!actor || !actor.uid) {
+    if (onUpdate) onUpdate([]);
+    return () => {};
+  }
+
+  const isAdmin = Boolean(actor.role === 'admin' || actor.isAdmin);
+  const isOrganizer = Boolean(actor.role === 'organizer' || actor.isOrganizer);
+
+  let constraints = [];
+  if (isAdmin) {
+    constraints = [];
+  } else if (isOrganizer) {
+    constraints = [where('organizerUid', '==', actor.uid)];
+  } else {
+    // Verifier
+    constraints = [where('verifierUid', '==', actor.uid)];
+  }
+
+  return subscribeToCollection({
+    collectionName: COLLECTIONS.CHECK_INS,
+    constraints,
+    orderByField: 'timestamp',
+    orderDirection: 'desc',
+    limitCount: 50,
+    onUpdate: (items) => {
+      if (onUpdate) onUpdate(items);
+    },
+    onError: (err) => {
+      console.warn('[GateApass Turnstile] Role check-ins subscription notice:', err);
+      if (onError) onError(err);
+    }
   });
 }

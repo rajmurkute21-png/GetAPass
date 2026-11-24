@@ -31,6 +31,7 @@ import Input from '../components/common/Input';
 import StatusBadge from '../components/common/StatusBadge';
 import PassCard from '../components/cards/PassCard';
 import PaymentCard from '../components/cards/PaymentCard';
+import PaymentHelpModal from '../components/payment/PaymentHelpModal';
 import Modal from '../components/common/Modal';
 import DigitalPass from '../components/pass/DigitalPass';
 import { useAuth } from '../context/AuthContext';
@@ -107,6 +108,7 @@ export default function ProfileView({
   const [isEditing, setIsEditing] = useState(false);
   const [selectedPassForModal, setSelectedPassForModal] = useState(null);
   const [selectedReceiptForModal, setSelectedReceiptForModal] = useState(null);
+  const [selectedPaymentForHelp, setSelectedPaymentForHelp] = useState(null);
   const [checkingVerification, setCheckingVerification] = useState(false);
   const [resendingVerification, setResendingVerification] = useState(false);
   const [verificationFeedback, setVerificationFeedback] = useState('');
@@ -1723,6 +1725,7 @@ export default function ProfileView({
                         key={b.bookingId}
                         booking={b}
                         onDownloadReceipt={() => setSelectedReceiptForModal(b)}
+                        onPaymentHelp={(bk) => setSelectedPaymentForHelp(bk)}
                       />
                     ))}
                   </div>
@@ -1943,6 +1946,18 @@ export default function ProfileView({
           </div>
         )}
       </Modal>
+
+      {/* Payment Help & Inquiries Modal */}
+      <PaymentHelpModal
+        isOpen={Boolean(selectedPaymentForHelp)}
+        onClose={() => setSelectedPaymentForHelp(null)}
+        bookingId={selectedPaymentForHelp?.bookingId || ''}
+        transactionId={selectedPaymentForHelp?.bookingId || ''}
+        amount={selectedPaymentForHelp?.amount}
+        eventTitle={selectedPaymentForHelp?.eventTitle}
+        paymentStatus="success"
+        user={currentUser}
+      />
     </div>
   );
 }

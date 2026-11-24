@@ -62,6 +62,11 @@ export default function OrganizerStudioView({
   // Edit Event Modal State
   const [editingEventModalOpen, setEditingEventModalOpen] = useState(false);
   const [editEventData, setEditEventData] = useState(null);
+  const [deleteConfirmationModal, setDeleteConfirmationModal] = useState({
+    isOpen: false,
+    event: null,
+    reason: ''
+  });
 
   // Selected participant for authority modal
   const [selectedParticipant, setSelectedParticipant] = useState(null);
@@ -98,12 +103,21 @@ export default function OrganizerStudioView({
 
   const handleDeleteEvent = (ev) => {
     if (!ev) return;
+    setDeleteConfirmationModal({
+      isOpen: true,
+      event: ev,
+      reason: ''
+    });
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deleteConfirmationModal.event) return;
+    const ev = deleteConfirmationModal.event;
     const title = ev.title || ev.name || 'this event';
-    if (window.confirm(`Are you sure you want to delete "${title}"? This will terminate the event and delete associated passes from attendees' My Passes.`)) {
-      if (onDeleteEvent) {
-        onDeleteEvent(ev.id, title);
-      }
+    if (onDeleteEvent) {
+      onDeleteEvent(ev.id, title);
     }
+    setDeleteConfirmationModal({ isOpen: false, event: null, reason: '' });
   };
 
   const handleSaveAuthority = () => {
@@ -754,6 +768,9 @@ export default function OrganizerStudioView({
                 history={checkinHistory}
                 onAllowEntry={onRecordCheckin}
                 onClearHistory={onClearHistory}
+                currentEvent={currentEvent}
+                gate="Main Gate"
+                verifierUser={currentUser}
               />
             </div>
           </div>
@@ -1003,6 +1020,42 @@ export default function OrganizerStudioView({
             options={AUTHORITIES}
             onChange={(e) => setNewAuthority(e.target.value)}
           />
+        </div>
+      </Modal>
+
+      {/* Organizer Event Deletion / Termination Confirmation Modal */}
+      <Modal
+        isOpen={deleteConfirmationModal.isOpen}
+        onClose={() => setDeleteConfirmationModal({ isOpen: false, event: null, reason: '' })}
+        title="Confirm Event Deletion & Termination"
+        confirmText="Confirm & Terminate Event"
+        onConfirm={handleConfirmDelete}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', textAlign: 'left' }}>
+          <div style={{ padding: '12px', backgroundColor: '#FEF3F2', border: '1px solid #FECDCA', borderRadius: '8px', color: '#B42318', fontSize: '13px' }}>
+            <strong>Warning:</strong> Terminating or deleting <strong>"{deleteConfirmationModal.event?.title || deleteConfirmationModal.event?.name}"</strong> will remove it from discovery and automatically move issued passes to attendees' Pass History.
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+              Reason for Event Termination (Optional)
+            </label>
+            <textarea
+              value={deleteConfirmationModal.reason}
+              onChange={(e) => setDeleteConfirmationModal({ ...deleteConfirmationModal, reason: e.target.value })}
+              placeholder="e.g. Rescheduled due to weather, venue change, completed festival"
+              rows={3}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                border: '1px solid #CBD5E1',
+                fontSize: '13px',
+                fontFamily: 'inherit',
+                outline: 'none'
+              }}
+            />
+          </div>
         </div>
       </Modal>
     </div>

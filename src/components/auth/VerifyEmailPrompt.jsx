@@ -11,7 +11,16 @@ export default function VerifyEmailPrompt({ onBackToLogin, onContinue }) {
   const [checking, setChecking] = useState(false);
   const [resending, setResending] = useState(false);
   const [resendStatus, setResendStatus] = useState('');
+  const [cooldown, setCooldown] = useState(0);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => {
+      setCooldown((c) => Math.max(0, c - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
 
   const handleCheckVerified = async () => {
     setError('');
@@ -35,11 +44,13 @@ export default function VerifyEmailPrompt({ onBackToLogin, onContinue }) {
   };
 
   const handleResend = async () => {
+    if (cooldown > 0) return;
     setError('');
     setResending(true);
     setResendStatus('');
     try {
       await resendVerification();
+      setCooldown(60); // 60-second cooldown timer
       setResendStatus('Verification link resent. Please check your inbox and spam folder.');
     } catch (err) {
       setError(err?.message || 'Failed to resend verification email.');
@@ -125,9 +136,13 @@ export default function VerifyEmailPrompt({ onBackToLogin, onContinue }) {
           size="default"
           fullWidth
           onClick={handleResend}
-          disabled={resending || checking}
+          disabled={resending || checking || cooldown > 0}
         >
-          {resending ? 'Sending Link...' : 'Resend Verification Email'}
+          {resending
+            ? 'Sending Link...'
+            : cooldown > 0
+            ? `Resend Link (${cooldown}s)`
+            : 'Resend Verification Email'}
         </Button>
 
         <button

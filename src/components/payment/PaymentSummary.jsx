@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { CreditCard, Smartphone, Building, Wallet, CheckCircle2, XCircle } from 'lucide-react';
+import { CreditCard, Smartphone, Building, Wallet, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
 import AnimatedPaymentButton from '../booking/AnimatedPaymentButton';
 import Button from '../common/Button';
 import Input from '../common/Input';
+import PaymentHelpModal from './PaymentHelpModal';
+import { acquirePaymentLock, releasePaymentLock } from '../../services/paymentSupportService';
 
 export default function PaymentSummary({
   event,
@@ -17,30 +19,47 @@ export default function PaymentSummary({
   const [cardCvv, setCardCvv] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState('idle'); // 'idle' | 'success' | 'failed'
-  const [txnId, setTxnId] = useState('TXN-2026-881920');
+  const [txnId, setTxnId] = useState('');
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   const subtotal = selectedPasses.reduce((acc, p) => acc + p.price * p.qty, 0);
   const platformFee = subtotal > 0 ? 0 : 0; // Flat pricing as per reference
   const total = subtotal + platformFee;
 
   const handlePay = () => {
+    const lockKey = `summary_pay_${event?.id || 'event'}_${total}`;
+    if (!acquirePaymentLock(lockKey)) {
+      alert('A transaction is already being processed. Please wait.');
+      return;
+    }
+
     setIsProcessing(true);
     // Simulate real gateway response
     setTimeout(() => {
       setIsProcessing(false);
+      releasePaymentLock(lockKey);
+
       // Let's succeed unless user entered "fail"
       if (upiId.toLowerCase().includes('fail')) {
         setPaymentStatus('failed');
       } else {
-        const generatedId = `TXN-2026-${Math.floor(100000 + Math.random() * 900000)}`;
-        setTxnId(generatedId);
+        const generatedRef = method === 'upi'
+          ? (upiId ? `UPI_UTR_${Date.now()}_${Math.floor(100000 + Math.random() * 900000)}` : `PAY_UPI_${Date.now()}_${Math.floor(100000 + Math.random() * 900000)}`)
+          : `PAY_CARD_${Date.now()}_${Math.floor(100000 + Math.random() * 900000)}`;
+        setTxnId(generatedRef);
         setPaymentStatus('success');
         if (onSuccess) {
           onSuccess({
             amount: total,
             method: method.toUpperCase(),
-            eventTitle: event?.title || 'TechFest 2026',
-            attendeeName: attendee.name || 'Aarav Shah',
+            paymentReference: generatedRef,
+            paymentDetails: {
+              method: method.toUpperCase(),
+              upiId: method === 'upi' ? upiId : undefined,
+              cardLast4: method === 'card' ? cardNumber.replace(/\s+/g, '').slice(-4) : undefined
+            },
+            eventTitle: event?.title || 'Campus Event',
+            attendeeName: attendee?.name || 'Attendee',
             passType: selectedPasses[0]?.name || 'Participant Pass',
             passes: selectedPasses
           });
@@ -85,7 +104,7 @@ export default function PaymentSummary({
             Payment Successful
           </h2>
           <p style={{ fontSize: '14px', color: 'var(--color-muted-text)', marginTop: '4px' }}>
-            Your GateApass has been generated and sent to {attendee.email || 'aarav@campus.edu'}.
+            Your GateApass has been generated and sent to {attendee?.email || 'your registered email'}.
           </p>
         </div>
 
@@ -112,7 +131,7 @@ export default function PaymentSummary({
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ color: 'var(--color-muted-text)' }}>Event</span>
-            <span style={{ fontWeight: 600 }}>{event?.title || 'TechFest 2026'}</span>
+            <span style={{ fontWeight: 600 }}>{event?.title || 'Campus Event'}</span>
           </div>
         </div>
       </div>
@@ -159,11 +178,30 @@ export default function PaymentSummary({
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', width: '100%', marginTop: '8px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', marginTop: '8px' }}>
           <Button variant="outline" fullWidth onClick={() => setPaymentStatus('idle')}>
             Try Again
           </Button>
+          <Button
+            variant="ghost"
+            icon={HelpCircle}
+            fullWidth
+            onClick={() => setIsHelpOpen(true)}
+            style={{ color: '#7C3AED', fontSize: '13px' }}
+          >
+            Need Help with this Payment?
+          </Button>
         </div>
+        <PaymentHelpModal
+          isOpen={isHelpOpen}
+          onClose={() => setIsHelpOpen(false)}
+          bookingId={txnId}
+          transactionId={txnId}
+          amount={total}
+          eventTitle={event?.title}
+          paymentStatus="failed"
+          user={{ displayName: attendee.name, email: attendee.email }}
+        />
       </div>
     );
   }
@@ -314,6 +352,28 @@ export default function PaymentSummary({
         onClick={handlePay}
       />
 
+      {/* Payment Help Action */}
+      <div style={{ textAlign: 'center', marginTop: '-6px' }}>
+        <button
+          type="button"
+          onClick={() => setIsHelpOpen(true)}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: '#7C3AED',
+            fontSize: '13px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+        >
+          <HelpCircle size={15} />
+          Need Help with Payment?
+        </button>
+      </div>
+
       {/* Secondary Demo Error trigger for full testing */}
       <div style={{ textAlign: 'center' }}>
         <button
@@ -324,6 +384,17 @@ export default function PaymentSummary({
           (Simulate Payment Gateway Failure)
         </button>
       </div>
+
+      <PaymentHelpModal
+        isOpen={isHelpOpen}
+        onClose={() => setIsHelpOpen(false)}
+        bookingId={txnId}
+        transactionId={txnId}
+        amount={total}
+        eventTitle={event?.title}
+        paymentStatus={paymentStatus}
+        user={{ displayName: attendee.name, email: attendee.email }}
+      />
     </div>
   );
 }

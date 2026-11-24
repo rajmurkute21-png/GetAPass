@@ -1,15 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, CreditCard, Smartphone, Building, Wallet, Calendar, Clock, MapPin, ShieldCheck, Ticket } from 'lucide-react';
+import { ArrowLeft, CreditCard, Smartphone, Building, Wallet, Calendar, Clock, MapPin, ShieldCheck, Ticket, HelpCircle, AlertCircle, Lock } from 'lucide-react';
 import BookingStepper from '../components/booking/BookingStepper';
 import TicketCategorySelector from '../components/booking/TicketCategorySelector';
 import AttendeeDetailsForm from '../components/booking/AttendeeDetailsForm';
 import AnimatedPaymentButton from '../components/booking/AnimatedPaymentButton';
 import BookingSuccessPanel from '../components/booking/BookingSuccessPanel';
+import PaymentHelpModal from '../components/payment/PaymentHelpModal';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import StatusBadge from '../components/common/StatusBadge';
 import { getPassTypesByEvent } from '../data/passTypes';
+import { acquirePaymentLock, releasePaymentLock } from '../services/paymentSupportService';
+import { useAuth } from '../context/AuthContext';
 
 /**
  * BookingView
@@ -29,42 +32,87 @@ export default function BookingView({
 
   // Step state: 1: Select, 2: Details, 3: Payment, 4: Confirmed Success
   const [currentStep, setCurrentStep] = useState(1);
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
 
-  // Resolve available passes dynamically
+  // Resolve available passes dynamically with real-time inventory calculation
   const eventPassTypes = currentEvent.id ? getPassTypesByEvent(currentEvent.id) : [];
-  const passes = (currentEvent.passes && currentEvent.passes.length > 0)
+  const rawPasses = (currentEvent.passTypes && currentEvent.passTypes.length > 0)
+    ? currentEvent.passTypes
+    : (currentEvent.passes && currentEvent.passes.length > 0)
     ? currentEvent.passes
     : (eventPassTypes.length > 0)
-    ? eventPassTypes.map((pt) => ({
-        id: pt.id,
-        name: pt.name,
-        price: pt.price,
-        description: pt.description || ''
-      }))
+    ? eventPassTypes
     : [
         {
           id: `pass-${currentEvent.id || 'standard'}`,
           name: 'Standard Admission',
           price: currentEvent.startingPrice || 0,
-          description: 'Official digital entry pass with QR gate validation'
+          description: 'Official digital entry pass with QR gate validation',
+          capacity: currentEvent.capacity || 100,
+          soldCount: currentEvent.totalSoldCount || 0
         }
       ];
 
-  // Quantities per pass tier
+  const passes = rawPasses.map((p) => {
+    const capacity = Number(p.capacity !== undefined ? p.capacity : 100);
+    const sold = Number(p.soldCount || 0);
+    const remaining = capacity > 0 ? Math.max(0, capacity - sold) : (p.remaining !== undefined ? p.remaining : undefined);
+    const isSoldOut = Boolean(p.isSoldOut || (capacity > 0 && remaining === 0));
+    return {
+      ...p,
+      price: Number(p.price || 0),
+      remaining,
+      capacity,
+      soldCount: sold,
+      isSoldOut
+    };
+  });
+
+  const isAllTiersSoldOut = passes.length > 0 && passes.every((p) => p.isSoldOut);
+  const isEventSoldOut = Boolean(currentEvent.isSoldOut || isAllTiersSoldOut);
+
+  // Quantities per pass tier - default 1 to first available tier if not sold out
   const [quantities, setQuantities] = useState(() => {
     const initial = {};
-    passes.forEach((p, idx) => {
-      initial[p.id] = idx === 0 ? 1 : 0;
+    let firstAvailableFound = false;
+    passes.forEach((p) => {
+      if (!firstAvailableFound && !p.isSoldOut) {
+        initial[p.id] = 1;
+        firstAvailableFound = true;
+      } else {
+        initial[p.id] = 0;
+      }
     });
     return initial;
   });
 
+  // Auth & attendee resolution: strictly tie booking to authenticated account
+  const { user: authUser, openAuthModal } = useAuth();
+  const effectiveAttendee = attendee?.uid ? attendee : (authUser?.uid ? {
+    uid: authUser.uid,
+    name: authUser.displayName || authUser.name || 'Campus Attendee',
+    displayName: authUser.displayName || authUser.name,
+    email: authUser.email,
+    phone: authUser.phone || '',
+    institution: authUser.institution || 'Campus Participant'
+  } : null);
+
   // Attendee state
-  const [fullName, setFullName] = useState(attendee?.displayName || attendee?.name || '');
-  const [email, setEmail] = useState(attendee?.email || '');
-  const [phone, setPhone] = useState(attendee?.phone || '');
-  const [institution, setInstitution] = useState(attendee?.institution || 'Campus Participant');
+  const [fullName, setFullName] = useState(effectiveAttendee?.displayName || effectiveAttendee?.name || '');
+  const [email, setEmail] = useState(effectiveAttendee?.email || '');
+  const [phone, setPhone] = useState(effectiveAttendee?.phone || '');
+  const [institution, setInstitution] = useState(effectiveAttendee?.institution || 'Campus Participant');
   const [errors, setErrors] = useState({});
+
+  // Sync attendee fields when auth user logs in or profile changes
+  useEffect(() => {
+    if (authUser?.uid) {
+      if (!fullName) setFullName(authUser.displayName || authUser.name || '');
+      if (!email) setEmail(authUser.email || '');
+      if (!phone && authUser.phone) setPhone(authUser.phone);
+      if (institution === 'Campus Participant' && authUser.institution) setInstitution(authUser.institution);
+    }
+  }, [authUser]);
 
   // Payment state
   const [paymentMethod, setPaymentMethod] = useState('upi'); // 'upi' | 'card' | 'netbanking' | 'wallet'
@@ -107,10 +155,86 @@ export default function BookingView({
     );
   }
 
+  // Early check for Sold Out event
+  if (isEventSoldOut) {
+    return (
+      <div className="gateapass-booking-view" style={{ textAlign: 'left', padding: '48px 0 64px' }}>
+        <div className="container-desktop" style={{ maxWidth: '640px', margin: '0 auto' }}>
+          <button
+            type="button"
+            onClick={onBack}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '14px',
+              fontWeight: 500,
+              color: 'var(--color-dark-text)',
+              marginBottom: '24px',
+              cursor: 'pointer',
+              backgroundColor: 'transparent',
+              border: 'none',
+              padding: 0
+            }}
+          >
+            <ArrowLeft size={16} />
+            <span>Back to Discovery</span>
+          </button>
+
+          <div
+            style={{
+              padding: '40px 32px',
+              backgroundColor: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '24px',
+              boxShadow: '0 8px 30px rgba(0, 0, 0, 0.05)',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '16px'
+            }}
+          >
+            <div
+              style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                color: '#EF4444',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <AlertCircle size={28} />
+            </div>
+            <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+              Event Sold Out
+            </h2>
+            <p style={{ fontSize: '15px', color: '#64748B', maxWidth: '440px', lineHeight: '22px', margin: 0 }}>
+              All tickets for <strong>{currentEvent.title}</strong> have been fully booked. Stay tuned for additional pass releases or check out other upcoming campus events.
+            </p>
+            <Button variant="primary" onClick={onBack} style={{ marginTop: '8px' }}>
+              Explore Other Events
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const updateQuantity = (passId, delta) => {
+    const targetPass = passes.find((p) => p.id === passId);
+    if (!targetPass) return;
+
     setQuantities((prev) => {
       const current = prev[passId] || 0;
       const next = Math.max(0, current + delta);
+      // Enforce inventory ceiling if remaining is defined
+      if (delta > 0 && targetPass.remaining !== undefined && next > targetPass.remaining) {
+        return prev;
+      }
       return { ...prev, [passId]: next };
     });
   };
@@ -130,11 +254,22 @@ export default function BookingView({
       alert('Please select at least 1 ticket to proceed.');
       return;
     }
+    // Strict authentication requirement before proceeding to attendee details
+    if (!effectiveAttendee?.uid) {
+      openAuthModal('login');
+      return;
+    }
     setCurrentStep(2);
   };
 
   // Step 2 -> Step 3 validation
   const handleProceedToPaymentStep = () => {
+    // Re-verify authentication
+    if (!effectiveAttendee?.uid) {
+      openAuthModal('login');
+      return;
+    }
+
     const newErrors = {};
     if (!fullName.trim()) newErrors.fullName = 'Full Name is required';
     if (!email.trim()) newErrors.email = 'Valid Email is required';
@@ -151,7 +286,7 @@ export default function BookingView({
     if (onProceedToPayment && !onPaymentSuccess) {
       onProceedToPayment({
         event: currentEvent,
-        attendee: { name: fullName, email, phone, institution },
+        attendee: { uid: effectiveAttendee.uid, name: fullName, email, phone, institution },
         passes: selectedPassesList,
         totalAmount
       });
@@ -161,42 +296,98 @@ export default function BookingView({
     setCurrentStep(3);
   };
 
-  // Step 3: Confirm & Pay execution
+  // Step 3: Confirm & Pay execution with atomic overselling protection & verified auth
   const handleExecutePayment = async () => {
+    if (!effectiveAttendee?.uid) {
+      alert('Authentication required: You must be signed in with a valid account to purchase tickets.');
+      openAuthModal('login');
+      return;
+    }
+
+    // Input validation for payment methods
+    if (paymentMethod === 'card') {
+      const cleanCard = cardNumber.replace(/\s+/g, '');
+      if (cleanCard.length < 15 || cleanCard.length > 19) {
+        alert('Please enter a valid 16-digit card number.');
+        return;
+      }
+      if (!cardCvv || cardCvv.trim().length < 3) {
+        alert('Please enter a valid card CVV (3-4 digits).');
+        return;
+      }
+    } else if (paymentMethod === 'upi') {
+      if (upiId && !/^[a-zA-Z0-9.\-_]{2,49}@[a-zA-Z]{2,49}$/.test(upiId.trim())) {
+        alert('Please enter a valid UPI ID (e.g. username@okhdfcbank).');
+        return;
+      }
+    }
+
+    const orderLockKey = `order_${currentEvent.id || 'event'}_${fullName || 'attendee'}_${totalAmount}`;
+    if (!acquirePaymentLock(orderLockKey)) {
+      alert('Payment processing is already underway. Please wait a moment.');
+      return;
+    }
+
     setIsProcessing(true);
 
     setTimeout(async () => {
-      setIsProcessing(false);
-      setIsSuccess(true);
-
-      const generatedRef = `BK-${Math.floor(100000 + Math.random() * 900000)}`;
+      const paymentRef = paymentMethod === 'upi'
+        ? (upiId ? `UPI_UTR_${Date.now()}_${Math.floor(100000 + Math.random() * 900000)}` : `PAY_UPI_${Date.now()}_${Math.floor(100000 + Math.random() * 900000)}`)
+        : `PAY_CARD_${Date.now()}_${Math.floor(100000 + Math.random() * 900000)}`;
 
       if (onPaymentSuccess) {
-        const result = await onPaymentSuccess({
-          amount: totalAmount,
-          method: paymentMethod.toUpperCase(),
-          eventTitle: currentEvent.title,
-          attendeeName: fullName,
-          passType: selectedPassesList[0]?.name || 'General Admission',
-          passes: selectedPassesList,
-          autoNavigate: false // keep user inside the success confirmation view
-        });
-
-        setBookingConfirmation({
-          bookingReference: result?.bookingId || generatedRef,
-          issuedPasses: result?.passes || selectedPassesList.map((p, idx) => ({
-            id: `GP-2026-${idx + 1}`,
-            passId: `GP-2026-${idx + 1}`,
-            title: currentEvent.title,
+        try {
+          const result = await onPaymentSuccess({
+            amount: totalAmount,
+            method: paymentMethod.toUpperCase(),
+            paymentReference: paymentRef,
+            paymentDetails: {
+              method: paymentMethod.toUpperCase(),
+              upiId: paymentMethod === 'upi' ? upiId : undefined,
+              cardLast4: paymentMethod === 'card' ? cardNumber.replace(/\s+/g, '').slice(-4) : undefined
+            },
+            eventTitle: currentEvent.title,
             attendeeName: fullName,
-            passType: p.name,
-            date: currentEvent.date,
-            time: currentEvent.time,
-            venue: currentEvent.venue,
-            category: currentEvent.category
-          }))
-        });
+            passType: selectedPassesList[0]?.name || 'General Admission',
+            passes: selectedPassesList,
+            autoNavigate: false // keep user inside the success confirmation view
+          });
+
+          setIsProcessing(false);
+          releasePaymentLock(orderLockKey);
+          setIsSuccess(true);
+
+          setBookingConfirmation({
+            bookingReference: result?.bookingId || paymentRef,
+            issuedPasses: result?.passes || selectedPassesList.map((p, idx) => ({
+              id: `GP-2026-${idx + 1}`,
+              passId: `GP-2026-${idx + 1}`,
+              title: currentEvent.title,
+              attendeeName: fullName,
+              passType: p.name,
+              date: currentEvent.date,
+              time: currentEvent.time,
+              venue: currentEvent.venue,
+              category: currentEvent.category
+            }))
+          });
+
+          // Smoothly advance to Confirmation screen after SVG checkmark plays
+          setTimeout(() => {
+            setCurrentStep(4);
+          }, 700);
+        } catch (bookingErr) {
+          setIsProcessing(false);
+          setIsSuccess(false);
+          releasePaymentLock(orderLockKey);
+          alert(bookingErr?.message || 'Booking failed. Tickets may no longer be available.');
+          return;
+        }
       } else {
+        setIsProcessing(false);
+        releasePaymentLock(orderLockKey);
+        setIsSuccess(true);
+
         setBookingConfirmation({
           bookingReference: generatedRef,
           issuedPasses: selectedPassesList.map((p, idx) => ({
@@ -211,14 +402,93 @@ export default function BookingView({
             category: currentEvent.category
           }))
         });
-      }
 
-      // Smoothly advance to Confirmation screen after SVG checkmark plays
-      setTimeout(() => {
-        setCurrentStep(4);
-      }, 700);
+        setTimeout(() => {
+          setCurrentStep(4);
+        }, 700);
+      }
     }, 1200);
   };
+
+  const normalizedStatus = String(currentEvent.status || 'Active').trim().toLowerCase();
+  const isBookingBlocked = ['disabled', 'removed', 'cancelled', 'rejected', 'pending'].includes(normalizedStatus);
+
+  if (isBookingBlocked) {
+    return (
+      <div className="gateapass-booking-view" style={{ textAlign: 'left', padding: '48px 0 64px' }}>
+        <div className="container-desktop" style={{ maxWidth: '640px', margin: '0 auto' }}>
+          <button
+            type="button"
+            onClick={onBack}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '14px',
+              fontWeight: 500,
+              color: 'var(--color-dark-text)',
+              marginBottom: '24px',
+              cursor: 'pointer',
+              backgroundColor: 'transparent',
+              border: 'none',
+              padding: 0
+            }}
+          >
+            <ArrowLeft size={16} />
+            <span>Back to Discovery</span>
+          </button>
+
+          <div
+            style={{
+              padding: '36px 24px',
+              backgroundColor: '#FEF2F2',
+              border: '1px solid #FECACA',
+              borderRadius: '16px',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '16px'
+            }}
+          >
+            <div
+              style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '50%',
+                backgroundColor: '#FEE2E2',
+                color: '#DC2626',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <AlertCircle size={32} />
+            </div>
+
+            <div>
+              <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#991B1B', margin: 0 }}>
+                Event Unavailable for Booking
+              </h2>
+              <p style={{ fontSize: '14px', color: '#7F1D1D', marginTop: '8px', maxWidth: '440px' }}>
+                {normalizedStatus === 'removed'
+                  ? 'This event was removed or terminated by administrators and cannot accept new bookings.'
+                  : normalizedStatus === 'disabled'
+                  ? 'Bookings for this event are currently disabled by management.'
+                  : normalizedStatus === 'pending'
+                  ? 'This event is currently pending administrative review and authorization.'
+                  : 'This event is not available for bookings.'}
+              </p>
+            </div>
+
+            <Button variant="outline" onClick={onBack} style={{ marginTop: '8px' }}>
+              Explore Other Events
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="gateapass-booking-view" style={{ textAlign: 'left', padding: '32px 0 64px' }}>
@@ -256,6 +526,64 @@ export default function BookingView({
             currentStep={currentStep}
             onStepClick={(stepNum) => setCurrentStep(stepNum)}
           />
+        )}
+
+        {/* Authentication Security Notice if not logged in */}
+        {currentStep <= 3 && !effectiveAttendee?.uid && (
+          <div
+            style={{
+              margin: '20px 0',
+              padding: '16px 20px',
+              background: 'linear-gradient(135deg, rgba(124, 58, 237, 0.06) 0%, rgba(236, 72, 153, 0.06) 100%)',
+              border: '1px solid rgba(124, 58, 237, 0.2)',
+              borderRadius: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+              flexWrap: 'wrap'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '10px',
+                  backgroundColor: 'rgba(124, 58, 237, 0.12)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#7C3AED'
+                }}
+              >
+                <Lock size={18} />
+              </div>
+              <div>
+                <p style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#0F172A' }}>
+                  Account Verification Required
+                </p>
+                <p style={{ margin: 0, fontSize: '13px', color: '#64748B' }}>
+                  You can select tickets now. You will be prompted to sign in with your verified account before checkout.
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="small"
+              onClick={() => openAuthModal('login')}
+              style={{
+                borderColor: '#7C3AED',
+                color: '#7C3AED',
+                padding: '8px 18px',
+                fontSize: '13px',
+                borderRadius: '9999px',
+                fontWeight: 600
+              }}
+            >
+              Sign In to Account
+            </Button>
+          </div>
         )}
 
         {/* STEP 1: Select Tickets */}
@@ -553,6 +881,27 @@ export default function BookingView({
                 <p style={{ fontSize: '11px', color: '#94A3B8', textAlign: 'center', margin: 0 }}>
                   Encrypted 256-bit payment · Instant unique QR pass delivery to your account.
                 </p>
+
+                <div style={{ textAlign: 'center', marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsHelpModalOpen(true)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#7C3AED',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <HelpCircle size={15} />
+                    Need Help with Payment?
+                  </button>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -560,17 +909,52 @@ export default function BookingView({
 
         {/* STEP 4: Digital Booking Confirmation Screen */}
         {currentStep === 4 && bookingConfirmation && (
-          <BookingSuccessPanel
-            bookingReference={bookingConfirmation.bookingReference}
-            event={currentEvent}
-            attendee={{ name: fullName, email, phone }}
-            issuedPasses={bookingConfirmation.issuedPasses}
-            totalAmount={totalAmount}
-            paymentMethod={paymentMethod.toUpperCase()}
-            onViewMyPasses={onViewMyPasses || (() => setCurrentStep(1))}
-            onExploreMore={onExploreMore || onBack}
-          />
+          <div>
+            <BookingSuccessPanel
+              bookingReference={bookingConfirmation.bookingReference}
+              event={currentEvent}
+              attendee={{ name: fullName, email, phone }}
+              issuedPasses={bookingConfirmation.issuedPasses}
+              totalAmount={totalAmount}
+              paymentMethod={paymentMethod.toUpperCase()}
+              onViewMyPasses={onViewMyPasses || (() => setCurrentStep(1))}
+              onExploreMore={onExploreMore || onBack}
+            />
+
+            <div style={{ textAlign: 'center', marginTop: '20px' }}>
+              <button
+                type="button"
+                onClick={() => setIsHelpModalOpen(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#7C3AED',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <HelpCircle size={15} />
+                Payment Help & Support Inquiry
+              </button>
+            </div>
+          </div>
         )}
+
+        {/* Global Payment Help Modal */}
+        <PaymentHelpModal
+          isOpen={isHelpModalOpen}
+          onClose={() => setIsHelpModalOpen(false)}
+          bookingId={bookingConfirmation?.bookingReference || ''}
+          transactionId={bookingConfirmation?.bookingReference || ''}
+          amount={totalAmount}
+          eventTitle={currentEvent.title}
+          paymentStatus={isProcessing ? 'processing' : isSuccess ? 'success' : 'idle'}
+          user={{ displayName: fullName, email, phone }}
+        />
       </div>
     </div>
   );

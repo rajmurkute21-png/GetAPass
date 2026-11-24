@@ -90,16 +90,19 @@ service cloud.firestore {
     // 2. EVENTS COLLECTION RULES (/events/{eventId})
     // =========================================================================
     match /events/{eventId} {
-      allow read: if isAuthenticated() && (
+      allow read: if (
         resource.data.status in ['Active', 'Published'] ||
-        isEventOwner(resource.data) ||
-        isVerifier() ||
-        isAdmin()
+        (isAuthenticated() && (
+          isEventOwner(resource.data) ||
+          isVerifier() ||
+          isAdmin()
+        ))
       );
 
       allow create: if isAuthorizedOrganizerOrAdmin() && (
         'organizerUid' in request.resource.data &&
-        request.resource.data.organizerUid == request.auth.uid
+        request.resource.data.organizerUid == request.auth.uid &&
+        (isAdmin() || request.resource.data.status in ['Pending', 'Draft'])
       );
 
       allow update: if (
@@ -107,7 +110,8 @@ service cloud.firestore {
         (
           isAuthorizedOrganizerOrAdmin() &&
           isEventOwner(resource.data) &&
-          request.resource.data.organizerUid == resource.data.organizerUid
+          request.resource.data.organizerUid == resource.data.organizerUid &&
+          (isAdmin() || request.resource.data.status == resource.data.status || request.resource.data.status in ['Pending', 'Draft', 'Cancelled'])
         )
       );
 
@@ -153,7 +157,8 @@ service cloud.firestore {
           'participantUid' in resource.data && resource.data.participantUid == request.auth.uid &&
           request.resource.data.participantUid == resource.data.participantUid &&
           request.resource.data.organizerUid == resource.data.organizerUid &&
-          request.resource.data.amount == resource.data.amount
+          request.resource.data.amount == resource.data.amount &&
+          request.resource.data.status == resource.data.status
         ) ||
         (
           isVerifier() &&

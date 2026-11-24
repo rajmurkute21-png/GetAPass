@@ -39,7 +39,7 @@ export const DYNAMIC_FIELD_TOKENS = [
   { token: '{{participant.name}}', label: 'Participant Name', category: 'PARTICIPANT', example: 'Aarav Shah' },
   { token: '{{participant.email}}', label: 'Participant Email', category: 'PARTICIPANT', example: 'aarav@campus.edu' },
   { token: '{{participant.phone}}', label: 'Participant Phone', category: 'PARTICIPANT', example: '+91 98765 43210' },
-  { token: '{{pass.id}}', label: 'Pass ID', category: 'PASS', example: 'GP-TF26-9481' },
+  { token: '{{pass.id}}', label: 'Pass ID', category: 'PASS', example: 'GP-PASS-1024' },
   { token: '{{pass.type}}', label: 'Pass Type', category: 'PASS', example: 'VIP Pass' },
   { token: '{{pass.authority}}', label: 'Authority', category: 'PASS', example: 'VIP' },
   { token: '{{pass.status}}', label: 'Pass Status', category: 'PASS', example: 'Active' },
@@ -575,28 +575,28 @@ export const PREDEFINED_SYSTEM_TEMPLATES = [
 
 export const SAMPLE_PASS_DATA = {
   event: {
-    id: 'techfest-2026',
-    name: 'TechFest 2026',
-    title: 'TechFest 2026',
-    category: 'Hackathon',
+    id: 'evt-campus-2026',
+    name: 'Campus Event',
+    title: 'Campus Event',
+    category: 'Hackathons',
     date: '15 October 2026',
     time: '10:00 AM – 8:00 PM',
-    venue: 'Zeal College, Pune'
+    venue: 'Campus Auditorium'
   },
   participant: {
-    name: 'Raj Murkute',
-    email: 'raj.murkute@campus.edu',
-    phone: '+91 98765 43210'
+    name: 'Pass Holder',
+    email: 'attendee@campus.edu',
+    phone: '+91 90000 00000'
   },
   pass: {
-    id: 'TF26-P10245',
-    type: 'VIP Pass',
-    authority: 'VIP',
+    id: 'GP-PASS-0001',
+    type: 'Standard Pass',
+    authority: 'Participant',
     gate: 'Gate A',
     status: 'Active',
-    price: 999,
+    price: 499,
     paymentMethod: 'UPI',
-    accessAreas: ['General Area', 'VIP Area', 'Backstage']
+    accessAreas: ['General Area']
   }
 };
 

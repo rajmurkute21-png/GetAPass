@@ -205,6 +205,9 @@ export default function VerifierView({
           history={checkinHistory}
           onAllowEntry={handleAllowEntry}
           onClearHistory={onClearHistory}
+          currentEvent={selectedEvent}
+          gate={selectedGate}
+          verifierUser={currentUser}
         />
       </div>
 

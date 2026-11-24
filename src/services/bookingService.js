@@ -24,7 +24,8 @@ import {
   updateDoc,
   onSnapshot,
   query,
-  where
+  where,
+  runTransaction
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { canValidatePasses, canManagePlatform } from './permissionService';
@@ -35,11 +36,12 @@ import {
   generatePassId,
   validateBookingPayload
 } from '../constants/firestoreSchema';
-import { fetchPaginatedCollection } from './firestoreService';
+import { fetchPaginatedCollection, getServerTimestamp } from './firestoreService';
 import { createDigitalPass } from './passService';
 import { createTransaction } from './transactionService';
 import { createNotification } from './notificationService';
 import { recordCheckInAuditLog } from './verifierService';
+import { verifyAndConfirmPayment } from './paymentVerificationService';
 
 export const BOOKINGS_COLLECTION = COLLECTIONS.BOOKINGS;
 export const BOOKINGS_STORAGE_KEY_PREFIX = 'gateapass_bookings_';
@@ -185,6 +187,32 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
   const now = Date.now();
   const rawPrefix = String(eventTitle).replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || 'GP';
 
+  const paymentReference = bookingData.paymentReference ||
+    bookingData.paymentDetails?.reference ||
+    `PAY_${now.toString(36).toUpperCase()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+  // 1b. Server-Side Payment Verification & Idempotency / Replay Guard
+  const paymentVerification = await verifyAndConfirmPayment({
+    bookingId,
+    eventId,
+    authoritativeAmount,
+    paymentMethod: bookingData.paymentMethod || 'UPI',
+    paymentDetails: {
+      ...(bookingData.paymentDetails || {}),
+      amountPaid: authoritativeAmount
+    },
+    paymentReference,
+    currentUser
+  });
+
+  if (!paymentVerification.verified || paymentVerification.status === 'FAILED') {
+    throw new Error(`Payment verification declined: ${paymentVerification.reason || 'Payment could not be verified by gateway.'}`);
+  }
+
+  const isConfirmed = paymentVerification.status === 'SUCCESS';
+  const bookingStatus = isConfirmed ? STATUS_ENUMS.BOOKING.ACTIVE : 'Pending Payment';
+  const passStatus = isConfirmed ? STATUS_ENUMS.PASS.ACTIVE : 'Pending Payment';
+
   // 2. Build canonical individual pass list (1 distinct pass per purchased ticket)
   const passList = [];
 
@@ -217,13 +245,14 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
         coverImage: p.coverImage || eventData?.coverImage || eventData?.image || bookingData.coverImage || '',
         eventCover: p.eventCover || eventData?.coverImage || eventData?.image || bookingData.eventCover || '',
         gate: p.gate || bookingData.gate || 'Gate A',
-        status: STATUS_ENUMS.PASS.ACTIVE,
+        status: passStatus,
         checkedIn: false,
         checkedInAt: null,
         checkedInBy: null,
         price: itemPrice,
         unitPrice: itemPrice,
         paymentMethod: bookingData.paymentMethod || 'UPI',
+        paymentReference,
         issuedAt: 'Just now',
         permissions: p.permissions || bookingData.permissions || ['General Area'],
         templateId: p.templateId || bookingData.templateId || 'tpl-classic-violet',
@@ -265,13 +294,14 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
           coverImage: eventData?.coverImage || eventData?.image || bookingData.coverImage || '',
           eventCover: eventData?.coverImage || eventData?.image || bookingData.eventCover || '',
           gate: bookingData.gate || 'Gate A',
-          status: STATUS_ENUMS.PASS.ACTIVE,
+          status: passStatus,
           checkedIn: false,
           checkedInAt: null,
           checkedInBy: null,
           price: itemPrice,
           unitPrice: itemPrice,
           paymentMethod: bookingData.paymentMethod || 'UPI',
+          paymentReference,
           issuedAt: 'Just now',
           permissions: bookingData.permissions || ['General Area'],
           templateId: item.templateId || bookingData.templateId || 'tpl-classic-violet',
@@ -350,8 +380,10 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
     items: validation.items || [],
     passes: passList,
     pass: passList[0], // backward compatibility
-    status: STATUS_ENUMS.BOOKING.ACTIVE,
+    status: bookingStatus,
     paymentMethod: bookingData.paymentMethod || 'UPI',
+    paymentReference,
+    paymentStatus: paymentVerification.status,
     date: bookingData.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
     createdAt: now,
     updatedAt: now
@@ -371,23 +403,97 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
   let createdTransaction = null;
   if (db) {
     try {
-      // 5a. Save Booking into /bookings collection
-      const cleanBooking = sanitizeForFirestore(newBooking);
-      await setDoc(doc(db, BOOKINGS_COLLECTION, bookingId), cleanBooking);
-
-      // 5b. Save each individual Pass into dedicated /passes collection
-      for (const passItem of passList) {
+      // 5a. Atomic inventory check & decrement (Strict overselling prevention)
+      if (eventId) {
         try {
-          await createDigitalPass({
-            ...passItem,
-            customPassId: passItem.passId
+          const eventRef = doc(db, 'events', eventId);
+          await runTransaction(db, async (txn) => {
+            const eventSnap = await txn.get(eventRef);
+            if (!eventSnap.exists()) {
+              throw new Error('Event does not exist.');
+            }
+            const liveEvent = eventSnap.data();
+
+            // Status guard
+            const liveStatus = String(liveEvent.status || 'Active').toLowerCase();
+            if (!['active', 'published'].includes(liveStatus)) {
+              throw new Error(`This event is no longer available for booking (status: ${liveEvent.status}).`);
+            }
+
+            // Inventory check & update
+            if (Array.isArray(liveEvent.passTypes) && liveEvent.passTypes.length > 0) {
+              const updatedPassTypes = liveEvent.passTypes.map((pt) => {
+                const purchased = (validation.items || []).find((it) =>
+                  (it.passType && it.passType.toLowerCase() === pt.name.toLowerCase()) ||
+                  (it.name && it.name.toLowerCase() === pt.name.toLowerCase()) ||
+                  it.id === pt.id
+                );
+
+                if (purchased) {
+                  const qtyToBuy = Number(purchased.quantity || purchased.qty || 1);
+                  const cap = Number(pt.capacity !== undefined ? pt.capacity : 100);
+                  const sold = Number(pt.soldCount || 0);
+                  const remaining = Math.max(0, cap - sold);
+
+                  if (qtyToBuy > remaining) {
+                    throw new Error(`Insufficient tickets remaining for "${pt.name}". Only ${remaining} ticket(s) left.`);
+                  }
+
+                  return {
+                    ...pt,
+                    soldCount: sold + qtyToBuy
+                  };
+                }
+                return pt;
+              });
+
+              const totalCap = updatedPassTypes.reduce((s, pt) => s + (Number(pt.capacity) || 0), 0);
+              const totalSold = updatedPassTypes.reduce((s, pt) => s + (Number(pt.soldCount) || 0), 0);
+              const isSoldOut = totalCap > 0 && totalSold >= totalCap;
+
+              txn.update(eventRef, {
+                passTypes: updatedPassTypes,
+                totalSoldCount: totalSold,
+                isSoldOut,
+                updatedAt: Date.now()
+              });
+            }
           });
-        } catch (passErr) {
-          console.warn('[GateApass Bookings] Coordinated pass write notice:', passErr);
+        } catch (invErr) {
+          if (
+            invErr.message.includes('Insufficient tickets') ||
+            invErr.message.includes('no longer available') ||
+            invErr.message.includes('does not exist')
+          ) {
+            throw invErr; // Abort booking on overselling or disabled event!
+          }
+          console.warn('[GateApass Bookings] Event inventory transaction notice:', invErr.message);
         }
       }
 
-      // 5c. Save Transaction into dedicated /transactions collection
+      // 5b. Save Booking into /bookings collection with server timestamp
+      const cleanBooking = sanitizeForFirestore({
+        ...newBooking,
+        createdAt: getServerTimestamp(),
+        updatedAt: getServerTimestamp()
+      });
+      await setDoc(doc(db, BOOKINGS_COLLECTION, bookingId), cleanBooking);
+
+      // 5c. Save each individual Pass into dedicated /passes collection (only if payment confirmed)
+      if (isConfirmed) {
+        for (const passItem of passList) {
+          try {
+            await createDigitalPass({
+              ...passItem,
+              customPassId: passItem.passId
+            });
+          } catch (passErr) {
+            console.warn('[GateApass Bookings] Coordinated pass write notice:', passErr);
+          }
+        }
+      }
+
+      // 5d. Save Transaction into dedicated /transactions collection
       try {
         createdTransaction = await createTransaction({
           bookingId,
@@ -396,13 +502,16 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
           participantUid: currentUser.uid,
           organizerUid,
           amount: authoritativeAmount,
-          paymentMethod: newBooking.paymentMethod
+          currency: 'INR',
+          paymentMethod: newBooking.paymentMethod,
+          gatewayRef: paymentReference,
+          status: isConfirmed ? STATUS_ENUMS.TRANSACTION.SUCCESS : 'Pending'
         });
       } catch (txErr) {
         console.warn('[GateApass Bookings] Coordinated transaction write notice:', txErr);
       }
 
-      // 5d. Dispatch confirmation notification
+      // 5e. Dispatch confirmation notification
       try {
         await createNotification({
           recipientUid: currentUser.uid,
@@ -418,6 +527,7 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
       console.log(`[GateApass Bookings] Successfully created booking ${bookingId} with ${passList.length} individual passes.`);
     } catch (err) {
       console.error('[GateApass Bookings] Error storing booking in Firestore:', err);
+      throw err;
     }
   }
 
@@ -480,16 +590,30 @@ export function subscribeToParticipantBookings(participantUid, onUpdate, onError
   if (!db) return () => {};
 
   try {
+    let latestBookings = cachedBookings;
+    const passMap = new Map();
+    cachedPasses.forEach((p) => passMap.set(p.passId || p.id, p));
+
+    const notify = () => {
+      const passes = Array.from(passMap.values());
+      latestBookings.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      passes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+      saveStoredUserBookings(participantUid, latestBookings);
+      saveStoredUserPasses(participantUid, passes);
+
+      if (onUpdate) onUpdate(latestBookings, passes);
+    };
+
     const q = query(
       collection(db, BOOKINGS_COLLECTION),
       where('participantUid', '==', participantUid)
     );
 
-    const unsubscribe = onSnapshot(
+    const unsubBookings = onSnapshot(
       q,
       (snapshot) => {
         const bookings = [];
-        const passMap = new Map();
 
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
@@ -506,8 +630,10 @@ export function subscribeToParticipantBookings(participantUid, onUpdate, onError
                     ? Number(p.unitPrice)
                     : Math.round(Number(data.amount || 0) / data.passes.length));
 
+              const existing = passMap.get(passId);
               passMap.set(passId, {
                 ...p,
+                ...existing,
                 id: passId,
                 passId,
                 bookingId: data.bookingId || docSnap.id,
@@ -525,7 +651,9 @@ export function subscribeToParticipantBookings(participantUid, onUpdate, onError
                 time: p.time || data.time || '09:00 AM – 06:00 PM',
                 venue: p.venue || data.venue || 'Campus Venue',
                 gate: p.gate || data.gate || 'Gate A',
-                status: p.status || data.status || STATUS_ENUMS.PASS.ACTIVE,
+                status: existing?.status || p.status || data.status || STATUS_ENUMS.PASS.ACTIVE,
+                checkedIn: existing?.checkedIn !== undefined ? existing.checkedIn : Boolean(p.checkedIn),
+                checkedInAt: existing?.checkedInAt || p.checkedInAt || null,
                 paymentMethod: p.paymentMethod || data.paymentMethod,
                 category: p.category || data.category || 'Concert',
                 coverImage: p.coverImage || data.coverImage || '',
@@ -546,7 +674,9 @@ export function subscribeToParticipantBookings(participantUid, onUpdate, onError
 
               for (let q = 0; q < qty; q++) {
                 const passId = `${data.bookingId || docSnap.id}-${passIndex}`;
+                const existing = passMap.get(passId);
                 passMap.set(passId, {
+                  ...existing,
                   id: passId,
                   passId,
                   bookingId: data.bookingId || docSnap.id,
@@ -563,8 +693,8 @@ export function subscribeToParticipantBookings(participantUid, onUpdate, onError
                   time: data.time || '09:00 AM – 06:00 PM',
                   venue: data.venue || 'Campus Venue',
                   gate: data.gate || 'Gate A',
-                  status: data.status || STATUS_ENUMS.PASS.ACTIVE,
-                  checkedIn: false,
+                  status: existing?.status || data.status || STATUS_ENUMS.PASS.ACTIVE,
+                  checkedIn: existing?.checkedIn !== undefined ? existing.checkedIn : false,
                   price: itemPrice,
                   unitPrice: itemPrice,
                   paymentMethod: data.paymentMethod,
@@ -585,7 +715,9 @@ export function subscribeToParticipantBookings(participantUid, onUpdate, onError
 
             for (let q = 1; q <= qty; q++) {
               const passId = `${data.passId || docSnap.id}-${q}`;
+              const existing = passMap.get(passId);
               passMap.set(passId, {
+                ...existing,
                 id: passId,
                 passId,
                 bookingId: data.bookingId || docSnap.id,
@@ -602,8 +734,8 @@ export function subscribeToParticipantBookings(participantUid, onUpdate, onError
                 time: data.time || '09:00 AM – 06:00 PM',
                 venue: data.venue || 'Campus Venue',
                 gate: data.gate || 'Gate A',
-                status: data.status || STATUS_ENUMS.PASS.ACTIVE,
-                checkedIn: false,
+                status: existing?.status || data.status || STATUS_ENUMS.PASS.ACTIVE,
+                checkedIn: existing?.checkedIn !== undefined ? existing.checkedIn : false,
                 price: unitPrice,
                 unitPrice: unitPrice,
                 paymentMethod: data.paymentMethod,
@@ -625,8 +757,10 @@ export function subscribeToParticipantBookings(participantUid, onUpdate, onError
                   ? Number(p.unitPrice)
                   : (data.unitPrice !== undefined ? Number(data.unitPrice) : Number(data.amount || 0)));
 
+            const existing = passMap.get(passId);
             passMap.set(passId, {
               ...p,
+              ...existing,
               id: passId,
               passId,
               bookingId: data.bookingId || docSnap.id,
@@ -640,8 +774,10 @@ export function subscribeToParticipantBookings(participantUid, onUpdate, onError
           else {
             const passId = data.passId || docSnap.id;
             const individualPrice = data.unitPrice !== undefined ? Number(data.unitPrice) : Number(data.amount || 0);
+            const existing = passMap.get(passId);
 
             passMap.set(passId, {
+              ...existing,
               id: passId,
               passId,
               bookingId: data.bookingId || docSnap.id,
@@ -658,8 +794,8 @@ export function subscribeToParticipantBookings(participantUid, onUpdate, onError
               time: data.time || '09:00 AM – 06:00 PM',
               venue: data.venue || 'Campus Venue',
               gate: data.gate || 'Gate A',
-              status: data.status || STATUS_ENUMS.PASS.ACTIVE,
-              checkedIn: false,
+              status: existing?.status || data.status || STATUS_ENUMS.PASS.ACTIVE,
+              checkedIn: existing?.checkedIn !== undefined ? existing.checkedIn : false,
               price: individualPrice,
               unitPrice: individualPrice,
               paymentMethod: data.paymentMethod,
@@ -672,14 +808,8 @@ export function subscribeToParticipantBookings(participantUid, onUpdate, onError
           }
         });
 
-        const passes = Array.from(passMap.values());
-        bookings.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-        passes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-
-        saveStoredUserBookings(participantUid, bookings);
-        saveStoredUserPasses(participantUid, passes);
-
-        if (onUpdate) onUpdate(bookings, passes);
+        latestBookings = bookings;
+        notify();
       },
       (error) => {
         console.error('[GateApass Bookings] Participant bookings listener error:', error);
@@ -687,7 +817,41 @@ export function subscribeToParticipantBookings(participantUid, onUpdate, onError
       }
     );
 
-    return () => unsubscribe();
+    // 2. Synchronize dedicated /passes collection for immediate gate turnstile status updates
+    const qPasses = query(
+      collection(db, COLLECTIONS.PASSES),
+      where('participantUid', '==', participantUid)
+    );
+
+    const unsubPasses = onSnapshot(
+      qPasses,
+      (snapshot) => {
+        snapshot.forEach((docSnap) => {
+          const passData = docSnap.data();
+          const passId = passData.passId || docSnap.id;
+          const existing = passMap.get(passId);
+
+          passMap.set(passId, {
+            ...existing,
+            ...passData,
+            id: passId,
+            passId,
+            status: passData.status || STATUS_ENUMS.PASS.ACTIVE,
+            checkedIn: Boolean(passData.checkedIn),
+            checkedInAt: passData.checkedInAt || null
+          });
+        });
+        notify();
+      },
+      (passErr) => {
+        console.warn('[GateApass Passes] Participant passes listener notice:', passErr);
+      }
+    );
+
+    return () => {
+      unsubBookings();
+      unsubPasses();
+    };
   } catch (err) {
     console.error('[GateApass Bookings] Failed to establish participant listener:', err);
     if (onError) onError(err);

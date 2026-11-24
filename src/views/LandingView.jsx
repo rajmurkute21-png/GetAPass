@@ -275,7 +275,10 @@ export default function LandingView({
                 gap: '24px'
               }}
             >
-              {events.slice(0, 3).map((event) => (
+              {events
+                .filter((e) => ['active', 'published'].includes(String(e.status || 'Active').trim().toLowerCase()))
+                .slice(0, 3)
+                .map((event) => (
                 <EventCard
                   key={event.id}
                   event={event}

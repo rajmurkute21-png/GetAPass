@@ -14,7 +14,7 @@ import {
   PERMISSIONS,
   ROLE_PERMISSIONS,
   ROLE_LABELS
-} from '../constants/roles';
+} from '../constants/roles.js';
 
 export { ROLES, ALL_ROLES, PERMISSIONS, ROLE_PERMISSIONS, ROLE_LABELS };
 

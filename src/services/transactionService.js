@@ -51,7 +51,7 @@ export async function createTransaction({
     currency,
     paymentMethod,
     status,
-    gatewayRef: gatewayRef || `MOCK_GW_${now.toString(36).toUpperCase()}`,
+    gatewayRef: gatewayRef || `GW_REF_${now.toString(36).toUpperCase()}`,
     createdAt: now,
     updatedAt: now
   };

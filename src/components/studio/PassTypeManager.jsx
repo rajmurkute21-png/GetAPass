@@ -490,7 +490,7 @@ export default function PassTypeManager({
                 title: event?.title || 'Campus Event',
                 category: event?.category || 'Concert',
                 passType: preview3DModalPass.name || 'Standard Pass',
-                attendeeName: 'Aarav Shah',
+                attendeeName: 'Pass Holder',
                 authority: preview3DModalPass.defaultAuthority || 'Participant',
                 date: event?.date || 'Sat, 24 May 2025',
                 time: event?.time || '7:00 PM',

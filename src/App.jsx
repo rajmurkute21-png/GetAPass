@@ -31,6 +31,8 @@ import {
   getStoredUserPasses,
   saveStoredUserPasses
 } from './services/bookingService';
+import { subscribeToRoleCheckIns } from './services/verifierService';
+import { subscribeToUserNotifications } from './services/notificationService';
 import {
   INITIAL_PASSES,
   INITIAL_BOOKINGS,
@@ -45,9 +47,14 @@ import {
   updateEvent,
   deleteEvent,
   subscribeToEvents,
+  subscribeToEventById,
   subscribeToOrganizerEvents,
   subscribeToAllEventsAdmin,
-  migrateLocalEventsToFirestore
+  migrateLocalEventsToFirestore,
+  authorizeEvent,
+  rejectEvent,
+  disableEvent,
+  removeUnauthorizedEvent
 } from './data/eventsData';
 
 export default function App() {
@@ -71,9 +78,9 @@ export default function App() {
   const [eventsSyncError, setEventsSyncError] = useState(null);
 
   // Personal participant data
-  const [passes, setPasses] = useState(INITIAL_PASSES);
-  const [bookings, setBookings] = useState(INITIAL_BOOKINGS);
-  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  const [passes, setPasses] = useState([]);
+  const [bookings, setBookings] = useState([]);
+  const [notifications, setNotifications] = useState([]);
 
   // Role-isolated data stores
   const [organizerEvents, setOrganizerEvents] = useState([]);
@@ -81,9 +88,12 @@ export default function App() {
   const [adminEvents, setAdminEvents] = useState([]);
   const [adminBookings, setAdminBookings] = useState([]);
 
-  // Mock fallbacks for turnstile and staff
-  const [participants, setParticipants] = useState(INITIAL_PARTICIPANTS);
-  const [checkinHistory, setCheckinHistory] = useState(INITIAL_CHECKINS);
+  // Live turnstile admissions & participants
+  const [participants, setParticipants] = useState([]);
+  const [checkinHistory, setCheckinHistory] = useState([]);
+
+  // Network connection state
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
 
   // Responsive mobile detection
   const [isMobile, setIsMobile] = useState(false);
@@ -120,9 +130,19 @@ export default function App() {
         setAuthModalView('verify');
         openAuthModal('verify');
       }
+    } else if (activeView === 'booking' && !currentUser) {
+      console.warn('[GateApass Security] Unauthenticated attempt to access Booking Funnel redirected to login.');
+      setActiveView('events');
+      if (openAuthModal) {
+        openAuthModal('login', () => {
+          setActiveView('booking');
+        });
+      }
     }
   }, [
     portalMode,
+    activeView,
+    currentUser?.uid,
     currentUser?.role,
     currentUser?.isAdmin,
     currentUser?.isOrganizer,
@@ -306,6 +326,77 @@ export default function App() {
     };
   }, [currentUser?.uid, currentUser?.role, currentUser?.isAdmin]);
 
+  // 5. Active / Selected Event Real-Time Subscription
+  useEffect(() => {
+    if (!selectedEvent?.id) return;
+
+    const unsubscribe = subscribeToEventById(
+      selectedEvent.id,
+      (updatedEvent) => {
+        if (updatedEvent) {
+          setSelectedEvent((prev) => {
+            if (!prev || prev.id !== updatedEvent.id) return prev;
+            return { ...prev, ...updatedEvent };
+          });
+        }
+      },
+      (err) => console.warn('[GateApass Events] Live selected event subscription notice:', err)
+    );
+
+    return () => unsubscribe();
+  }, [selectedEvent?.id]);
+
+  // 6. Role-Based Check-in Admissions Real-Time Subscription
+  useEffect(() => {
+    if (!currentUser?.uid) {
+      setCheckinHistory([]);
+      return;
+    }
+
+    const unsubscribe = subscribeToRoleCheckIns(
+      currentUser,
+      (liveCheckins) => {
+        setCheckinHistory(liveCheckins);
+      },
+      (err) => console.warn('[GateApass Turnstile] Role check-ins subscription notice:', err)
+    );
+
+    return () => unsubscribe();
+  }, [currentUser?.uid, currentUser?.role, currentUser?.isAdmin, currentUser?.isOrganizer]);
+
+  // 7. User-Specific Real-Time Notifications Feed Subscription
+  useEffect(() => {
+    if (!currentUser?.uid) {
+      setNotifications([]);
+      return;
+    }
+
+    const unsubscribe = subscribeToUserNotifications(
+      currentUser.uid,
+      (userNotifs) => {
+        setNotifications(userNotifs);
+      },
+      (err) => console.warn('[GateApass Notifications] Real-time subscription notice:', err)
+    );
+
+    return () => unsubscribe();
+  }, [currentUser?.uid]);
+
+  // 8. Graceful Network Connection (Online / Offline) Monitoring
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   // Listen to local persistent event changes across windows/components
   useEffect(() => {
     const handleEventsChanged = (e) => {
@@ -340,8 +431,19 @@ export default function App() {
   };
 
   const handleBookEvent = (ev) => {
-    // Requirement 4: Require verified email for email/password accounts before granting access
-    if (currentUser && !currentUser.isEmailVerified && !currentUser.isGoogle) {
+    // 1. Requirement: Every user must have a valid authenticated Firebase account before booking tickets
+    if (!currentUser) {
+      if (openAuthModal) {
+        openAuthModal('login', () => {
+          setSelectedEvent(ev);
+          setActiveView('booking');
+        });
+      }
+      return;
+    }
+
+    // 2. Requirement: Require verified email for email/password accounts before granting access
+    if (!currentUser.isEmailVerified && !currentUser.isGoogle) {
       if (setAuthModalView && openAuthModal) {
         setAuthModalView('verify');
         openAuthModal('verify');
@@ -357,6 +459,30 @@ export default function App() {
     setActiveView('event-details');
   };
 
+  const handleCreateEventClick = () => {
+    if (!currentUser) {
+      if (openAuthModal) {
+        openAuthModal('login', (authUser) => {
+          if (canAccessOrganizerDashboard(authUser)) {
+            setOrganizerInitialTab('create-event');
+            setPortalMode('organizer-studio');
+          } else {
+            setActiveView('profile');
+            setProfileSubTab('list-event');
+          }
+        });
+      }
+      return;
+    }
+    if (canAccessOrganizerDashboard(currentUser)) {
+      setOrganizerInitialTab('create-event');
+      setPortalMode('organizer-studio');
+    } else {
+      setActiveView('profile');
+      setProfileSubTab('list-event');
+    }
+  };
+
   const handleProceedToPayment = (data) => {
     setBookingData(data);
     setActiveView('payment');
@@ -365,12 +491,18 @@ export default function App() {
   const handlePaymentSuccess = async ({
     amount,
     method,
+    paymentReference,
+    paymentDetails,
     eventTitle,
     attendeeName,
     passType,
     passes: bookedPasses,
     autoNavigate = true
   }) => {
+    // Critical: Only authenticated users can complete booking payment and receive passes
+    if (!currentUser || !currentUser.uid) {
+      throw new Error('Authentication required: You must be signed in with a valid account to purchase tickets.');
+    }
     const rawTitle = eventTitle || selectedEvent?.title || 'GP';
     const prefix = rawTitle.replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || 'GP';
 
@@ -497,18 +629,25 @@ export default function App() {
       pass: individualPasses[0]
     };
 
-    if (currentUser?.uid) {
-      try {
-        const created = await createBooking(bookingPayload, currentUser, selectedEvent);
-        if (created?.passes && created.passes.length > 0) {
-          createdPassesList = created.passes;
-        }
-        if (created?.booking) {
-          primaryBooking = created.booking;
-        }
-      } catch (err) {
-        console.error('[GateApass Bookings] Failed to save booking to Firestore:', err);
+    try {
+      const created = await createBooking(
+        {
+          ...bookingPayload,
+          paymentReference,
+          paymentDetails
+        },
+        currentUser,
+        selectedEvent
+      );
+      if (created?.passes && created.passes.length > 0) {
+        createdPassesList = created.passes;
       }
+      if (created?.booking) {
+        primaryBooking = created.booking;
+      }
+    } catch (err) {
+      console.error('[GateApass Bookings] Failed to save booking to Firestore:', err);
+      throw err;
     }
 
     setPasses((prev) => [...createdPassesList, ...prev.filter((p) => !createdPassesList.some((cp) => cp.id === p.id))]);
@@ -695,11 +834,37 @@ export default function App() {
         organizerUid: b.organizerUid
       }));
     }
-    return participants;
-  }, [adminBookings, participants]);
+    return [];
+  }, [adminBookings]);
 
   return (
     <div className="gateapass-app">
+      {/* Network Connection Warning (when offline) */}
+      {!isOnline && (
+        <div
+          role="status"
+          style={{
+            backgroundColor: '#FEF3C7',
+            color: '#92400E',
+            padding: '10px 16px',
+            fontSize: '13px',
+            fontWeight: 600,
+            textAlign: 'center',
+            borderBottom: '1px solid #FDE68A',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            position: 'sticky',
+            top: 0,
+            zIndex: 9999
+          }}
+        >
+          <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#F59E0B' }} />
+          <span>You are currently offline. Showing cached records. Real-time updates will resume once reconnected.</span>
+        </div>
+      )}
+
       {/* SEPARATED PUBLIC ATTENDEE HEADER (Only rendered outside organizer studio and admin) */}
       {portalMode === 'participant' && (
         <>
@@ -741,10 +906,36 @@ export default function App() {
               initialTab={adminInitialTab}
               events={adminEvents.length > 0 ? adminEvents : events}
               participants={adminParticipantsList}
+              bookings={adminBookings}
+              checkinHistory={checkinHistory}
               onUpdateParticipants={setParticipants}
               onCreateEvent={(newEvent) => {
                 const saved = saveEvent(newEvent, currentUser);
                 setSelectedEvent(saved);
+              }}
+              onAuthorizeEvent={async (eventId) => {
+                const updated = await authorizeEvent(eventId, currentUser);
+                setEvents((prev) => prev.map((e) => (e.id === eventId ? updated : e)));
+                return updated;
+              }}
+              onRejectEvent={async (eventId, reason) => {
+                const updated = await rejectEvent(eventId, reason, currentUser);
+                setEvents((prev) => prev.map((e) => (e.id === eventId ? updated : e)));
+                return updated;
+              }}
+              onDisableEvent={async (eventId, reason) => {
+                const updated = await disableEvent(eventId, reason, currentUser);
+                setEvents((prev) => prev.map((e) => (e.id === eventId ? updated : e)));
+                return updated;
+              }}
+              onRemoveUnauthorizedEvent={async (eventId, options) => {
+                const res = await removeUnauthorizedEvent(eventId, options, currentUser);
+                if (options?.permanent) {
+                  setEvents((prev) => prev.filter((e) => e.id !== eventId));
+                } else {
+                  setEvents((prev) => prev.map((e) => (e.id === eventId ? res : e)));
+                }
+                return res;
               }}
               onLogout={handleLogout}
               onBackToPortal={() => {
@@ -835,15 +1026,7 @@ export default function App() {
                 }}
                 onBookEvent={handleBookEvent}
                 onViewEventDetails={handleViewEventDetails}
-                onCreateEvent={() => {
-                  if (canAccessOrganizerDashboard(currentUser)) {
-                    setOrganizerInitialTab('create-event');
-                    setPortalMode('organizer-studio');
-                  } else {
-                    setActiveView('profile');
-                    setProfileSubTab('list-event');
-                  }
-                }}
+                onCreateEvent={handleCreateEventClick}
               />
             )}
 
@@ -861,15 +1044,7 @@ export default function App() {
                 }}
                 onBookEvent={handleBookEvent}
                 onViewEventDetails={handleViewEventDetails}
-                onCreateEvent={() => {
-                  if (canAccessOrganizerDashboard(currentUser)) {
-                    setOrganizerInitialTab('create-event');
-                    setPortalMode('organizer-studio');
-                  } else {
-                    setActiveView('profile');
-                    setProfileSubTab('list-event');
-                  }
-                }}
+                onCreateEvent={handleCreateEventClick}
               />
             )}
 
@@ -882,15 +1057,7 @@ export default function App() {
                 onSelectCategory={setSelectedCategory}
                 onBookEvent={handleBookEvent}
                 onViewEventDetails={handleViewEventDetails}
-                onCreateEvent={() => {
-                  if (canAccessOrganizerDashboard(currentUser)) {
-                    setOrganizerInitialTab('create-event');
-                    setPortalMode('organizer-studio');
-                  } else {
-                    setActiveView('profile');
-                    setProfileSubTab('list-event');
-                  }
-                }}
+                onCreateEvent={handleCreateEventClick}
               />
             )}
 
@@ -898,7 +1065,7 @@ export default function App() {
               <EventDetailsView
                 event={selectedEvent}
                 onBack={() => setActiveView('events')}
-                onBookNow={() => setActiveView('booking')}
+                onBookNow={() => handleBookEvent(selectedEvent)}
               />
             )}
 
