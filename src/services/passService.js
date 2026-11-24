@@ -8,15 +8,15 @@
  */
 
 import { where } from 'firebase/firestore';
-import { COLLECTIONS, STATUS_ENUMS, generatePassId } from '../constants/firestoreSchema';
+import { COLLECTIONS, STATUS_ENUMS, generatePassId } from '../constants/firestoreSchema.js';
 import {
   fetchPaginatedCollection,
   getDocumentById,
   writeDocument,
   updateDocumentFields,
   subscribeToCollection
-} from './firestoreService';
-import { canValidatePasses, canManageEvents } from './permissionService';
+} from './firestoreService.js';
+import { canValidatePasses, canManageEvents } from './permissionService.js';
 
 /**
  * Creates an authoritative digital pass linked to a booking.

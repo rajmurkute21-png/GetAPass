@@ -299,6 +299,23 @@ export function verifyPassOffline(passCode, targetEventId = null) {
         };
       }
 
+      // Check payment status
+      const paymentStatus = String(foundPass.paymentStatus || '').toUpperCase();
+      if (
+        foundPass.status === 'Pending Payment' ||
+        paymentStatus === 'PENDING' ||
+        paymentStatus === 'FAILED' ||
+        paymentStatus === 'UNPAID' ||
+        paymentStatus === 'DECLINED'
+      ) {
+        return {
+          valid: false,
+          status: 'Payment-pending',
+          reason: 'Payment for this pass has not been completed or verified.',
+          pass: foundPass
+        };
+      }
+
       // Check cancelled / expired
       if (foundPass.status === 'Cancelled' || foundPass.status === 'Refunded') {
         return {

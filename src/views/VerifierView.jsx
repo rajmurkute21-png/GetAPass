@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import QRScanner from '../components/scanner/QRScanner';
 import { ShieldCheck, ArrowLeft } from 'lucide-react';
-import { verifyAndCheckinPass } from '../services/bookingService';
 
 export default function VerifierView({
   events = [],
@@ -17,36 +16,17 @@ export default function VerifierView({
 
   const selectedEvent = events.find((e) => e.id === selectedEventId) || events[0] || null;
 
-  const handleAllowEntry = async (checkinData) => {
-    let verificationResult = null;
-
-    if (checkinData.passId) {
-      try {
-        verificationResult = await verifyAndCheckinPass({
-          passCode: checkinData.passId,
-          eventId: selectedEvent?.id || null,
-          verifierUser: currentUser,
-          gate: selectedGate
-        });
-
-        if (verificationResult?.valid) {
-          setLiveVerificationNotice({
-            type: 'success',
-            text: `Pass ${checkinData.passId} verified: Access Granted for ${verificationResult.attendeeName}.`
-          });
-        } else {
-          setLiveVerificationNotice({
-            type: 'error',
-            text: `Pass ${checkinData.passId} check-in rejected: ${verificationResult?.reason || 'Invalid pass.'}`
-          });
-        }
-      } catch (err) {
-        console.warn('[GateApass Verifier] Check-in error:', err);
-        setLiveVerificationNotice({
-          type: 'error',
-          text: err?.message || 'Verification error occurred.'
-        });
-      }
+  const handleAllowEntry = (checkinData) => {
+    if (checkinData.result === 'Valid') {
+      setLiveVerificationNotice({
+        type: 'success',
+        text: `Pass ${checkinData.passId} verified: Access Granted for ${checkinData.participant}.`
+      });
+    } else {
+      setLiveVerificationNotice({
+        type: 'error',
+        text: `Pass ${checkinData.passId} denied: ${checkinData.reason || 'Invalid pass.'}`
+      });
     }
 
     if (onRecordCheckin) {
@@ -55,7 +35,7 @@ export default function VerifierView({
         gate: selectedGate,
         event: selectedEvent?.title || checkinData.event || 'Campus Event',
         verifier: currentUser?.name || currentUser?.displayName || 'Gate Verifier',
-        verificationStatus: verificationResult?.valid ? 'Valid' : 'Warning'
+        verificationStatus: checkinData.result === 'Valid' ? 'Valid' : 'Warning'
       });
     }
 

@@ -1,26 +1,42 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import jsQR from 'jsqr';
 import {
   Scan,
   Flashlight,
   CheckCircle2,
   XCircle,
-  Clock,
   AlertTriangle,
   History,
   Camera,
+  CameraOff,
   RefreshCw,
   Upload,
   Keyboard,
   ShieldCheck,
   ShieldAlert,
   AlertCircle,
-  SwitchCamera
+  SwitchCamera,
+  Volume2,
+  VolumeX,
+  Clock,
+  User,
+  Ticket,
+  MapPin,
+  Calendar,
+  X,
+  ArrowRight
 } from 'lucide-react';
 import Button from '../common/Button';
 import Input from '../common/Input';
 import StatusBadge from '../common/StatusBadge';
-import { verifyPassOffline } from '../../services/verifierService';
-import { verifyAndCheckinPass } from '../../services/bookingService';
+import {
+  verifyAndCheckInPassAuthoritative,
+  parseQRPayload,
+  VERIFICATION_CODES,
+  VERIFICATION_TITLES,
+  playVerificationChime,
+  triggerVerificationHaptic
+} from '../../services/passVerificationEngine';
 
 export default function QRScanner({
   onAllowEntry,
@@ -30,26 +46,38 @@ export default function QRScanner({
   gate = 'Gate A',
   verifierUser = null
 }) {
-  const [scanState, setScanState] = useState('idle'); // 'idle' | 'valid' | 'invalid' | 'already-used' | 'cancelled' | 'wrong-event' | 'expired'
   const [activeTab, setActiveTab] = useState('scan'); // 'scan' | 'history' | 'manual'
-  const [torchOn, setTorchOn] = useState(false);
-  const [facingMode, setFacingMode] = useState('environment'); // 'environment' | 'user'
-  const [scannedPass, setScannedPass] = useState(null);
-  const [statusReason, setStatusReason] = useState('');
-  const [isVerifying, setIsVerifying] = useState(false);
-
-  // Real Camera & Stream state
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState(null);
-  const videoRef = useRef(null);
-  const streamRef = useRef(null);
-  const scanningLoopRef = useRef(null);
+  const [facingMode, setFacingMode] = useState('environment'); // 'environment' (rear) | 'user' (front)
+  const [torchOn, setTorchOn] = useState(false);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // Manual & Upload Input
+  // Scanning loop & verification state
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState(null); // null | result object
+  const [modalOpen, setModalOpen] = useState(false);
+
+  // Manual code & upload state
   const [manualCode, setManualCode] = useState('');
-  const [isOfflineMode, setIsOfflineMode] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+  const [uploadError, setUploadError] = useState(null);
+  const [isProcessingUpload, setIsProcessingUpload] = useState(false);
 
-  // Monitor online/offline status
+  // Offline detection
+  const [isOfflineMode, setIsOfflineMode] = useState(
+    typeof navigator !== 'undefined' ? !navigator.onLine : false
+  );
+
+  // DOM Refs
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const scanLoopRef = useRef(null);
+  const lastScannedCodeRef = useRef(null);
+  const scanCooldownRef = useRef(false);
+
+  // Monitor network status
   useEffect(() => {
     const handleOnline = () => setIsOfflineMode(false);
     const handleOffline = () => setIsOfflineMode(true);
@@ -61,56 +89,28 @@ export default function QRScanner({
     };
   }, []);
 
-  // Camera Management
-  const startCamera = async (facing = facingMode) => {
-    setCameraError(null);
-    stopCamera();
-
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      setCameraError('Camera access is not supported by your current browser.');
-      return;
+  // Safe sound trigger respecting user's mute preference
+  const playSound = useCallback((type) => {
+    if (soundEnabled) {
+      playVerificationChime(type);
     }
+    triggerVerificationHaptic(type);
+  }, [soundEnabled]);
 
-    try {
-      const constraints = {
-        video: {
-          facingMode: { ideal: facing },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        },
-        audio: false
-      };
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      streamRef.current = stream;
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.setAttribute('playsinline', 'true');
-        await videoRef.current.play();
-        setCameraActive(true);
-        startBarcodeDetection();
-      }
-    } catch (err) {
-      console.warn('[GateApass QR] Camera start error:', err);
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setCameraError('Camera permission denied. Please allow camera access in your browser settings to scan physical or digital passes.');
-      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        setCameraError('No camera found on this device. You can verify passes using manual entry or upload.');
-      } else {
-        setCameraError(`Camera initialization error: ${err.message || 'Please check permissions.'}`);
-      }
-      setCameraActive(false);
-    }
-  };
-
-  const stopCamera = () => {
-    if (scanningLoopRef.current) {
-      cancelAnimationFrame(scanningLoopRef.current);
-      scanningLoopRef.current = null;
+  /**
+   * Stop any running camera streams and clean up media tracks
+   */
+  const stopCamera = useCallback(() => {
+    if (scanLoopRef.current) {
+      cancelAnimationFrame(scanLoopRef.current);
+      scanLoopRef.current = null;
     }
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
+      try {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      } catch (err) {
+        console.warn('[GateApass Scanner] Error stopping tracks:', err);
+      }
       streamRef.current = null;
     }
     if (videoRef.current) {
@@ -118,262 +118,363 @@ export default function QRScanner({
     }
     setCameraActive(false);
     setTorchOn(false);
-  };
+  }, []);
 
+  /**
+   * Start device camera with specific facing mode (rear default on mobile)
+   */
+  const startCamera = useCallback(async (facing = facingMode) => {
+    setCameraError(null);
+    stopCamera();
+
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      setCameraError('Camera access is not supported by your current browser or connection (HTTPS required).');
+      return;
+    }
+
+    try {
+      const constraints = {
+        video: {
+          facingMode: { ideal: facing },
+          width: { ideal: 1280, min: 640 },
+          height: { ideal: 720, min: 480 }
+        },
+        audio: false
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+
+      // Check torch capability
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack?.getCapabilities) {
+        const capabilities = videoTrack.getCapabilities();
+        setTorchSupported(Boolean(capabilities?.torch));
+      } else {
+        setTorchSupported(false);
+      }
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.setAttribute('playsinline', 'true');
+        videoRef.current.muted = true;
+        await videoRef.current.play();
+        setCameraActive(true);
+        startFrameDecoding();
+      }
+    } catch (err) {
+      console.warn('[GateApass Scanner] Camera initialization error:', err);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setCameraError('Camera permission was denied. Please allow camera permissions in your browser address bar.');
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        setCameraError('No camera found on this device. You can verify passes using manual entry or file upload.');
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        setCameraError('Camera is already in use by another application or tab.');
+      } else {
+        setCameraError(`Camera error: ${err.message || 'Unable to start camera'}`);
+      }
+      setCameraActive(false);
+    }
+  }, [facingMode, stopCamera]);
+
+  /**
+   * Toggle between Rear ('environment') and Front ('user') cameras
+   */
   const toggleCameraFacing = () => {
     const nextFacing = facingMode === 'environment' ? 'user' : 'environment';
     setFacingMode(nextFacing);
     startCamera(nextFacing);
   };
 
+  /**
+   * Toggle Flashlight / Torch if supported by the device hardware
+   */
   const toggleTorch = async () => {
     if (!streamRef.current) return;
     const track = streamRef.current.getVideoTracks()[0];
-    if (track) {
-      const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-      if (capabilities.torch) {
-        try {
-          const nextTorch = !torchOn;
-          await track.applyConstraints({ advanced: [{ torch: nextTorch }] });
-          setTorchOn(nextTorch);
-        } catch (err) {
-          console.warn('[GateApass QR] Torch error:', err);
-        }
-      } else {
-        alert('Flashlight/torch is not supported by this camera.');
+    if (track && torchSupported) {
+      try {
+        const nextTorch = !torchOn;
+        await track.applyConstraints({ advanced: [{ torch: nextTorch }] });
+        setTorchOn(nextTorch);
+      } catch (err) {
+        console.warn('[GateApass Scanner] Torch error:', err);
       }
     }
   };
 
-  // Start Barcode Detection using native browser BarcodeDetector API
-  const startBarcodeDetection = () => {
-    if (typeof window === 'undefined') return;
+  /**
+   * Process a scanned or submitted code through the authoritative verification engine
+   */
+  const handleProcessCode = useCallback(async (rawPayload) => {
+    if (!rawPayload || isVerifying || scanCooldownRef.current) return;
 
-    if ('BarcodeDetector' in window) {
-      const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+    const trimmed = String(rawPayload).trim();
+    if (!trimmed) return;
 
-      const checkFrame = async () => {
-        if (!videoRef.current || videoRef.current.readyState < 2) {
-          scanningLoopRef.current = requestAnimationFrame(checkFrame);
-          return;
-        }
-
-        try {
-          const barcodes = await detector.detect(videoRef.current);
-          if (barcodes.length > 0) {
-            const rawValue = barcodes[0].rawValue;
-            if (rawValue) {
-              handleProcessScannedCode(rawValue);
-              return; // Stop loop after code detected
-            }
-          }
-        } catch {
-          // ignore detection frame drops
-        }
-
-        scanningLoopRef.current = requestAnimationFrame(checkFrame);
-      };
-
-      scanningLoopRef.current = requestAnimationFrame(checkFrame);
+    // Prevent immediate repeated scans of the exact same code in a rapid loop
+    if (lastScannedCodeRef.current === trimmed && scanCooldownRef.current) {
+      return;
     }
-  };
 
-  // Turnstile verification processor for raw scanned payloads
-  const handleProcessScannedCode = async (rawCode) => {
-    if (!rawCode || isVerifying) return;
     setIsVerifying(true);
-
-    let parsedPassId = String(rawCode).trim();
-    // Support JSON payloads e.g. { passId: 'GP-...', eventId: '...' }
-    try {
-      if (parsedPassId.startsWith('{') && parsedPassId.endsWith('}')) {
-        const json = JSON.parse(parsedPassId);
-        parsedPassId = json.passId || json.id || parsedPassId;
-      }
-    } catch {}
-
-    const targetEventId = currentEvent?.id || null;
+    scanCooldownRef.current = true;
+    lastScannedCodeRef.current = trimmed;
 
     try {
-      // 1. If online and booking service available, verify in registry
-      if (!isOfflineMode && verifierUser) {
-        const result = await verifyAndCheckinPass({
-          passCode: parsedPassId,
-          eventId: targetEventId,
-          verifierUser,
-          gate
+      const result = await verifyAndCheckInPassAuthoritative({
+        passDataOrCode: trimmed,
+        currentEventId: currentEvent?.id || null,
+        verifierUser,
+        gate: gate || 'Gate A',
+        isOfflineMode
+      });
+
+      setVerificationResult(result);
+      setModalOpen(true);
+
+      // Play sound and trigger haptic feedback
+      playSound(result.valid ? 'success' : 'error');
+
+      // Notify parent view (e.g. for live turnstile history logs)
+      if (onAllowEntry) {
+        onAllowEntry({
+          passId: result.passId || trimmed,
+          participant: result.attendeeName || 'Attendee',
+          event: result.eventTitle || currentEvent?.title || 'Campus Event',
+          gate: gate || 'Gate A',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          result: result.valid ? 'Valid' : (result.alreadyUsed ? 'Duplicate' : 'Denied'),
+          code: result.code,
+          reason: result.reason || (result.valid ? 'Access Approved' : 'Denied')
         });
-
-        if (result.valid) {
-          setScanState('valid');
-          setScannedPass({
-            passId: parsedPassId,
-            name: result.attendeeName || 'Registered Attendee',
-            event: result.eventTitle || currentEvent?.title || 'Campus Event',
-            authority: result.booking?.passType || 'General Entry',
-            permissions: ['Campus Gate Entry', 'Authorized Seating'],
-            gate: gate || 'Gate A',
-            status: 'Valid'
-          });
-          setStatusReason('Entry verified and authorized in real-time registry.');
-        } else if (result.alreadyUsed) {
-          setScanState('already-used');
-          setScannedPass(result.booking || { passId: parsedPassId });
-          setStatusReason(result.reason || 'This pass was already used earlier today. Duplicate entry blocked.');
-        } else if (result.reason?.includes('different event') || result.reason?.includes('Wrong event')) {
-          setScanState('wrong-event');
-          setScannedPass(result.booking || { passId: parsedPassId });
-          setStatusReason(result.reason || 'Pass belongs to a different event.');
-        } else if (result.booking?.status === 'Cancelled' || result.reason?.includes('Cancelled')) {
-          setScanState('cancelled');
-          setScannedPass(result.booking || { passId: parsedPassId });
-          setStatusReason(result.reason || 'Pass has been cancelled or refunded.');
-        } else if (result.booking?.status === 'Expired' || result.reason?.includes('Expired')) {
-          setScanState('expired');
-          setScannedPass(result.booking || { passId: parsedPassId });
-          setStatusReason(result.reason || 'Pass has expired.');
-        } else {
-          setScanState('invalid');
-          setStatusReason(result.reason || 'Unrecognized pass or invalid cryptographic signature.');
-        }
-      } else {
-        // 2. Offline fallback mode: verify against cached pass roster
-        const offlineResult = verifyPassOffline(parsedPassId, targetEventId);
-
-        if (offlineResult.valid) {
-          setScanState('valid');
-          setScannedPass({
-            passId: parsedPassId,
-            name: offlineResult.attendeeName,
-            event: offlineResult.eventTitle,
-            authority: offlineResult.passType,
-            permissions: ['Offline Gate Authorized'],
-            gate: gate || 'Gate A',
-            status: 'Valid (Offline Cached)'
-          });
-          setStatusReason('Verified against local offline pass roster.');
-        } else if (offlineResult.status === 'Already-used') {
-          setScanState('already-used');
-          setStatusReason(offlineResult.reason);
-        } else if (offlineResult.status === 'Wrong-event') {
-          setScanState('wrong-event');
-          setStatusReason(offlineResult.reason);
-        } else if (offlineResult.status === 'Cancelled') {
-          setScanState('cancelled');
-          setStatusReason(offlineResult.reason);
-        } else {
-          setScanState('invalid');
-          setStatusReason(offlineResult.reason || 'Pass not recognized in local offline roster.');
-        }
       }
     } catch (err) {
-      console.warn('[GateApass QR] Processing error:', err);
-      // Fallback evaluation
-      setScanState('invalid');
-      setStatusReason(err?.message || 'Verification failed. Please check network or roster.');
+      console.error('[GateApass Scanner] Verification error:', err);
+      const fallbackResult = {
+        valid: false,
+        code: VERIFICATION_CODES.INVALID_QR,
+        title: 'VERIFICATION ERROR',
+        reason: err.message || 'System failed to verify pass.',
+        passId: trimmed,
+        timestamp: Date.now(),
+        gate
+      };
+      setVerificationResult(fallbackResult);
+      setModalOpen(true);
+      playSound('error');
     } finally {
       setIsVerifying(false);
     }
-  };
+  }, [currentEvent, gate, verifierUser, isOfflineMode, isVerifying, onAllowEntry, playSound]);
 
-  // Handle Manual Code Submission
-  const handleManualSubmit = (e) => {
-    e.preventDefault();
-    if (!manualCode.trim()) return;
-    handleProcessScannedCode(manualCode.trim());
-    setManualCode('');
-  };
+  /**
+   * Continuous frame decoding loop using jsQR
+   */
+  const startFrameDecoding = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
 
-  // Handle Image Upload QR decoding
-  const handleFileUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if ('BarcodeDetector' in window) {
-      try {
-        const imageBitmap = await createImageBitmap(file);
-        const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-        const barcodes = await detector.detect(imageBitmap);
-        if (barcodes.length > 0 && barcodes[0].rawValue) {
-          handleProcessScannedCode(barcodes[0].rawValue);
-        } else {
-          alert('No QR code detected in the uploaded image. Please try a clearer picture.');
-        }
-      } catch (err) {
-        alert('Could not decode QR code from image: ' + err.message);
-      }
-    } else {
-      alert('QR Image file detection requires modern browser support. Please use camera scan or manual code input.');
+    let canvas = canvasRef.current;
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      canvasRef.current = canvas;
     }
-  };
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-  // Start / Stop camera when tab changes
+    const scanFrame = () => {
+      if (
+        !video ||
+        video.readyState < 2 ||
+        !streamRef.current ||
+        modalOpen ||
+        isVerifying ||
+        scanCooldownRef.current
+      ) {
+        scanLoopRef.current = requestAnimationFrame(scanFrame);
+        return;
+      }
+
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        try {
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'dontInvert'
+          });
+
+          if (qrCode && qrCode.data) {
+            handleProcessCode(qrCode.data);
+            return; // Pause loop until modal reset
+          }
+        } catch {
+          // ignore transient frame capture drops
+        }
+      }
+
+      scanLoopRef.current = requestAnimationFrame(scanFrame);
+    };
+
+    scanLoopRef.current = requestAnimationFrame(scanFrame);
+  }, [handleProcessCode, isVerifying, modalOpen]);
+
+  // Handle Tab Switch & Modal open/close
   useEffect(() => {
-    if (activeTab === 'scan' && scanState === 'idle') {
+    if (activeTab === 'scan' && !modalOpen) {
       startCamera(facingMode);
     } else {
       stopCamera();
     }
     return () => stopCamera();
-  }, [activeTab, scanState]);
+  }, [activeTab, modalOpen, facingMode, startCamera, stopCamera]);
 
-
-
-  const handleAllowEntry = () => {
-    if (scannedPass && onAllowEntry) {
-      onAllowEntry({
-        passId: scannedPass.passId,
-        participant: scannedPass.name,
-        event: scannedPass.event,
-        gate: gate || 'Gate A',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        result: 'Valid'
-      });
-    }
-    setScanState('idle');
-    setScannedPass(null);
+  /**
+   * Reset scanner for next pass
+   */
+  const handleScanNext = () => {
+    setModalOpen(false);
+    setVerificationResult(null);
+    // Allow brief cooldown to prevent re-triggering the same pass currently in front of lens
+    setTimeout(() => {
+      scanCooldownRef.current = false;
+      lastScannedCodeRef.current = null;
+      if (activeTab === 'scan') {
+        startCamera(facingMode);
+      }
+    }, 400);
   };
 
-  const handleReset = () => {
-    setScanState('idle');
-    setScannedPass(null);
-    setStatusReason('');
+  /**
+   * Handle Manual Pass Code Form Submit
+   */
+  const handleManualSubmit = (e) => {
+    e.preventDefault();
+    if (!manualCode.trim() || isVerifying) return;
+    handleProcessCode(manualCode.trim());
+    setManualCode('');
+  };
+
+  /**
+   * Handle QR Pass Image File Upload using jsQR
+   */
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadError(null);
+    setIsProcessingUpload(true);
+
+    try {
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error('Failed to load image file.'));
+      });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0, img.width, img.height);
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: 'attemptBoth'
+      });
+
+      URL.revokeObjectURL(img.src);
+
+      if (code && code.data) {
+        handleProcessCode(code.data);
+      } else {
+        setUploadError('No QR code detected in this image. Please upload a clearer photo or enter the Pass ID manually.');
+        playSound('error');
+      }
+    } catch (err) {
+      setUploadError(err.message || 'Could not process image file.');
+      playSound('error');
+    } finally {
+      setIsProcessingUpload(false);
+      e.target.value = '';
+    }
   };
 
   return (
     <div
-      className="gateapass-verifier-screen"
+      className="gateapass-qr-scanner-container"
       style={{
         maxWidth: '440px',
         margin: '0 auto',
-        backgroundColor: 'var(--color-white)',
-        border: '1px solid var(--color-gray)',
-        borderRadius: 'var(--radius-card)',
+        backgroundColor: '#FFFFFF',
+        border: '1px solid #E2E8F0',
+        borderRadius: '20px',
+        boxShadow: '0 20px 40px -15px rgba(124, 58, 237, 0.1)',
         overflow: 'hidden',
-        textAlign: 'left'
+        textAlign: 'left',
+        position: 'relative'
       }}
     >
-      {/* Top Header */}
+      {/* ── Top Header ── */}
       <div
         style={{
           padding: '16px 20px',
-          borderBottom: '1px solid var(--color-gray)',
+          borderBottom: '1px solid #E2E8F0',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          backgroundColor: 'var(--color-white)'
+          backgroundColor: '#FFFFFF'
         }}
       >
         <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-dark-text)', margin: 0 }}>
-            Gate Pass Scanner
-          </h2>
-          <p style={{ fontSize: '12px', color: 'var(--color-muted-text)', margin: '2px 0 0' }}>
-            {currentEvent?.title || 'Campus Event'} · {gate} &nbsp;|&nbsp; {isOfflineMode ? 'Offline Mode' : 'Live Sync'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h2 style={{ fontSize: '17px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+              Gate Pass Scanner
+            </h2>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: '12px',
+                backgroundColor: isOfflineMode ? '#FEF3F2' : '#F0FDF4',
+                color: isOfflineMode ? '#B42318' : '#166534',
+                border: `1px solid ${isOfflineMode ? '#FECDCA' : '#BBF7D0'}`
+              }}
+            >
+              {isOfflineMode ? 'Offline Mode' : 'Live Sync'}
+            </span>
+          </div>
+          <p style={{ fontSize: '12px', color: '#64748B', margin: '2px 0 0' }}>
+            {currentEvent?.title || 'Campus Event'} · {gate}
           </p>
         </div>
 
+        {/* Action Controls: Sound Mute & History */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <button
+            type="button"
+            onClick={() => setSoundEnabled((prev) => !prev)}
+            title={soundEnabled ? 'Mute Chimes' : 'Unmute Chimes'}
+            style={{
+              padding: '6px 8px',
+              backgroundColor: soundEnabled ? '#F5F3FF' : '#F1F5F9',
+              color: soundEnabled ? '#7C3AED' : '#94A3B8',
+              border: '1px solid #E2E8F0',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+          </button>
+
           <button
             type="button"
             onClick={() => setActiveTab('history')}
@@ -392,24 +493,27 @@ export default function QRScanner({
             }}
           >
             <History size={14} />
-            History ({history.length})
+            Log ({history.length})
           </button>
         </div>
       </div>
 
-      {/* Navigation Sub-Tabs: Camera Scan | Manual Entry */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--color-gray)', backgroundColor: '#F8FAFC' }}>
+      {/* ── Tabs Navigation: Camera | Manual & Upload ── */}
+      <div style={{ display: 'flex', borderBottom: '1px solid #E2E8F0', backgroundColor: '#F8FAFC' }}>
         <button
           type="button"
-          onClick={() => { setActiveTab('scan'); handleReset(); }}
+          onClick={() => {
+            setActiveTab('scan');
+            setModalOpen(false);
+          }}
           style={{
             flex: 1,
-            height: '40px',
+            height: '42px',
             border: 'none',
             borderBottom: activeTab === 'scan' ? '2px solid #7C3AED' : 'none',
             backgroundColor: activeTab === 'scan' ? '#FFFFFF' : 'transparent',
             color: activeTab === 'scan' ? '#7C3AED' : '#64748B',
-            fontWeight: activeTab === 'scan' ? 600 : 500,
+            fontWeight: activeTab === 'scan' ? 700 : 500,
             fontSize: '13px',
             cursor: 'pointer',
             display: 'flex',
@@ -421,17 +525,21 @@ export default function QRScanner({
           <Camera size={15} />
           Camera Scan
         </button>
+
         <button
           type="button"
-          onClick={() => { setActiveTab('manual'); stopCamera(); }}
+          onClick={() => {
+            setActiveTab('manual');
+            stopCamera();
+          }}
           style={{
             flex: 1,
-            height: '40px',
+            height: '42px',
             border: 'none',
             borderBottom: activeTab === 'manual' ? '2px solid #7C3AED' : 'none',
             backgroundColor: activeTab === 'manual' ? '#FFFFFF' : 'transparent',
             color: activeTab === 'manual' ? '#7C3AED' : '#64748B',
-            fontWeight: activeTab === 'manual' ? 600 : 500,
+            fontWeight: activeTab === 'manual' ? 700 : 500,
             fontSize: '13px',
             cursor: 'pointer',
             display: 'flex',
@@ -445,126 +553,13 @@ export default function QRScanner({
         </button>
       </div>
 
-      {/* VIEW 1: Check-in History */}
-      {activeTab === 'history' && (
-        <div style={{ padding: '20px', minHeight: '440px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>Check-in History</h3>
-            {history.length > 0 && (
-              <button
-                type="button"
-                onClick={onClearHistory}
-                style={{ fontSize: '12px', color: '#64748B', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer' }}
-              >
-                Clear Log
-              </button>
-            )}
-          </div>
-
-          {history.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--color-muted-text)', fontSize: '13px' }}>
-              No check-ins recorded yet this session.
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {history.map((item, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    padding: '12px 14px',
-                    border: '1px solid var(--color-gray)',
-                    borderRadius: '8px',
-                    backgroundColor: 'var(--color-white)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-dark-text)' }}>
-                      {item.participant}
-                    </div>
-                    <div style={{ fontSize: '12px', color: 'var(--color-muted-text)' }}>
-                      {item.passId} · {item.gate} · {item.time}
-                    </div>
-                  </div>
-                  <StatusBadge status={item.result} />
-                </div>
-              ))}
-            </div>
-          )}
-
-          <Button
-            variant="outline"
-            fullWidth
-            style={{ marginTop: '20px' }}
-            onClick={() => setActiveTab('scan')}
-          >
-            Back to Scanner
-          </Button>
-        </div>
-      )}
-
-      {/* VIEW 2: Manual Pass ID Input & File Upload for Physical Tickets */}
-      {activeTab === 'manual' && (
-        <div style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>
-              Physical & Manual Pass Verification
-            </h3>
-            <p style={{ fontSize: '12px', color: 'var(--color-muted-text)', marginTop: '4px' }}>
-              Verify printed physical tickets, digital pass IDs, or handheld laser scanner feeds.
-            </p>
-          </div>
-
-          <form onSubmit={handleManualSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <Input
-              label="Pass ID or Raw QR Code"
-              placeholder="e.g. GP-2026-1 or paste QR string"
-              value={manualCode}
-              onChange={(e) => setManualCode(e.target.value)}
-              helperText="Press Enter or tap Verify Pass"
-            />
-            <Button variant="primary" type="submit" fullWidth disabled={!manualCode.trim() || isVerifying}>
-              {isVerifying ? 'Verifying...' : 'Verify Pass ID'}
-            </Button>
-          </form>
-
-          <div style={{ borderTop: '1px solid var(--color-gray)', paddingTop: '16px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
-              Upload QR Image from Printed / Mobile Pass:
-            </label>
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                padding: '16px',
-                border: '1.5px dashed #CBD5E1',
-                borderRadius: '10px',
-                backgroundColor: '#F8FAFC',
-                cursor: 'pointer',
-                fontSize: '13px',
-                fontWeight: 600,
-                color: '#7C3AED'
-              }}
-            >
-              <Upload size={18} />
-              <span>Select Pass Image File</span>
-              <input type="file" accept="image/*" onChange={handleFileUpload} style={{ display: 'none' }} />
-            </label>
-          </div>
-        </div>
-      )}
-
-      {/* VIEW 3: Active Scanner Camera Viewport */}
+      {/* ── TAB 1: Real Camera Viewport ── */}
       {activeTab === 'scan' && (
         <>
           <div
             style={{
-              backgroundColor: '#0F172A',
-              height: '280px',
+              backgroundColor: '#0A0F1D',
+              height: '320px',
               position: 'relative',
               display: 'flex',
               alignItems: 'center',
@@ -572,7 +567,7 @@ export default function QRScanner({
               overflow: 'hidden'
             }}
           >
-            {/* Live Video Camera Feed */}
+            {/* Live Video Feed */}
             <video
               ref={videoRef}
               playsInline
@@ -586,43 +581,56 @@ export default function QRScanner({
               }}
             />
 
-            {/* Camera Error / Permission Fallback View */}
+            {/* Error or Permission Denied State */}
             {cameraError && (
               <div
                 style={{
                   position: 'absolute',
                   inset: 0,
-                  backgroundColor: '#1E293B',
+                  backgroundColor: '#0F172A',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  padding: '20px',
+                  padding: '24px',
                   textAlign: 'center',
                   gap: '12px',
                   color: '#FFFFFF'
                 }}
               >
-                <Camera size={36} color="#EC4899" />
-                <p style={{ fontSize: '13px', margin: 0, color: '#E2E8F0', maxWidth: '320px' }}>
+                <div
+                  style={{
+                    width: '52px',
+                    height: '52px',
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#EF4444'
+                  }}
+                >
+                  <CameraOff size={26} />
+                </div>
+                <p style={{ fontSize: '13px', margin: 0, color: '#E2E8F0', maxWidth: '300px', lineHeight: '18px' }}>
                   {cameraError}
                 </p>
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                   <Button
-                    variant="outline"
+                    variant="primary"
                     size="sm"
                     icon={RefreshCw}
                     onClick={() => startCamera(facingMode)}
-                    style={{ backgroundColor: '#FFFFFF', color: '#0F172A', fontSize: '12px' }}
+                    style={{ fontSize: '12px', backgroundColor: '#7C3AED' }}
                   >
                     Retry Camera
                   </Button>
                   <Button
-                    variant="primary"
+                    variant="outline"
                     size="sm"
                     icon={Keyboard}
                     onClick={() => setActiveTab('manual')}
-                    style={{ fontSize: '12px' }}
+                    style={{ fontSize: '12px', backgroundColor: 'transparent', color: '#FFFFFF', borderColor: '#475569' }}
                   >
                     Manual Input
                   </Button>
@@ -630,276 +638,641 @@ export default function QRScanner({
               </div>
             )}
 
-            {/* Scanner Target Frame */}
-            {!cameraError && (
+            {/* Target Scanning Reticle with Animated Laser Line */}
+            {cameraActive && !cameraError && (
               <div
                 style={{
-                  width: '190px',
-                  height: '190px',
-                  border:
-                    scanState === 'valid'
-                      ? '3px solid #10B981'
-                      : scanState === 'invalid' || scanState === 'cancelled'
-                      ? '3px solid #EF4444'
-                      : scanState === 'already-used' || scanState === 'expired'
-                      ? '3px solid #F59E0B'
-                      : scanState === 'wrong-event'
-                      ? '3px solid #8B5CF6'
-                      : '3px solid #7C3AED',
-                  borderRadius: '12px',
+                  width: '210px',
+                  height: '210px',
+                  border: '2.5px solid #7C3AED',
+                  borderRadius: '16px',
                   position: 'relative',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                  transition: 'border-color 0.2s ease',
-                  boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.45)'
+                  boxShadow: '0 0 0 9999px rgba(10, 15, 29, 0.55)',
+                  backgroundColor: 'rgba(124, 58, 237, 0.04)'
                 }}
               >
-                {/* Illustrative QR or scanning beam */}
-                {scanState === 'idle' && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '20%',
-                      left: 0,
-                      right: 0,
-                      height: '2px',
-                      backgroundColor: '#7C3AED'
-                    }}
-                  />
-                )}
+                {/* 4 Framing Corner Brackets */}
+                <div style={{ position: 'absolute', top: '-2px', left: '-2px', width: '20px', height: '20px', borderTop: '4px solid #A855F7', borderLeft: '4px solid #A855F7', borderTopLeftRadius: '14px' }} />
+                <div style={{ position: 'absolute', top: '-2px', right: '-2px', width: '20px', height: '20px', borderTop: '4px solid #A855F7', borderRight: '4px solid #A855F7', borderTopRightRadius: '14px' }} />
+                <div style={{ position: 'absolute', bottom: '-2px', left: '-2px', width: '20px', height: '20px', borderBottom: '4px solid #A855F7', borderLeft: '4px solid #A855F7', borderBottomLeftRadius: '14px' }} />
+                <div style={{ position: 'absolute', bottom: '-2px', right: '-2px', width: '20px', height: '20px', borderBottom: '4px solid #A855F7', borderRight: '4px solid #A855F7', borderBottomRightRadius: '14px' }} />
+
+                {/* Animated Pulsing Laser Beam */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '40%',
+                    left: '8px',
+                    right: '8px',
+                    height: '2px',
+                    backgroundColor: '#EC4899',
+                    boxShadow: '0 0 10px #EC4899, 0 0 20px #7C3AED',
+                    animation: 'scanLaser 2s infinite ease-in-out'
+                  }}
+                />
               </div>
             )}
 
-            {/* Camera Floating Controls: Flip Camera & Torch */}
+            {/* In-view Floating Camera Controls (Flip Camera, Torch, Stop/Start) */}
             {cameraActive && (
-              <div style={{ position: 'absolute', bottom: '12px', right: '12px', display: 'flex', gap: '8px' }}>
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                  backdropFilter: 'blur(8px)',
+                  padding: '6px 12px',
+                  borderRadius: '30px',
+                  border: '1px solid rgba(255, 255, 255, 0.15)'
+                }}
+              >
                 <button
                   type="button"
                   onClick={toggleCameraFacing}
-                  title="Switch Camera (Front/Back)"
+                  title="Switch Camera (Front/Rear)"
                   style={{
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '8px',
-                    backgroundColor: 'rgba(0,0,0,0.6)',
+                    backgroundColor: 'transparent',
+                    border: 'none',
                     color: '#FFFFFF',
-                    border: '1px solid rgba(255,255,255,0.2)',
+                    cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer'
+                    gap: '4px',
+                    fontSize: '11px',
+                    fontWeight: 600
                   }}
                 >
-                  <SwitchCamera size={18} />
+                  <SwitchCamera size={16} />
+                  <span>{facingMode === 'environment' ? 'Rear' : 'Front'}</span>
                 </button>
+
+                {torchSupported && (
+                  <>
+                    <div style={{ width: '1px', height: '14px', backgroundColor: 'rgba(255,255,255,0.2)' }} />
+                    <button
+                      type="button"
+                      onClick={toggleTorch}
+                      title="Toggle Torch"
+                      style={{
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        color: torchOn ? '#FBBF24' : '#FFFFFF',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '11px',
+                        fontWeight: 600
+                      }}
+                    >
+                      <Flashlight size={16} />
+                      <span>{torchOn ? 'Torch On' : 'Torch'}</span>
+                    </button>
+                  </>
+                )}
+
+                <div style={{ width: '1px', height: '14px', backgroundColor: 'rgba(255,255,255,0.2)' }} />
                 <button
                   type="button"
-                  onClick={toggleTorch}
-                  title="Toggle Flashlight"
+                  onClick={stopCamera}
+                  title="Stop Camera Stream"
                   style={{
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '8px',
-                    backgroundColor: torchOn ? '#FFFFFF' : 'rgba(0,0,0,0.6)',
-                    color: torchOn ? '#000000' : '#FFFFFF',
-                    border: '1px solid rgba(255,255,255,0.2)',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    color: '#F87171',
+                    cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer'
+                    gap: '4px',
+                    fontSize: '11px',
+                    fontWeight: 600
                   }}
                 >
-                  <Flashlight size={18} />
+                  <CameraOff size={16} />
+                  <span>Stop</span>
                 </button>
               </div>
+            )}
+
+            {/* Restart Camera Button when stopped */}
+            {!cameraActive && !cameraError && (
+              <Button
+                variant="primary"
+                icon={Camera}
+                onClick={() => startCamera(facingMode)}
+                style={{ backgroundColor: '#7C3AED' }}
+              >
+                Start Camera Scanner
+              </Button>
             )}
           </div>
 
-          {/* Verification Status & Details Screen */}
-          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {scanState === 'idle' && (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Scan size={20} style={{ color: '#7C3AED' }} />
-                  <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-dark-text)' }}>
-                    Ready to scan QR pass
-                  </span>
-                </div>
-                <p style={{ fontSize: '13px', color: 'var(--color-muted-text)', lineHeight: '18px', margin: 0 }}>
-                  Align the digital pass on a phone or a printed physical ticket within the target frame. Pass validity, event scope, and check-in history will be validated.
-                </p>
-              </>
-            )}
-
-            {/* 1. VALID PASS */}
-            {scanState === 'valid' && scannedPass && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <CheckCircle2 size={24} style={{ color: '#059669' }} />
-                  <span style={{ fontSize: '17px', fontWeight: 700, color: '#059669' }}>
-                    ✓ Valid Pass – Entry Authorized
-                  </span>
-                </div>
-
-                <div
-                  style={{
-                    backgroundColor: '#ECFDF5',
-                    border: '1px solid #A7F3D0',
-                    padding: '14px',
-                    borderRadius: '10px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '6px',
-                    fontSize: '13px'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#065F46' }}>Attendee:</span>
-                    <span style={{ fontWeight: 700 }}>{scannedPass.name}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#065F46' }}>Pass ID:</span>
-                    <span style={{ fontWeight: 800, color: '#7C3AED' }}>{scannedPass.passId}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#065F46' }}>Tier / Category:</span>
-                    <span style={{ fontWeight: 600 }}>{scannedPass.authority}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#065F46' }}>Event:</span>
-                    <span>{scannedPass.event}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#065F46' }}>Gate:</span>
-                    <span>{gate}</span>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <Button variant="outline" onClick={handleReset} style={{ flex: 1 }}>
-                    Cancel
-                  </Button>
-                  <Button variant="primary" onClick={handleAllowEntry} style={{ flex: 1, backgroundColor: '#059669' }}>
-                    Allow Entry
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* 2. ALREADY-USED PASS */}
-            {scanState === 'already-used' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <AlertTriangle size={24} style={{ color: '#D97706' }} />
-                  <span style={{ fontSize: '17px', fontWeight: 700, color: '#D97706' }}>
-                    Pass Already Used
-                  </span>
-                </div>
-                <div
-                  style={{
-                    backgroundColor: '#FFFBEB',
-                    border: '1px solid #FDE68A',
-                    padding: '14px',
-                    borderRadius: '10px',
-                    fontSize: '13px',
-                    color: '#92400E'
-                  }}
-                >
-                  {statusReason || 'This individual pass has already been used for entry. Duplicate check-in denied.'}
-                </div>
-                <Button variant="outline" fullWidth onClick={handleReset}>
-                  Scan Next Pass
-                </Button>
-              </div>
-            )}
-
-            {/* 3. WRONG EVENT */}
-            {scanState === 'wrong-event' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <AlertCircle size={24} style={{ color: '#7C3AED' }} />
-                  <span style={{ fontSize: '17px', fontWeight: 700, color: '#7C3AED' }}>
-                    Wrong Event Pass
-                  </span>
-                </div>
-                <div
-                  style={{
-                    backgroundColor: '#F5F3FF',
-                    border: '1px solid #DDD6FE',
-                    padding: '14px',
-                    borderRadius: '10px',
-                    fontSize: '13px',
-                    color: '#5B21B6'
-                  }}
-                >
-                  {statusReason || `This pass belongs to a different event. It cannot be used at this gate.`}
-                </div>
-                <Button variant="outline" fullWidth onClick={handleReset}>
-                  Scan Next Pass
-                </Button>
-              </div>
-            )}
-
-            {/* 4. CANCELLED PASS */}
-            {scanState === 'cancelled' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <ShieldAlert size={24} style={{ color: '#DC2626' }} />
-                  <span style={{ fontSize: '17px', fontWeight: 700, color: '#DC2626' }}>
-                    Pass Cancelled / Suspended
-                  </span>
-                </div>
-                <div
-                  style={{
-                    backgroundColor: '#FEF2F2',
-                    border: '1px solid #FECACA',
-                    padding: '14px',
-                    borderRadius: '10px',
-                    fontSize: '13px',
-                    color: '#991B1B'
-                  }}
-                >
-                  {statusReason || 'This pass has been cancelled or refunded by event administrators. Entry strictly denied.'}
-                </div>
-                <Button variant="outline" fullWidth onClick={handleReset}>
-                  Scan Next Pass
-                </Button>
-              </div>
-            )}
-
-            {/* 5. INVALID PASS */}
-            {scanState === 'invalid' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <XCircle size={24} style={{ color: '#DC2626' }} />
-                  <span style={{ fontSize: '17px', fontWeight: 700, color: '#DC2626' }}>
-                    Invalid Pass / Signature
-                  </span>
-                </div>
-                <div
-                  style={{
-                    backgroundColor: '#FEF2F2',
-                    border: '1px solid #FECACA',
-                    padding: '14px',
-                    borderRadius: '10px',
-                    fontSize: '13px',
-                    color: '#991B1B'
-                  }}
-                >
-                  {statusReason || 'Unrecognized pass identifier or unverified cryptographic QR payload.'}
-                </div>
-                <Button variant="outline" fullWidth onClick={handleReset}>
-                  Scan Another Pass
-                </Button>
-              </div>
-            )}
-
-
+          {/* Scanner Guidance Bar */}
+          <div style={{ padding: '16px 20px', backgroundColor: '#FFFFFF' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Scan size={18} style={{ color: '#7C3AED' }} />
+              <span style={{ fontSize: '14px', fontWeight: 600, color: '#0F172A' }}>
+                {isVerifying ? 'Verifying Pass Signature...' : 'Position QR Pass Inside Frame'}
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#64748B', margin: '4px 0 0', lineHeight: '17px' }}>
+              Hold participant pass steady. Scanning is automatic and executes real-time turnstile check-in.
+            </p>
           </div>
         </>
       )}
+
+      {/* ── TAB 2: Manual Pass ID & QR Image Upload ── */}
+      {activeTab === 'manual' && (
+        <div style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+              Manual Pass Verification
+            </h3>
+            <p style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>
+              Verify printed physical badges, alphanumeric codes, or uploaded pass photos.
+            </p>
+          </div>
+
+          <form onSubmit={handleManualSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <Input
+              label="Pass ID or Raw QR Payload"
+              placeholder="e.g. GP-TF26-9481-1 or pass_..."
+              value={manualCode}
+              onChange={(e) => setManualCode(e.target.value)}
+              helperText="Enter Pass ID printed on ticket or physical badge"
+            />
+            <Button
+              variant="primary"
+              type="submit"
+              fullWidth
+              disabled={!manualCode.trim() || isVerifying}
+              style={{ backgroundColor: '#7C3AED' }}
+            >
+              {isVerifying ? 'Verifying in Ledger...' : 'Verify Pass ID'}
+            </Button>
+          </form>
+
+          <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '16px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: '#0F172A', display: 'block', marginBottom: '8px' }}>
+              Or Upload Pass Screenshot / Image File:
+            </label>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                padding: '16px',
+                border: '1.5px dashed #CBD5E1',
+                borderRadius: '12px',
+                backgroundColor: '#F8FAFC',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: '#7C3AED'
+              }}
+            >
+              <Upload size={18} />
+              <span>{isProcessingUpload ? 'Decoding Image...' : 'Select Ticket Image (PNG, JPG)'}</span>
+              <input type="file" accept="image/*" onChange={handleFileUpload} style={{ display: 'none' }} />
+            </label>
+
+            {uploadError && (
+              <div
+                style={{
+                  marginTop: '10px',
+                  padding: '8px 12px',
+                  backgroundColor: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  color: '#991B1B'
+                }}
+              >
+                {uploadError}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB 3: Check-in History Log ── */}
+      {activeTab === 'history' && (
+        <div style={{ padding: '20px', minHeight: '360px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: '#0F172A' }}>
+              Session Check-in Log
+            </h3>
+            {history.length > 0 && onClearHistory && (
+              <button
+                type="button"
+                onClick={onClearHistory}
+                style={{
+                  fontSize: '12px',
+                  color: '#64748B',
+                  background: 'none',
+                  border: 'none',
+                  textDecoration: 'underline',
+                  cursor: 'pointer'
+                }}
+              >
+                Clear Log
+              </button>
+            )}
+          </div>
+
+          {history.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '48px 0', color: '#94A3B8', fontSize: '13px' }}>
+              No pass check-ins recorded yet in this session.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
+              {history.map((item, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    padding: '10px 14px',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '10px',
+                    backgroundColor: '#FFFFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                      {item.participant || 'Attendee'}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748B' }}>
+                      {item.passId} · {item.gate || gate} · {item.time}
+                    </div>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      backgroundColor:
+                        item.result === 'Valid'
+                          ? '#ECFDF5'
+                          : item.result === 'Duplicate'
+                          ? '#FFFBEB'
+                          : '#FEF2F2',
+                      color:
+                        item.result === 'Valid'
+                          ? '#059669'
+                          : item.result === 'Duplicate'
+                          ? '#D97706'
+                          : '#DC2626'
+                    }}
+                  >
+                    {item.result}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Button
+            variant="outline"
+            fullWidth
+            style={{ marginTop: '16px' }}
+            onClick={() => setActiveTab('scan')}
+          >
+            Back to Scanner
+          </Button>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════════
+          PROMINENT VERIFICATION RESULT POPUPS (VALID PASS / ENTRY DENIED)
+         ════════════════════════════════════════════════════════════════════ */}
+      {modalOpen && verificationResult && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 100,
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          {/* ── SUCCESS POPUP: VALID PASS ── */}
+          {verificationResult.valid ? (
+            <div
+              style={{
+                width: '100%',
+                maxWidth: '380px',
+                backgroundColor: '#FFFFFF',
+                borderRadius: '20px',
+                boxShadow: '0 25px 50px -12px rgba(16, 185, 129, 0.35)',
+                border: '2px solid #10B981',
+                padding: '24px 20px',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px',
+                animation: 'scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+              }}
+            >
+              {/* Animated Glowing Checkmark Icon */}
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <div
+                  style={{
+                    width: '68px',
+                    height: '68px',
+                    borderRadius: '50%',
+                    backgroundColor: '#ECFDF5',
+                    border: '3px solid #10B981',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#059669',
+                    boxShadow: '0 0 24px rgba(16, 185, 129, 0.35)'
+                  }}
+                >
+                  <CheckCircle2 size={38} strokeWidth={2.5} />
+                </div>
+              </div>
+
+              {/* Headings */}
+              <div>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    letterSpacing: '1px',
+                    textTransform: 'uppercase',
+                    color: '#059669',
+                    backgroundColor: '#ECFDF5',
+                    padding: '3px 10px',
+                    borderRadius: '12px'
+                  }}
+                >
+                  ENTRY APPROVED
+                </span>
+                <h3 style={{ fontSize: '22px', fontWeight: 800, color: '#0F172A', margin: '8px 0 2px' }}>
+                  VALID PASS
+                </h3>
+                <p style={{ fontSize: '13px', color: '#059669', fontWeight: 600, margin: 0 }}>
+                  PASS VERIFIED SUCCESSFULLY
+                </p>
+              </div>
+
+              {/* Rich Details Card */}
+              <div
+                style={{
+                  backgroundColor: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '14px',
+                  padding: '14px 16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  textAlign: 'left',
+                  fontSize: '13px'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <User size={14} /> Attendee
+                  </span>
+                  <span style={{ fontWeight: 800, color: '#0F172A', fontSize: '14px' }}>
+                    {verificationResult.attendeeName}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Ticket size={14} /> Pass ID
+                  </span>
+                  <span style={{ fontWeight: 800, color: '#7C3AED', fontFamily: 'monospace', fontSize: '13px' }}>
+                    {verificationResult.passId}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Calendar size={14} /> Event
+                  </span>
+                  <span style={{ fontWeight: 600, color: '#1E293B', maxWidth: '180px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {verificationResult.eventTitle}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    Tier / Category
+                  </span>
+                  <span style={{ fontWeight: 600, color: '#0F172A' }}>
+                    {verificationResult.category}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <MapPin size={14} /> Gate & Time
+                  </span>
+                  <span style={{ color: '#334155', fontWeight: 600 }}>
+                    {verificationResult.gate} · {new Date(verificationResult.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <Button
+                  variant="outline"
+                  onClick={handleScanNext}
+                  style={{ flex: 1, borderColor: '#CBD5E1', color: '#475569' }}
+                >
+                  Close
+                </Button>
+                <Button
+                  variant="primary"
+                  icon={ArrowRight}
+                  onClick={handleScanNext}
+                  style={{ flex: 1.4, backgroundColor: '#059669', borderColor: '#059669', color: '#FFFFFF' }}
+                >
+                  Scan Next Pass
+                </Button>
+              </div>
+            </div>
+          ) : (
+            /* ── FAILURE POPUP: ENTRY DENIED ── */
+            <div
+              style={{
+                width: '100%',
+                maxWidth: '380px',
+                backgroundColor: '#FFFFFF',
+                borderRadius: '20px',
+                boxShadow: '0 25px 50px -12px rgba(239, 68, 68, 0.35)',
+                border: '2px solid #EF4444',
+                padding: '24px 20px',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px',
+                animation: 'scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+              }}
+            >
+              {/* Alert Icon */}
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <div
+                  style={{
+                    width: '68px',
+                    height: '68px',
+                    borderRadius: '50%',
+                    backgroundColor: '#FEF2F2',
+                    border: '3px solid #EF4444',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#DC2626',
+                    boxShadow: '0 0 24px rgba(239, 68, 68, 0.3)'
+                  }}
+                >
+                  <XCircle size={38} strokeWidth={2.5} />
+                </div>
+              </div>
+
+              {/* Headings */}
+              <div>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    letterSpacing: '1px',
+                    textTransform: 'uppercase',
+                    color: '#DC2626',
+                    backgroundColor: '#FEF2F2',
+                    padding: '3px 10px',
+                    borderRadius: '12px'
+                  }}
+                >
+                  {verificationResult.title || 'ENTRY DENIED'}
+                </span>
+                <h3 style={{ fontSize: '22px', fontWeight: 800, color: '#DC2626', margin: '8px 0 2px' }}>
+                  ENTRY DENIED
+                </h3>
+                <p style={{ fontSize: '13px', color: '#64748B', margin: 0 }}>
+                  Pass could not be authorized for admission
+                </p>
+              </div>
+
+              {/* Failure Reason Box */}
+              <div
+                style={{
+                  backgroundColor: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  borderRadius: '14px',
+                  padding: '14px 16px',
+                  textAlign: 'left',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  fontSize: '13px'
+                }}
+              >
+                <div>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: '#991B1B', textTransform: 'uppercase' }}>
+                    Reason:
+                  </span>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#7F1D1D', marginTop: '2px' }}>
+                    {verificationResult.reason}
+                  </div>
+                </div>
+
+                {verificationResult.passId && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #FEE2E2', paddingTop: '6px' }}>
+                    <span style={{ color: '#991B1B', fontSize: '12px' }}>Pass Reference:</span>
+                    <span style={{ fontWeight: 700, color: '#7F1D1D', fontFamily: 'monospace' }}>
+                      {verificationResult.passId}
+                    </span>
+                  </div>
+                )}
+
+                {/* Granular Duplicate Details: previous timestamp, gate, and verifier */}
+                {verificationResult.alreadyUsed && (
+                  <div
+                    style={{
+                      marginTop: '4px',
+                      padding: '8px',
+                      backgroundColor: '#FFFBEB',
+                      border: '1px solid #FDE68A',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      color: '#92400E'
+                    }}
+                  >
+                    <strong>Previous Check-in Details:</strong>
+                    <div style={{ marginTop: '2px' }}>
+                      • Time: {verificationResult.checkedInAt ? new Date(verificationResult.checkedInAt).toLocaleTimeString() : 'Earlier today'}
+                    </div>
+                    <div>
+                      • Gate: {verificationResult.checkedInGate || 'Gate A'}
+                    </div>
+                    {verificationResult.checkedInBy && (
+                      <div>
+                        • Verifier: {verificationResult.checkedInBy}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <Button
+                  variant="outline"
+                  onClick={handleScanNext}
+                  style={{ flex: 1, borderColor: '#CBD5E1', color: '#475569' }}
+                >
+                  Close
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={handleScanNext}
+                  style={{ flex: 1.4, backgroundColor: '#DC2626', borderColor: '#DC2626', color: '#FFFFFF' }}
+                >
+                  Scan Next Pass
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Inline Keyframe Animations */}
+      <style>{`
+        @keyframes scanLaser {
+          0% { top: 15%; opacity: 0.8; }
+          50% { top: 85%; opacity: 1; }
+          100% { top: 15%; opacity: 0.8; }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes scaleIn {
+          from { opacity: 0; transform: scale(0.92); }
+          to { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
     </div>
   );
 }

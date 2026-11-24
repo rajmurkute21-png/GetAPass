@@ -7,14 +7,14 @@
  */
 
 import { where } from 'firebase/firestore';
-import { COLLECTIONS, generateDocId } from '../constants/firestoreSchema';
+import { COLLECTIONS, generateDocId } from '../constants/firestoreSchema.js';
 import {
   fetchPaginatedCollection,
   writeDocument,
   updateDocumentFields,
   deleteDocumentById,
   subscribeToCollection
-} from './firestoreService';
+} from './firestoreService.js';
 
 /**
  * Creates a notification for a target user.

@@ -8,13 +8,13 @@
  */
 
 import { where } from 'firebase/firestore';
-import { COLLECTIONS, STATUS_ENUMS, generateTransactionId } from '../constants/firestoreSchema';
+import { COLLECTIONS, STATUS_ENUMS, generateTransactionId } from '../constants/firestoreSchema.js';
 import {
   fetchPaginatedCollection,
   writeDocument,
   subscribeToCollection
-} from './firestoreService';
-import { canManagePlatform } from './permissionService';
+} from './firestoreService.js';
+import { canManagePlatform } from './permissionService.js';
 
 /**
  * Creates an authoritative transaction ledger entry upon booking payment.

@@ -682,12 +682,12 @@ export default function App() {
         prev.map((p) =>
           (p.id === code || p.passId === code)
             ? {
-                ...p,
-                status: 'Used',
-                checkedIn: true,
-                checkedInAt: Date.now(),
-                checkedInGate: checkinItem.gate || 'Gate A'
-              }
+              ...p,
+              status: 'Used',
+              checkedIn: true,
+              checkedInAt: Date.now(),
+              checkedInGate: checkinItem.gate || 'Gate A'
+            }
             : p
         )
       );
@@ -696,12 +696,12 @@ export default function App() {
         const updated = stored.map((p) =>
           (p.id === code || p.passId === code)
             ? {
-                ...p,
-                status: 'Used',
-                checkedIn: true,
-                checkedInAt: Date.now(),
-                checkedInGate: checkinItem.gate || 'Gate A'
-              }
+              ...p,
+              status: 'Used',
+              checkedIn: true,
+              checkedInAt: Date.now(),
+              checkedInGate: checkinItem.gate || 'Gate A'
+            }
             : p
         );
         saveStoredUserPasses(currentUser.uid, updated);
@@ -1146,10 +1146,10 @@ export default function App() {
             activeView === 'profile' && profileSubTab === 'my-passes'
               ? 'my-passes'
               : activeView === 'profile'
-              ? 'profile'
-              : activeView === 'events'
-              ? 'events'
-              : 'landing'
+                ? 'profile'
+                : activeView === 'events'
+                  ? 'events'
+                  : 'landing'
           }
           onSelect={handleMobileNavSelect}
         />

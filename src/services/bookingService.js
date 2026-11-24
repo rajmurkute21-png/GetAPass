@@ -27,21 +27,22 @@ import {
   where,
   runTransaction
 } from 'firebase/firestore';
-import { db } from '../config/firebase';
-import { canValidatePasses, canManagePlatform } from './permissionService';
+import { db } from '../config/firebase.js';
+import { canValidatePasses, canManagePlatform } from './permissionService.js';
 import {
   COLLECTIONS,
   STATUS_ENUMS,
   generateBookingId,
   generatePassId,
   validateBookingPayload
-} from '../constants/firestoreSchema';
-import { fetchPaginatedCollection, getServerTimestamp } from './firestoreService';
-import { createDigitalPass } from './passService';
-import { createTransaction } from './transactionService';
-import { createNotification } from './notificationService';
-import { recordCheckInAuditLog } from './verifierService';
-import { verifyAndConfirmPayment } from './paymentVerificationService';
+} from '../constants/firestoreSchema.js';
+import { fetchPaginatedCollection, getServerTimestamp } from './firestoreService.js';
+import { createDigitalPass } from './passService.js';
+import { createTransaction } from './transactionService.js';
+import { createNotification } from './notificationService.js';
+import { recordCheckInAuditLog } from './verifierService.js';
+import { verifyAndConfirmPayment } from './paymentVerificationService.js';
+import { verifyAndCheckInPassAuthoritative } from './passVerificationEngine.js';
 
 export const BOOKINGS_COLLECTION = COLLECTIONS.BOOKINGS;
 export const BOOKINGS_STORAGE_KEY_PREFIX = 'gateapass_bookings_';
@@ -943,288 +944,10 @@ export async function verifyAndCheckinPass({
   verifierUser = null,
   gate = 'Gate A'
 }) {
-  if (!passCode) {
-    return { valid: false, reason: 'Pass identifier or QR code missing.' };
-  }
-
-  if (!canValidatePasses(verifierUser)) {
-    throw new Error('Unauthorized: Only authorized verifiers, organizers, or administrators can validate passes.');
-  }
-
-  const cleanCode = String(passCode).trim();
-  const now = Date.now();
-
-  // 1. Try finding in Firestore /passes or /bookings
-  if (db) {
-    try {
-      // 1a. Check dedicated /passes collection first
-      let targetDocSnap = await getDoc(doc(db, COLLECTIONS.PASSES, cleanCode));
-      let isDedicatedPass = targetDocSnap.exists();
-      let docRef = isDedicatedPass ? doc(db, COLLECTIONS.PASSES, cleanCode) : null;
-      let matchedPassData = null;
-      let parentBookingData = null;
-
-      if (isDedicatedPass) {
-        matchedPassData = targetDocSnap.data();
-      } else {
-        // 1b. Check if cleanCode matches a direct booking doc
-        targetDocSnap = await getDoc(doc(db, BOOKINGS_COLLECTION, cleanCode));
-        if (targetDocSnap.exists()) {
-          docRef = doc(db, BOOKINGS_COLLECTION, cleanCode);
-          parentBookingData = targetDocSnap.data();
-          matchedPassData = Array.isArray(parentBookingData.passes) && parentBookingData.passes.length > 0
-            ? parentBookingData.passes[0]
-            : (parentBookingData.pass || parentBookingData);
-        } else {
-          // 1c. Search /bookings where passId == cleanCode or passIds contains cleanCode
-          const qPass = query(collection(db, BOOKINGS_COLLECTION), where('passId', '==', cleanCode));
-          let passSnap = await getDocs(qPass);
-
-          if (passSnap.empty) {
-            const qPassIds = query(collection(db, BOOKINGS_COLLECTION), where('passIds', 'array-contains', cleanCode));
-            passSnap = await getDocs(qPassIds);
-          }
-
-          if (!passSnap.empty) {
-            targetDocSnap = passSnap.docs[0];
-            docRef = targetDocSnap.ref;
-            parentBookingData = targetDocSnap.data();
-
-            if (Array.isArray(parentBookingData.passes)) {
-              matchedPassData = parentBookingData.passes.find(
-                (p) => p.passId === cleanCode || p.id === cleanCode
-              ) || parentBookingData.passes[0];
-            } else {
-              matchedPassData = parentBookingData.pass || parentBookingData;
-            }
-          }
-        }
-      }
-
-      if (matchedPassData) {
-        const passRecord = matchedPassData;
-
-        // Check Event scope
-        if (eventId && passRecord.eventId && passRecord.eventId !== eventId) {
-          await recordCheckInAuditLog({
-            passId: passRecord.passId || cleanCode,
-            bookingId: passRecord.bookingId,
-            eventId: passRecord.eventId,
-            eventTitle: passRecord.eventTitle,
-            attendeeName: passRecord.attendeeName || passRecord.participantName,
-            participantUid: passRecord.participantUid,
-            organizerUid: passRecord.organizerUid,
-            verifierUid: verifierUser?.uid,
-            verifierName: verifierUser?.name || verifierUser?.displayName,
-            gate,
-            status: STATUS_ENUMS.CHECK_IN.DENIED,
-            reason: `Wrong event: expected ${eventId}, pass was for ${passRecord.eventId}`
-          }).catch(() => {});
-
-          return {
-            valid: false,
-            reason: `Pass belongs to different event: "${passRecord.eventTitle || passRecord.eventId}".`,
-            booking: passRecord
-          };
-        }
-
-        // Duplicate / already checked-in check
-        if (passRecord.checkedIn || passRecord.status === STATUS_ENUMS.PASS.USED) {
-          await recordCheckInAuditLog({
-            passId: passRecord.passId || cleanCode,
-            bookingId: passRecord.bookingId,
-            eventId: passRecord.eventId,
-            eventTitle: passRecord.eventTitle,
-            attendeeName: passRecord.attendeeName || passRecord.participantName,
-            participantUid: passRecord.participantUid,
-            organizerUid: passRecord.organizerUid,
-            verifierUid: verifierUser?.uid,
-            verifierName: verifierUser?.name || verifierUser?.displayName,
-            gate,
-            status: STATUS_ENUMS.CHECK_IN.DUPLICATE,
-            reason: 'Pass already scanned previously'
-          }).catch(() => {});
-
-          return {
-            valid: false,
-            reason: `Pass already used. Checked in at ${passRecord.checkedInAt ? new Date(passRecord.checkedInAt).toLocaleTimeString() : 'earlier today'} at ${passRecord.gate || 'Gate'}.`,
-            booking: passRecord,
-            alreadyUsed: true
-          };
-        }
-
-        // Status check
-        if (passRecord.status && passRecord.status !== STATUS_ENUMS.PASS.ACTIVE) {
-          await recordCheckInAuditLog({
-            passId: passRecord.passId || cleanCode,
-            bookingId: passRecord.bookingId,
-            eventId: passRecord.eventId,
-            eventTitle: passRecord.eventTitle,
-            attendeeName: passRecord.attendeeName || passRecord.participantName,
-            participantUid: passRecord.participantUid,
-            organizerUid: passRecord.organizerUid,
-            verifierUid: verifierUser?.uid,
-            verifierName: verifierUser?.name || verifierUser?.displayName,
-            gate,
-            status: STATUS_ENUMS.CHECK_IN.DENIED,
-            reason: `Pass status is ${passRecord.status}`
-          }).catch(() => {});
-
-          return {
-            valid: false,
-            reason: `Pass status is "${passRecord.status}" (expected Active).`,
-            booking: passRecord
-          };
-        }
-
-        // Authorized: Update ONLY this individual pass
-        const checkinUpdate = {
-          checkedIn: true,
-          checkedInAt: now,
-          checkedInBy: verifierUser?.uid || 'verifier',
-          verifierName: verifierUser?.name || verifierUser?.displayName || 'Gate Verifier',
-          gate,
-          status: STATUS_ENUMS.PASS.USED,
-          updatedAt: now
-        };
-
-        // If it was in /passes, update /passes document
-        if (isDedicatedPass && docRef) {
-          await updateDoc(docRef, checkinUpdate);
-
-          // Also synchronize matching pass inside parent booking in /bookings
-          if (passRecord.bookingId) {
-            try {
-              const bRef = doc(db, BOOKINGS_COLLECTION, passRecord.bookingId);
-              const bSnap = await getDoc(bRef);
-              if (bSnap.exists()) {
-                const bData = bSnap.data();
-                if (Array.isArray(bData.passes)) {
-                  const updatedPasses = bData.passes.map((p) =>
-                    (p.passId === cleanCode || p.id === cleanCode) ? { ...p, ...checkinUpdate } : p
-                  );
-                  await updateDoc(bRef, { passes: updatedPasses, updatedAt: now });
-                }
-              }
-            } catch (syncErr) {
-              console.warn('[GateApass Bookings] Booking pass status sync notice:', syncErr);
-            }
-          }
-        } else if (docRef && parentBookingData) {
-          // If updated from parent booking directly
-          if (Array.isArray(parentBookingData.passes)) {
-            const updatedPasses = parentBookingData.passes.map((p) =>
-              (p.passId === cleanCode || p.id === cleanCode) ? { ...p, ...checkinUpdate } : p
-            );
-            await updateDoc(docRef, { passes: updatedPasses, updatedAt: now });
-          } else {
-            await updateDoc(docRef, checkinUpdate);
-          }
-        }
-
-        // Synchronize local memory & storage caches
-        if (passRecord.participantUid) {
-          const userPasses = getStoredUserPasses(passRecord.participantUid);
-          const updatedUserPasses = userPasses.map((p) =>
-            (p.passId === cleanCode || p.id === cleanCode) ? { ...p, ...checkinUpdate } : p
-          );
-          saveStoredUserPasses(passRecord.participantUid, updatedUserPasses);
-
-          const userBookings = getStoredUserBookings(passRecord.participantUid);
-          const updatedUserBookings = userBookings.map((b) => {
-            if (b.bookingId === passRecord.bookingId && Array.isArray(b.passes)) {
-              return {
-                ...b,
-                passes: b.passes.map((p) =>
-                  (p.passId === cleanCode || p.id === cleanCode) ? { ...p, ...checkinUpdate } : p
-                )
-              };
-            }
-            return b;
-          });
-          saveStoredUserBookings(passRecord.participantUid, updatedUserBookings);
-        }
-
-        // Record immutable audit log in /checkIns
-        await recordCheckInAuditLog({
-          passId: passRecord.passId || cleanCode,
-          bookingId: passRecord.bookingId,
-          eventId: passRecord.eventId,
-          eventTitle: passRecord.eventTitle,
-          attendeeName: passRecord.attendeeName || passRecord.participantName,
-          participantUid: passRecord.participantUid,
-          organizerUid: passRecord.organizerUid,
-          verifierUid: verifierUser?.uid,
-          verifierName: verifierUser?.name || verifierUser?.displayName,
-          gate,
-          status: STATUS_ENUMS.CHECK_IN.GRANTED,
-          reason: 'Entry Authorized'
-        }).catch((err) => console.warn('[GateApass Bookings] Audit log write notice:', err));
-
-        return {
-          valid: true,
-          message: 'Entry Authorized',
-          attendeeName: passRecord.participantName || passRecord.attendeeName || 'Attendee',
-          eventTitle: passRecord.eventTitle,
-          passType: passRecord.passType || 'Standard Pass',
-          authority: passRecord.authority || 'Participant',
-          booking: { ...passRecord, ...checkinUpdate }
-        };
-      }
-    } catch (err) {
-      console.error('[GateApass Bookings] Firestore pass validation notice:', err);
-    }
-  }
-
-  // 2. Fallback to memory and local storage cache for offline/mock passes
-  let localPass = memoryPassesCache.find(
-    (p) => p.passId === cleanCode || p.id === cleanCode
-  );
-
-  if (!localPass) {
-    for (const b of memoryBookingsCache) {
-      if (Array.isArray(b.passes)) {
-        const found = b.passes.find((p) => p.passId === cleanCode || p.id === cleanCode);
-        if (found) {
-          localPass = found;
-          break;
-        }
-      }
-      if (b.passId === cleanCode || b.bookingId === cleanCode || b.id === cleanCode) {
-        localPass = b.pass || b;
-        break;
-      }
-    }
-  }
-
-  if (localPass) {
-    if (localPass.checkedIn || localPass.status === STATUS_ENUMS.PASS.USED) {
-      return {
-        valid: false,
-        reason: 'Pass already used.',
-        booking: localPass,
-        alreadyUsed: true
-      };
-    }
-
-    localPass.checkedIn = true;
-    localPass.status = STATUS_ENUMS.PASS.USED;
-    localPass.checkedInAt = Date.now();
-    localPass.gate = gate;
-
-    return {
-      valid: true,
-      message: 'Entry Authorized',
-      attendeeName: localPass.participantName || localPass.attendeeName || 'Attendee',
-      eventTitle: localPass.eventTitle,
-      passType: localPass.passType,
-      authority: localPass.authority,
-      booking: localPass
-    };
-  }
-
-  return {
-    valid: false,
-    reason: `Pass "${cleanCode}" not found in system ledger.`
-  };
+  return verifyAndCheckInPassAuthoritative({
+    passDataOrCode: passCode,
+    currentEventId: eventId,
+    verifierUser,
+    gate
+  });
 }
