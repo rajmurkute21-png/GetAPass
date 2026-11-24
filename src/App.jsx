@@ -1100,6 +1100,7 @@ export default function App() {
               >
                 <ProfileView
                   user={currentUser}
+                  currentUser={currentUser}
                   onUpdateUser={setUser}
                   passes={passes}
                   events={events}

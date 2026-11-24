@@ -90,6 +90,7 @@ function isEventExpired(dateStr, timeStr) {
 
 export default function ProfileView({
   user,
+  currentUser: propCurrentUser,
   onUpdateUser,
   passes = [],
   events = [],
@@ -99,7 +100,8 @@ export default function ProfileView({
   initialSubTab = 'profile',
   onLogout,
   onOpenOrganizerStudio,
-  onOpenAdminDashboard
+  onOpenAdminDashboard,
+  onOpenVerifierPortal
 }) {
   const { user: authUser, isAuthenticated, openAuthModal, reloadUser, resendVerification } = useAuth();
   const [activeTab, setActiveTab] = useState(initialSubTab); // 'profile' | 'my-passes' | 'pass-history' | 'my-bookings' | 'payments' | ...
@@ -120,13 +122,25 @@ export default function ProfileView({
     }
   }, [initialSubTab]);
 
-  const activeUser = authUser || user;
+  // Authoritative user resolution from AuthContext or props
+  const activeUser = authUser || propCurrentUser || user || null;
+  const currentUser = activeUser;
 
   // Edit form state
   const [name, setName] = useState(() => activeUser?.displayName || activeUser?.name || '');
   const [email, setEmail] = useState(() => activeUser?.email || '');
   const [phone, setPhone] = useState(() => activeUser?.phone || '');
   const [college, setCollege] = useState(() => activeUser?.college || '');
+
+  // Synchronize state when active user loads asynchronously
+  React.useEffect(() => {
+    if (activeUser) {
+      if (activeUser.displayName || activeUser.name) setName(activeUser.displayName || activeUser.name);
+      if (activeUser.email) setEmail(activeUser.email);
+      if (activeUser.phone) setPhone(activeUser.phone);
+      if (activeUser.college) setCollege(activeUser.college);
+    }
+  }, [activeUser]);
 
   const getInitials = (str) => {
     if (!str) return 'AS';

@@ -106,6 +106,7 @@ export default function Ticket3D({
     gate = 'Gate A',
     status = 'Active',
     price = 499,
+    unitPrice,
     amount,
     bookingId = '',
     paymentMethod = 'UPI',

@@ -389,7 +389,7 @@ export default function BookingView({
         setIsSuccess(true);
 
         setBookingConfirmation({
-          bookingReference: generatedRef,
+          bookingReference: paymentRef,
           issuedPasses: selectedPassesList.map((p, idx) => ({
             id: `GP-2026-${idx + 1}`,
             passId: `GP-2026-${idx + 1}`,
