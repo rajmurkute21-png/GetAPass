@@ -10,25 +10,91 @@ import {
   where
 } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
-import { db, auth } from '../config/firebase';
-import { INITIAL_EVENTS } from '../data/mockData';
-import { savePassType } from '../data/passTypes';
-import { fetchPaginatedCollection } from './firestoreService';
+import { db, auth } from '../config/firebase.js';
+import { INITIAL_EVENTS } from '../data/mockData.js';
+import { savePassType } from '../data/passTypes.js';
+import { fetchPaginatedCollection } from './firestoreService.js';
 
 export const EVENTS_COLLECTION = 'events';
 export const EVENTS_STORAGE_KEY = 'gateapass_events';
 
 export const PUBLISHED_STATUSES = ['Active', 'Published'];
+export const EVENT_AUDIT_LOGS_KEY = 'gateapass_event_audit_logs';
 
 /**
- * Standardizes event status to canonical 'Active', 'Published', or 'Draft'.
+ * Standardizes event status across the application.
+ * Supported canonical statuses: Draft, Pending, Active, Published, Disabled, Removed, Rejected, Cancelled.
  */
 export function normalizeEventStatus(status) {
   if (!status) return 'Active';
   const s = String(status).trim().toLowerCase();
   if (s === 'draft') return 'Draft';
+  if (s === 'pending') return 'Pending';
   if (s === 'published') return 'Published';
+  if (s === 'active') return 'Active';
+  if (s === 'disabled') return 'Disabled';
+  if (s === 'removed') return 'Removed';
+  if (s === 'rejected') return 'Rejected';
+  if (s === 'cancelled' || s === 'terminated') return 'Cancelled';
   return 'Active';
+}
+
+/**
+ * Logs event management actions to audit trail (localStorage & Firestore eventAuditLogs)
+ */
+export async function logEventAudit({ eventId, eventTitle, action, reason, performedBy, metadata = {} }) {
+  const auditEntry = {
+    id: `AUDIT-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`,
+    eventId: eventId || 'UNKNOWN',
+    eventTitle: eventTitle || 'Untitled Event',
+    action, // 'AUTHORIZE_EVENT' | 'REJECT_EVENT' | 'DISABLE_EVENT' | 'EVENT_SOFT_REMOVED' | 'EVENT_PERMANENTLY_DELETED'
+    reason: reason || 'N/A',
+    performedBy: performedBy?.email || performedBy?.displayName || performedBy?.uid || 'Admin / Security Desk',
+    performerRole: performedBy?.role || 'admin',
+    timestamp: Date.now(),
+    dateString: new Date().toISOString(),
+    ...metadata
+  };
+
+  // Local storage logging
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = window.localStorage.getItem(EVENT_AUDIT_LOGS_KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      list.unshift(auditEntry);
+      window.localStorage.setItem(EVENT_AUDIT_LOGS_KEY, JSON.stringify(list.slice(0, 200)));
+    }
+  } catch (err) {
+    console.warn('[GateApass Audit] Failed to save audit log locally:', err);
+  }
+
+  // Firestore logging
+  if (db) {
+    try {
+      await setDoc(doc(collection(db, 'eventAuditLogs'), auditEntry.id), sanitizeForFirestore(auditEntry));
+    } catch (err) {
+      console.warn('[GateApass Audit] Firestore audit log notice:', err);
+    }
+  }
+
+  return auditEntry;
+}
+
+/**
+ * Retrieves audit logs for events
+ */
+export function getEventAuditLogs(eventId = null) {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = window.localStorage.getItem(EVENT_AUDIT_LOGS_KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      if (eventId) {
+        return list.filter((l) => l.eventId === eventId);
+      }
+      return list;
+    }
+  } catch {}
+  return [];
 }
 
 const LEGACY_PREDEFINED_EVENT_IDS = [
@@ -120,7 +186,9 @@ export function saveStoredLocalEvents(eventsArray) {
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(eventsArray));
-      window.dispatchEvent(new CustomEvent('gateapass_events_changed', { detail: eventsArray }));
+      if (typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gateapass_events_changed', { detail: eventsArray }));
+      }
     }
   } catch (err) {
     console.warn('[GateApass] Could not save events to localStorage:', err);
@@ -732,6 +800,174 @@ export async function publishEvent(id, currentUser) {
  */
 export async function unpublishEvent(id, currentUser) {
   return updateEvent(id, { status: 'Draft' }, currentUser);
+}
+
+/**
+ * Authorizes / Approves an event for public discovery and booking.
+ * Validates admin role, prevents double authorization, verifies required event fields.
+ */
+export async function authorizeEvent(id, currentUser) {
+  if (!id) throw new Error('Event ID is required for authorization.');
+  if (!currentUser || currentUser.role !== 'admin') {
+    throw new Error('Unauthorized: Only administrators can authorize events.');
+  }
+
+  const currentLocal = getStoredLocalEvents();
+  const event = currentLocal.find((e) => e.id === id);
+  if (!event) throw new Error('Event not found.');
+
+  const currentStatus = normalizeEventStatus(event.status);
+  if (currentStatus === 'Active' || currentStatus === 'Published') {
+    throw new Error('This event is already authorized and active.');
+  }
+
+  // Verify completeness of event
+  if (!event.title?.trim() && !event.name?.trim()) {
+    throw new Error('Event must have a title before authorization.');
+  }
+  if (!event.date?.trim()) {
+    throw new Error('Event must have a scheduled date before authorization.');
+  }
+  if (!event.venue?.trim()) {
+    throw new Error('Event must have a venue before authorization.');
+  }
+
+  const updates = {
+    status: 'Active',
+    authorizedAt: Date.now(),
+    authorizedBy: currentUser.email || currentUser.uid
+  };
+
+  const updated = await updateEvent(id, updates, currentUser);
+
+  await logEventAudit({
+    eventId: id,
+    eventTitle: event.title || event.name,
+    action: 'AUTHORIZE_EVENT',
+    reason: 'Verified and authorized by platform administrator.',
+    performedBy: currentUser
+  });
+
+  return updated;
+}
+
+/**
+ * Rejects an event submission with an explicit reason.
+ */
+export async function rejectEvent(id, reason, currentUser) {
+  if (!id) throw new Error('Event ID is required.');
+  if (!currentUser || currentUser.role !== 'admin') {
+    throw new Error('Unauthorized: Only administrators can reject events.');
+  }
+  if (!reason || !reason.trim()) {
+    throw new Error('Please provide an explicit rejection reason.');
+  }
+
+  const currentLocal = getStoredLocalEvents();
+  const event = currentLocal.find((e) => e.id === id);
+  if (!event) throw new Error('Event not found.');
+
+  const updates = {
+    status: 'Rejected',
+    rejectionReason: reason.trim(),
+    rejectedAt: Date.now(),
+    rejectedBy: currentUser.email || currentUser.uid
+  };
+
+  const updated = await updateEvent(id, updates, currentUser);
+
+  await logEventAudit({
+    eventId: id,
+    eventTitle: event.title || event.name,
+    action: 'REJECT_EVENT',
+    reason: reason.trim(),
+    performedBy: currentUser
+  });
+
+  return updated;
+}
+
+/**
+ * Disables an event (temporarily halts bookings and discovery without deleting).
+ */
+export async function disableEvent(id, reason, currentUser) {
+  if (!id) throw new Error('Event ID is required.');
+  const currentLocal = getStoredLocalEvents();
+  const event = currentLocal.find((e) => e.id === id);
+  if (!event) throw new Error('Event not found.');
+
+  if (currentUser && !canManageEvent(currentUser, event)) {
+    throw new Error('Permission denied: You do not have permission to disable this event.');
+  }
+
+  const updates = {
+    status: 'Disabled',
+    disableReason: (reason || 'Disabled by management').trim(),
+    disabledAt: Date.now(),
+    disabledBy: currentUser?.email || currentUser?.uid
+  };
+
+  const updated = await updateEvent(id, updates, currentUser);
+
+  await logEventAudit({
+    eventId: id,
+    eventTitle: event.title || event.name,
+    action: 'DISABLE_EVENT',
+    reason: reason || 'Administrative pause',
+    performedBy: currentUser
+  });
+
+  return updated;
+}
+
+/**
+ * Removes or permanently deletes an unauthorized or inappropriate event.
+ * Preserves audit trail and protects existing user tickets/bookings.
+ */
+export async function removeUnauthorizedEvent(
+  id,
+  { reason, permanent = false, preserveBookings = true },
+  currentUser
+) {
+  if (!id) throw new Error('Event ID is required for removal.');
+  if (!reason || !reason.trim()) {
+    throw new Error('Please provide a mandatory reason for event removal.');
+  }
+
+  const currentLocal = getStoredLocalEvents();
+  const event = currentLocal.find((e) => e.id === id);
+  if (!event) throw new Error('Event not found.');
+
+  if (currentUser && !canManageEvent(currentUser, event)) {
+    throw new Error('Permission denied: You do not have permission to remove this event.');
+  }
+
+  await logEventAudit({
+    eventId: id,
+    eventTitle: event.title || event.name,
+    action: permanent ? 'EVENT_PERMANENTLY_DELETED' : 'EVENT_SOFT_REMOVED',
+    reason: reason.trim(),
+    performedBy: currentUser,
+    metadata: {
+      permanent,
+      preserveBookings,
+      priorStatus: event.status
+    }
+  });
+
+  if (permanent) {
+    return deleteEvent(id, currentUser);
+  } else {
+    // Soft removal: marks event as Removed, hides from discovery, preserves bookings
+    const updates = {
+      status: 'Removed',
+      removalReason: reason.trim(),
+      removedAt: Date.now(),
+      removedBy: currentUser?.email || currentUser?.uid,
+      bookingsPreserved: Boolean(preserveBookings)
+    };
+    return updateEvent(id, updates, currentUser);
+  }
 }
 
 /**

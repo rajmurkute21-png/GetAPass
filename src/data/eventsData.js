@@ -23,7 +23,13 @@ import {
   PUBLISHED_STATUSES,
   normalizeEventStatus,
   subscribeToOrganizerEvents,
-  subscribeToAllEventsAdmin
+  subscribeToAllEventsAdmin,
+  authorizeEvent,
+  rejectEvent,
+  disableEvent,
+  removeUnauthorizedEvent,
+  logEventAudit,
+  getEventAuditLogs
 } from '../services/eventService';
 import { INITIAL_EVENTS } from './mockData';
 
@@ -41,7 +47,13 @@ export {
   canManageEvent,
   canCreateEvents,
   PUBLISHED_STATUSES,
-  normalizeEventStatus
+  normalizeEventStatus,
+  authorizeEvent,
+  rejectEvent,
+  disableEvent,
+  removeUnauthorizedEvent,
+  logEventAudit,
+  getEventAuditLogs
 };
 
 /**

@@ -2,13 +2,22 @@ import React, { useState, useEffect } from 'react';
 import {
   Plus,
   CheckCircle,
+  CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   Sparkles,
   Layers,
   Eye,
   Save,
   RotateCcw,
-  Shield
+  Shield,
+  ShieldAlert,
+  Trash2,
+  Pause,
+  Play,
+  XCircle,
+  FileText,
+  Clock
 } from 'lucide-react';
 import AdminSidebar from '../components/navigation/AdminSidebar';
 import Button from '../components/common/Button';
@@ -26,6 +35,14 @@ import { getAllTemplates, saveCustomTemplate } from '../data/passTemplates';
 import { subscribeToUsers, assignUserRole } from '../services/userService';
 import { ROLES, ALL_ROLES, ROLE_LABELS } from '../constants/roles';
 import {
+  authorizeEvent,
+  rejectEvent,
+  disableEvent,
+  removeUnauthorizedEvent,
+  getEventAuditLogs,
+  normalizeEventStatus
+} from '../data/eventsData';
+import {
   CATEGORIES,
   AUTHORITIES,
   PERMISSION_AREAS,
@@ -38,6 +55,10 @@ export default function AdminView({
   participants = [],
   onUpdateParticipants,
   onCreateEvent,
+  onAuthorizeEvent,
+  onRejectEvent,
+  onDisableEvent,
+  onRemoveUnauthorizedEvent,
   onLogout,
   onBackToPortal,
   currentUser = null,
@@ -51,6 +72,28 @@ export default function AdminView({
     }
   }, [initialTab]);
   const [selectedRowIds, setSelectedRowIds] = useState([]);
+
+  // Event Management and Authorization State
+  const [eventStatusFilter, setEventStatusFilter] = useState('all');
+  const [processingEventId, setProcessingEventId] = useState(null);
+  const [eventActionFeedback, setEventActionFeedback] = useState(null);
+  const [removalModal, setRemovalModal] = useState({
+    isOpen: false,
+    event: null,
+    reason: '',
+    permanent: false,
+    preserveBookings: true
+  });
+  const [rejectionModal, setRejectionModal] = useState({
+    isOpen: false,
+    event: null,
+    reason: ''
+  });
+  const [auditModal, setAuditModal] = useState({
+    isOpen: false,
+    event: null,
+    logs: []
+  });
 
   // Create Event Modal State
   const [isCreateEventOpen, setIsCreateEventOpen] = useState(false);
@@ -109,6 +152,160 @@ export default function AdminView({
     } finally {
       setRoleUpdatingUid(null);
     }
+  };
+
+  // Event Action Handlers (Authorization, Removal, Disabling, Rejection)
+  const handleAuthorizeAction = async (ev) => {
+    if (!ev || processingEventId) return;
+    setProcessingEventId(ev.id);
+    setEventActionFeedback(null);
+    try {
+      if (onAuthorizeEvent) {
+        await onAuthorizeEvent(ev.id);
+      } else {
+        await authorizeEvent(ev.id, currentUser);
+      }
+      setEventActionFeedback({
+        type: 'success',
+        message: `Event "${ev.title || ev.name}" has been authorized and published to discovery!`
+      });
+    } catch (err) {
+      setEventActionFeedback({
+        type: 'error',
+        message: err?.message || 'Failed to authorize event.'
+      });
+    } finally {
+      setProcessingEventId(null);
+    }
+  };
+
+  const handleDisableAction = async (ev) => {
+    if (!ev || processingEventId) return;
+    const reason = window.prompt(`Provide reason for disabling "${ev.title || ev.name}":`, 'Administrative verification pause');
+    if (reason === null) return;
+    setProcessingEventId(ev.id);
+    setEventActionFeedback(null);
+    try {
+      if (onDisableEvent) {
+        await onDisableEvent(ev.id, reason);
+      } else {
+        await disableEvent(ev.id, reason, currentUser);
+      }
+      setEventActionFeedback({
+        type: 'success',
+        message: `Event "${ev.title || ev.name}" has been disabled and hidden from public discovery.`
+      });
+    } catch (err) {
+      setEventActionFeedback({
+        type: 'error',
+        message: err?.message || 'Failed to disable event.'
+      });
+    } finally {
+      setProcessingEventId(null);
+    }
+  };
+
+  const handleOpenRemovalModal = (ev) => {
+    setRemovalModal({
+      isOpen: true,
+      event: ev,
+      reason: '',
+      permanent: false,
+      preserveBookings: true
+    });
+  };
+
+  const handleConfirmRemoval = async (e) => {
+    e?.preventDefault();
+    if (!removalModal.event) return;
+    if (!removalModal.reason.trim()) {
+      alert('Please enter a mandatory reason for event removal.');
+      return;
+    }
+    const targetEvent = removalModal.event;
+    setProcessingEventId(targetEvent.id);
+    setEventActionFeedback(null);
+    try {
+      if (onRemoveUnauthorizedEvent) {
+        await onRemoveUnauthorizedEvent(targetEvent.id, {
+          reason: removalModal.reason,
+          permanent: removalModal.permanent,
+          preserveBookings: removalModal.preserveBookings
+        });
+      } else {
+        await removeUnauthorizedEvent(
+          targetEvent.id,
+          {
+            reason: removalModal.reason,
+            permanent: removalModal.permanent,
+            preserveBookings: removalModal.preserveBookings
+          },
+          currentUser
+        );
+      }
+      setEventActionFeedback({
+        type: 'success',
+        message: removalModal.permanent
+          ? `Event "${targetEvent.title}" was permanently deleted and logged to audit trail.`
+          : `Unauthorized event "${targetEvent.title}" was soft-removed. Existing tickets remain preserved.`
+      });
+      setRemovalModal({ isOpen: false, event: null, reason: '', permanent: false, preserveBookings: true });
+    } catch (err) {
+      setEventActionFeedback({
+        type: 'error',
+        message: err?.message || 'Failed to remove event.'
+      });
+    } finally {
+      setProcessingEventId(null);
+    }
+  };
+
+  const handleOpenRejectionModal = (ev) => {
+    setRejectionModal({
+      isOpen: true,
+      event: ev,
+      reason: ''
+    });
+  };
+
+  const handleConfirmRejection = async (e) => {
+    e?.preventDefault();
+    if (!rejectionModal.event) return;
+    if (!rejectionModal.reason.trim()) {
+      alert('Please enter a rejection reason.');
+      return;
+    }
+    const targetEvent = rejectionModal.event;
+    setProcessingEventId(targetEvent.id);
+    setEventActionFeedback(null);
+    try {
+      if (onRejectEvent) {
+        await onRejectEvent(targetEvent.id, rejectionModal.reason);
+      } else {
+        await rejectEvent(targetEvent.id, rejectionModal.reason, currentUser);
+      }
+      setEventActionFeedback({
+        type: 'success',
+        message: `Event "${targetEvent.title}" was rejected with logged audit reason.`
+      });
+      setRejectionModal({ isOpen: false, event: null, reason: '' });
+    } catch (err) {
+      setEventActionFeedback({
+        type: 'error',
+        message: err?.message || 'Failed to reject event.'
+      });
+    } finally {
+      setProcessingEventId(null);
+    }
+  };
+
+  const handleOpenAuditModal = (ev) => {
+    const logs = getEventAuditLogs(ev?.id);
+    setAuditModal({
+      isOpen: true,
+      event: ev,
+      logs
+    });
   };
 
   // Staff State
@@ -474,11 +671,11 @@ export default function AdminView({
             ============================================================== */}
         {activeTab === 'events' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
               <div>
-                <h1 className="text-h1" style={{ fontSize: '32px' }}>Events Management</h1>
+                <h1 className="text-h1" style={{ fontSize: '32px' }}>Events Management & Authorization</h1>
                 <p style={{ fontSize: '14px', color: 'var(--color-muted-text)', marginTop: '4px' }}>
-                  Manage campus festivals, conferences, ticketing tiers, and gates.
+                  Authorize submissions, manage unauthorized/inappropriate events, and control campus discovery.
                 </p>
               </div>
               <Button variant="primary" icon={Plus} onClick={() => setIsCreateEventOpen(true)}>
@@ -486,31 +683,287 @@ export default function AdminView({
               </Button>
             </div>
 
-            <div style={{ border: '1px solid var(--color-gray)', borderRadius: 'var(--radius-card)', overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
-                <thead>
-                  <tr style={{ backgroundColor: 'var(--color-white)', borderBottom: '1px solid var(--color-gray)' }}>
-                    <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase' }}>Event</th>
-                    <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase' }}>Category</th>
-                    <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase' }}>Date</th>
-                    <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase' }}>Venue</th>
-                    <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase' }}>Starting</th>
-                    <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase' }}>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {events.map((ev) => (
-                    <tr key={ev.id} style={{ borderBottom: '1px solid var(--color-gray)' }}>
-                      <td style={{ padding: '16px', fontWeight: 600 }}>{ev.title}</td>
-                      <td style={{ padding: '16px', color: 'var(--color-deep-violet)' }}>{ev.category}</td>
-                      <td style={{ padding: '16px' }}>{ev.date}</td>
-                      <td style={{ padding: '16px', color: 'var(--color-muted-text)' }}>{ev.venue}</td>
-                      <td style={{ padding: '16px', fontWeight: 600 }}>₹{ev.startingPrice}</td>
-                      <td style={{ padding: '16px' }}><StatusBadge status={ev.status} /></td>
+            {/* Action Feedback Banner */}
+            {eventActionFeedback && (
+              <div
+                style={{
+                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  border: eventActionFeedback.type === 'success' ? '1px solid #A7F3D0' : '1px solid #FECACA',
+                  backgroundColor: eventActionFeedback.type === 'success' ? '#ECFDF5' : '#FEF2F2',
+                  color: eventActionFeedback.type === 'success' ? '#065F46' : '#991B1B',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {eventActionFeedback.type === 'success' ? (
+                    <CheckCircle2 size={18} color="#059669" />
+                  ) : (
+                    <AlertTriangle size={18} color="#DC2626" />
+                  )}
+                  <span>{eventActionFeedback.message}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEventActionFeedback(null)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', lineHeight: 1 }}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
+            {/* Status Filter Tabs */}
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {[
+                { id: 'all', label: 'All Events', count: events.length },
+                {
+                  id: 'active',
+                  label: 'Active & Published',
+                  count: events.filter((e) => ['active', 'published'].includes(normalizeEventStatus(e.status).toLowerCase())).length
+                },
+                {
+                  id: 'pending',
+                  label: 'Pending Approval',
+                  count: events.filter((e) => normalizeEventStatus(e.status).toLowerCase() === 'pending').length
+                },
+                {
+                  id: 'draft',
+                  label: 'Draft',
+                  count: events.filter((e) => normalizeEventStatus(e.status).toLowerCase() === 'draft').length
+                },
+                {
+                  id: 'disabled',
+                  label: 'Disabled',
+                  count: events.filter((e) => normalizeEventStatus(e.status).toLowerCase() === 'disabled').length
+                },
+                {
+                  id: 'removed',
+                  label: 'Removed',
+                  count: events.filter((e) => normalizeEventStatus(e.status).toLowerCase() === 'removed').length
+                }
+              ].map((tab) => {
+                const isSelected = eventStatusFilter === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setEventStatusFilter(tab.id)}
+                    style={{
+                      height: '38px',
+                      padding: '0 14px',
+                      borderRadius: '10px',
+                      border: isSelected ? '1.5px solid #7C3AED' : '1px solid #E2E8F0',
+                      backgroundColor: isSelected ? '#7C3AED' : '#FFFFFF',
+                      color: isSelected ? '#FFFFFF' : '#475569',
+                      fontSize: '13px',
+                      fontWeight: isSelected ? 600 : 500,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <span>{tab.label}</span>
+                    <span
+                      style={{
+                        padding: '1px 6px',
+                        borderRadius: '999px',
+                        fontSize: '11px',
+                        backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : '#F1F5F9',
+                        color: isSelected ? '#FFFFFF' : '#64748B'
+                      }}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Events Management Table */}
+            <div style={{ border: '1px solid var(--color-gray)', borderRadius: 'var(--radius-card)', overflow: 'hidden', backgroundColor: '#FFFFFF' }}>
+              <div style={{ overflowX: 'auto', width: '100%' }}>
+                <table style={{ width: '100%', minWidth: '800px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: 'var(--color-off-white)', borderBottom: '1px solid var(--color-gray)' }}>
+                      <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase', color: '#64748B' }}>Event</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase', color: '#64748B' }}>Category</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase', color: '#64748B' }}>Date</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase', color: '#64748B' }}>Venue</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase', color: '#64748B' }}>Starting</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase', color: '#64748B' }}>Status</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', textTransform: 'uppercase', color: '#64748B', textAlign: 'right' }}>Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {events
+                      .filter((ev) => {
+                        if (eventStatusFilter === 'all') return true;
+                        const s = normalizeEventStatus(ev.status).toLowerCase();
+                        if (eventStatusFilter === 'active') return s === 'active' || s === 'published';
+                        return s === eventStatusFilter;
+                      })
+                      .map((ev) => {
+                        const canonicalStatus = normalizeEventStatus(ev.status);
+                        const isProcessing = processingEventId === ev.id;
+                        const canAuthorize = !isProcessing && (canonicalStatus === 'Pending' || canonicalStatus === 'Draft' || canonicalStatus === 'Disabled' || canonicalStatus === 'Removed');
+
+                        return (
+                          <tr key={ev.id} style={{ borderBottom: '1px solid var(--color-gray)' }}>
+                            <td style={{ padding: '16px', fontWeight: 600, color: 'var(--color-dark-text)' }}>
+                              <div>{ev.title || ev.name}</div>
+                              {ev.removalReason && (
+                                <div style={{ fontSize: '11px', color: '#DC2626', marginTop: '2px' }}>
+                                  Reason: {ev.removalReason}
+                                </div>
+                              )}
+                              {ev.disableReason && (
+                                <div style={{ fontSize: '11px', color: '#D97706', marginTop: '2px' }}>
+                                  Notice: {ev.disableReason}
+                                </div>
+                              )}
+                            </td>
+                            <td style={{ padding: '16px', color: 'var(--color-deep-violet)' }}>{ev.category}</td>
+                            <td style={{ padding: '16px' }}>{ev.date}</td>
+                            <td style={{ padding: '16px', color: 'var(--color-muted-text)' }}>{ev.venue}</td>
+                            <td style={{ padding: '16px', fontWeight: 600 }}>₹{ev.startingPrice || 0}</td>
+                            <td style={{ padding: '16px' }}>
+                              <StatusBadge status={canonicalStatus} />
+                            </td>
+                            <td style={{ padding: '16px', textAlign: 'right' }}>
+                              <div style={{ display: 'inline-flex', gap: '8px', alignItems: 'center' }}>
+                                {/* Authorize / Approve Action */}
+                                {canAuthorize && (
+                                  <Button
+                                    variant="primary"
+                                    size="sm"
+                                    icon={CheckCircle2}
+                                    disabled={isProcessing || !ev.title}
+                                    onClick={() => handleAuthorizeAction(ev)}
+                                    style={{
+                                      backgroundColor: '#7C3AED',
+                                      fontSize: '12px',
+                                      height: '32px',
+                                      padding: '0 12px'
+                                    }}
+                                  >
+                                    {isProcessing ? 'Authorizing...' : canonicalStatus === 'Pending' ? 'Authorize' : 'Approve & Activate'}
+                                  </Button>
+                                )}
+
+                                {/* Reject Action for Pending Submissions */}
+                                {canonicalStatus === 'Pending' && (
+                                  <button
+                                    type="button"
+                                    disabled={isProcessing}
+                                    onClick={() => handleOpenRejectionModal(ev)}
+                                    style={{
+                                      height: '32px',
+                                      padding: '0 10px',
+                                      borderRadius: '8px',
+                                      border: '1px solid #FECACA',
+                                      backgroundColor: '#FEF2F2',
+                                      color: '#B91C1C',
+                                      fontSize: '12px',
+                                      fontWeight: 600,
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px'
+                                    }}
+                                  >
+                                    <XCircle size={14} />
+                                    Reject
+                                  </button>
+                                )}
+
+                                {/* Disable Action for Active Events */}
+                                {(canonicalStatus === 'Active' || canonicalStatus === 'Published') && (
+                                  <button
+                                    type="button"
+                                    disabled={isProcessing}
+                                    onClick={() => handleDisableAction(ev)}
+                                    title="Disable Event (Temporarily halt bookings)"
+                                    style={{
+                                      height: '32px',
+                                      padding: '0 10px',
+                                      borderRadius: '8px',
+                                      border: '1px solid #FDE68A',
+                                      backgroundColor: '#FFFBEB',
+                                      color: '#B45309',
+                                      fontSize: '12px',
+                                      fontWeight: 600,
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px'
+                                    }}
+                                  >
+                                    <Pause size={14} />
+                                    Disable
+                                  </button>
+                                )}
+
+                                {/* Remove / Delete Unauthorized Action */}
+                                {canonicalStatus !== 'Removed' && (
+                                  <button
+                                    type="button"
+                                    disabled={isProcessing}
+                                    onClick={() => handleOpenRemovalModal(ev)}
+                                    title="Remove Unauthorized Event"
+                                    style={{
+                                      height: '32px',
+                                      padding: '0 10px',
+                                      borderRadius: '8px',
+                                      border: '1px solid #FECACA',
+                                      backgroundColor: '#FEF2F2',
+                                      color: '#DC2626',
+                                      fontSize: '12px',
+                                      fontWeight: 600,
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px'
+                                    }}
+                                  >
+                                    <Trash2 size={14} />
+                                    Remove
+                                  </button>
+                                )}
+
+                                {/* Audit Logs Action */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenAuditModal(ev)}
+                                  title="View Event Audit Trail"
+                                  style={{
+                                    height: '32px',
+                                    padding: '0 8px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #E2E8F0',
+                                    backgroundColor: '#FFFFFF',
+                                    color: '#64748B',
+                                    fontSize: '12px',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center'
+                                  }}
+                                >
+                                  <FileText size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -1912,6 +2365,139 @@ export default function AdminView({
             onChange={(e) => setNewStaff({ ...newStaff, gate: e.target.value })}
           />
         </form>
+      </Modal>
+
+      {/* Unauthorized Event Removal Modal */}
+      <Modal
+        isOpen={removalModal.isOpen}
+        onClose={() => setRemovalModal({ isOpen: false, event: null, reason: '', permanent: false, preserveBookings: true })}
+        title="Remove Unauthorized / Inappropriate Event"
+        confirmText={removalModal.permanent ? 'Permanently Delete' : 'Confirm Soft Removal'}
+        onConfirm={handleConfirmRemoval}
+      >
+        <form onSubmit={handleConfirmRemoval} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ padding: '12px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', color: '#991B1B', fontSize: '13px' }}>
+            <strong>Action Target:</strong> {removalModal.event?.title || removalModal.event?.name}
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+              Reason for Removal / Termination *
+            </label>
+            <textarea
+              value={removalModal.reason}
+              onChange={(e) => setRemovalModal({ ...removalModal, reason: e.target.value })}
+              placeholder="e.g. Unauthorized event, inappropriate content, duplicate submission, cancelled by campus authority"
+              required
+              rows={3}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                border: '1px solid #CBD5E1',
+                fontSize: '13px',
+                fontFamily: 'inherit',
+                outline: 'none'
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={removalModal.preserveBookings}
+                onChange={(e) => setRemovalModal({ ...removalModal, preserveBookings: e.target.checked })}
+              />
+              <span><strong>Preserve existing user bookings / passes</strong> (Recommended: protects attendee records from accidental invalidation)</span>
+            </label>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#B91C1C' }}>
+              <input
+                type="checkbox"
+                checked={removalModal.permanent}
+                onChange={(e) => setRemovalModal({ ...removalModal, permanent: e.target.checked })}
+              />
+              <span><strong>Permanent Deletion:</strong> Permanently erase from database rather than soft-removal</span>
+            </label>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Reject Submission Modal */}
+      <Modal
+        isOpen={rejectionModal.isOpen}
+        onClose={() => setRejectionModal({ isOpen: false, event: null, reason: '' })}
+        title="Reject Event Submission"
+        confirmText="Confirm Rejection"
+        onConfirm={handleConfirmRejection}
+      >
+        <form onSubmit={handleConfirmRejection} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <p style={{ fontSize: '13px', color: 'var(--color-muted-text)', margin: 0 }}>
+            Rejecting will change the status of <strong>{rejectionModal.event?.title}</strong> to Rejected and notify the organizer.
+          </p>
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+              Rejection Reason *
+            </label>
+            <textarea
+              value={rejectionModal.reason}
+              onChange={(e) => setRejectionModal({ ...rejectionModal, reason: e.target.value })}
+              placeholder="e.g. Missing venue confirmation, incomplete safety guidelines"
+              required
+              rows={3}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                border: '1px solid #CBD5E1',
+                fontSize: '13px',
+                fontFamily: 'inherit',
+                outline: 'none'
+              }}
+            />
+          </div>
+        </form>
+      </Modal>
+
+      {/* Event Audit Trail Modal */}
+      <Modal
+        isOpen={auditModal.isOpen}
+        onClose={() => setAuditModal({ isOpen: false, event: null, logs: [] })}
+        title={`Audit Trail: ${auditModal.event?.title || 'Event'}`}
+        confirmText="Close"
+        onConfirm={() => setAuditModal({ isOpen: false, event: null, logs: [] })}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '360px', overflowY: 'auto' }}>
+          {auditModal.logs.length === 0 ? (
+            <p style={{ fontSize: '13px', color: 'var(--color-muted-text)', textAlign: 'center', padding: '16px' }}>
+              No audit logs recorded for this event yet.
+            </p>
+          ) : (
+            auditModal.logs.map((log) => (
+              <div
+                key={log.id}
+                style={{
+                  padding: '12px',
+                  backgroundColor: 'var(--color-off-white)',
+                  border: '1px solid var(--color-gray)',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
+                  <span style={{ color: '#7C3AED' }}>{log.action}</span>
+                  <span style={{ color: 'var(--color-muted-text)' }}>{new Date(log.timestamp).toLocaleString()}</span>
+                </div>
+                <div><strong>Reason:</strong> {log.reason}</div>
+                <div style={{ color: 'var(--color-muted-text)' }}>By: {log.performedBy} ({log.performerRole})</div>
+              </div>
+            ))
+          )}
+        </div>
       </Modal>
     </div>
   );

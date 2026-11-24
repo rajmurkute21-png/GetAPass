@@ -47,7 +47,11 @@ import {
   subscribeToEvents,
   subscribeToOrganizerEvents,
   subscribeToAllEventsAdmin,
-  migrateLocalEventsToFirestore
+  migrateLocalEventsToFirestore,
+  authorizeEvent,
+  rejectEvent,
+  disableEvent,
+  removeUnauthorizedEvent
 } from './data/eventsData';
 
 export default function App() {
@@ -745,6 +749,30 @@ export default function App() {
               onCreateEvent={(newEvent) => {
                 const saved = saveEvent(newEvent, currentUser);
                 setSelectedEvent(saved);
+              }}
+              onAuthorizeEvent={async (eventId) => {
+                const updated = await authorizeEvent(eventId, currentUser);
+                setEvents((prev) => prev.map((e) => (e.id === eventId ? updated : e)));
+                return updated;
+              }}
+              onRejectEvent={async (eventId, reason) => {
+                const updated = await rejectEvent(eventId, reason, currentUser);
+                setEvents((prev) => prev.map((e) => (e.id === eventId ? updated : e)));
+                return updated;
+              }}
+              onDisableEvent={async (eventId, reason) => {
+                const updated = await disableEvent(eventId, reason, currentUser);
+                setEvents((prev) => prev.map((e) => (e.id === eventId ? updated : e)));
+                return updated;
+              }}
+              onRemoveUnauthorizedEvent={async (eventId, options) => {
+                const res = await removeUnauthorizedEvent(eventId, options, currentUser);
+                if (options?.permanent) {
+                  setEvents((prev) => prev.filter((e) => e.id !== eventId));
+                } else {
+                  setEvents((prev) => prev.map((e) => (e.id === eventId ? res : e)));
+                }
+                return res;
               }}
               onLogout={handleLogout}
               onBackToPortal={() => {

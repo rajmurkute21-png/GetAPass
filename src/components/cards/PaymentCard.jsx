@@ -1,11 +1,12 @@
 import React from 'react';
-import { CreditCard, Download } from 'lucide-react';
+import { CreditCard, Download, HelpCircle } from 'lucide-react';
 import StatusBadge from '../common/StatusBadge';
 import Button from '../common/Button';
 
 export default function PaymentCard({
   booking,
-  onDownloadReceipt
+  onDownloadReceipt,
+  onPaymentHelp
 }) {
   const {
     bookingId,
@@ -85,14 +86,27 @@ export default function PaymentCard({
         Your pass has been generated and emailed.
       </p>
 
-      <Button
-        variant="outline"
-        icon={Download}
-        fullWidth
-        onClick={onDownloadReceipt}
-      >
-        Download receipt
-      </Button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <Button
+          variant="outline"
+          icon={Download}
+          fullWidth
+          onClick={onDownloadReceipt}
+        >
+          Download receipt
+        </Button>
+        {onPaymentHelp && (
+          <Button
+            variant="ghost"
+            icon={HelpCircle}
+            fullWidth
+            onClick={() => onPaymentHelp(booking)}
+            style={{ color: '#7C3AED', fontSize: '13px', height: '36px' }}
+          >
+            Payment Support
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

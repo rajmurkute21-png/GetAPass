@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, CreditCard, Smartphone, Building, Wallet, Calendar, Clock, MapPin, ShieldCheck, Ticket } from 'lucide-react';
+import { ArrowLeft, CreditCard, Smartphone, Building, Wallet, Calendar, Clock, MapPin, ShieldCheck, Ticket, HelpCircle, AlertCircle } from 'lucide-react';
 import BookingStepper from '../components/booking/BookingStepper';
 import TicketCategorySelector from '../components/booking/TicketCategorySelector';
 import AttendeeDetailsForm from '../components/booking/AttendeeDetailsForm';
 import AnimatedPaymentButton from '../components/booking/AnimatedPaymentButton';
 import BookingSuccessPanel from '../components/booking/BookingSuccessPanel';
+import PaymentHelpModal from '../components/payment/PaymentHelpModal';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import StatusBadge from '../components/common/StatusBadge';
 import { getPassTypesByEvent } from '../data/passTypes';
+import { acquirePaymentLock, releasePaymentLock } from '../services/paymentSupportService';
 
 /**
  * BookingView
@@ -29,6 +31,7 @@ export default function BookingView({
 
   // Step state: 1: Select, 2: Details, 3: Payment, 4: Confirmed Success
   const [currentStep, setCurrentStep] = useState(1);
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
 
   // Resolve available passes dynamically
   const eventPassTypes = currentEvent.id ? getPassTypesByEvent(currentEvent.id) : [];
@@ -163,10 +166,17 @@ export default function BookingView({
 
   // Step 3: Confirm & Pay execution
   const handleExecutePayment = async () => {
+    const orderLockKey = `order_${currentEvent.id || 'event'}_${fullName || 'attendee'}_${totalAmount}`;
+    if (!acquirePaymentLock(orderLockKey)) {
+      alert('Payment processing is already underway. Please wait a moment.');
+      return;
+    }
+
     setIsProcessing(true);
 
     setTimeout(async () => {
       setIsProcessing(false);
+      releasePaymentLock(orderLockKey);
       setIsSuccess(true);
 
       const generatedRef = `BK-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -219,6 +229,86 @@ export default function BookingView({
       }, 700);
     }, 1200);
   };
+
+  const normalizedStatus = String(currentEvent.status || 'Active').trim().toLowerCase();
+  const isBookingBlocked = ['disabled', 'removed', 'cancelled', 'rejected', 'pending'].includes(normalizedStatus);
+
+  if (isBookingBlocked) {
+    return (
+      <div className="gateapass-booking-view" style={{ textAlign: 'left', padding: '48px 0 64px' }}>
+        <div className="container-desktop" style={{ maxWidth: '640px', margin: '0 auto' }}>
+          <button
+            type="button"
+            onClick={onBack}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '14px',
+              fontWeight: 500,
+              color: 'var(--color-dark-text)',
+              marginBottom: '24px',
+              cursor: 'pointer',
+              backgroundColor: 'transparent',
+              border: 'none',
+              padding: 0
+            }}
+          >
+            <ArrowLeft size={16} />
+            <span>Back to Discovery</span>
+          </button>
+
+          <div
+            style={{
+              padding: '36px 24px',
+              backgroundColor: '#FEF2F2',
+              border: '1px solid #FECACA',
+              borderRadius: '16px',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '16px'
+            }}
+          >
+            <div
+              style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '50%',
+                backgroundColor: '#FEE2E2',
+                color: '#DC2626',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <AlertCircle size={32} />
+            </div>
+
+            <div>
+              <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#991B1B', margin: 0 }}>
+                Event Unavailable for Booking
+              </h2>
+              <p style={{ fontSize: '14px', color: '#7F1D1D', marginTop: '8px', maxWidth: '440px' }}>
+                {normalizedStatus === 'removed'
+                  ? 'This event was removed or terminated by administrators and cannot accept new bookings.'
+                  : normalizedStatus === 'disabled'
+                  ? 'Bookings for this event are currently disabled by management.'
+                  : normalizedStatus === 'pending'
+                  ? 'This event is currently pending administrative review and authorization.'
+                  : 'This event is not available for bookings.'}
+              </p>
+            </div>
+
+            <Button variant="outline" onClick={onBack} style={{ marginTop: '8px' }}>
+              Explore Other Events
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="gateapass-booking-view" style={{ textAlign: 'left', padding: '32px 0 64px' }}>
@@ -553,6 +643,27 @@ export default function BookingView({
                 <p style={{ fontSize: '11px', color: '#94A3B8', textAlign: 'center', margin: 0 }}>
                   Encrypted 256-bit payment · Instant unique QR pass delivery to your account.
                 </p>
+
+                <div style={{ textAlign: 'center', marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsHelpModalOpen(true)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#7C3AED',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <HelpCircle size={15} />
+                    Need Help with Payment?
+                  </button>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -560,17 +671,52 @@ export default function BookingView({
 
         {/* STEP 4: Digital Booking Confirmation Screen */}
         {currentStep === 4 && bookingConfirmation && (
-          <BookingSuccessPanel
-            bookingReference={bookingConfirmation.bookingReference}
-            event={currentEvent}
-            attendee={{ name: fullName, email, phone }}
-            issuedPasses={bookingConfirmation.issuedPasses}
-            totalAmount={totalAmount}
-            paymentMethod={paymentMethod.toUpperCase()}
-            onViewMyPasses={onViewMyPasses || (() => setCurrentStep(1))}
-            onExploreMore={onExploreMore || onBack}
-          />
+          <div>
+            <BookingSuccessPanel
+              bookingReference={bookingConfirmation.bookingReference}
+              event={currentEvent}
+              attendee={{ name: fullName, email, phone }}
+              issuedPasses={bookingConfirmation.issuedPasses}
+              totalAmount={totalAmount}
+              paymentMethod={paymentMethod.toUpperCase()}
+              onViewMyPasses={onViewMyPasses || (() => setCurrentStep(1))}
+              onExploreMore={onExploreMore || onBack}
+            />
+
+            <div style={{ textAlign: 'center', marginTop: '20px' }}>
+              <button
+                type="button"
+                onClick={() => setIsHelpModalOpen(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#7C3AED',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <HelpCircle size={15} />
+                Payment Help & Support Inquiry
+              </button>
+            </div>
+          </div>
         )}
+
+        {/* Global Payment Help Modal */}
+        <PaymentHelpModal
+          isOpen={isHelpModalOpen}
+          onClose={() => setIsHelpModalOpen(false)}
+          bookingId={bookingConfirmation?.bookingReference || ''}
+          transactionId={bookingConfirmation?.bookingReference || ''}
+          amount={totalAmount}
+          eventTitle={currentEvent.title}
+          paymentStatus={isProcessing ? 'processing' : isSuccess ? 'success' : 'idle'}
+          user={{ displayName: fullName, email, phone }}
+        />
       </div>
     </div>
   );

@@ -19,7 +19,7 @@ import {
   startAfter,
   onSnapshot
 } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db } from '../config/firebase.js';
 
 let _inMemoryStore = null;
 

@@ -31,6 +31,12 @@ export default function EventsView({
 
   const filteredEvents = events
     .filter((ev) => {
+      // Exclude unauthorized, pending, disabled, or removed events from public discovery
+      const status = String(ev.status || 'Active').trim().toLowerCase();
+      if (status !== 'active' && status !== 'published') {
+        return false;
+      }
+
       const category = ev.category || '';
       const title = ev.title || ev.name || '';
       const venue = ev.venue || '';
