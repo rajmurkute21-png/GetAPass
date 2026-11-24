@@ -41,6 +41,7 @@ import { createDigitalPass } from './passService';
 import { createTransaction } from './transactionService';
 import { createNotification } from './notificationService';
 import { recordCheckInAuditLog } from './verifierService';
+import { verifyAndConfirmPayment } from './paymentVerificationService';
 
 export const BOOKINGS_COLLECTION = COLLECTIONS.BOOKINGS;
 export const BOOKINGS_STORAGE_KEY_PREFIX = 'gateapass_bookings_';
@@ -186,6 +187,32 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
   const now = Date.now();
   const rawPrefix = String(eventTitle).replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || 'GP';
 
+  const paymentReference = bookingData.paymentReference ||
+    bookingData.paymentDetails?.reference ||
+    `PAY_${now.toString(36).toUpperCase()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+  // 1b. Server-Side Payment Verification & Idempotency / Replay Guard
+  const paymentVerification = await verifyAndConfirmPayment({
+    bookingId,
+    eventId,
+    authoritativeAmount,
+    paymentMethod: bookingData.paymentMethod || 'UPI',
+    paymentDetails: {
+      ...(bookingData.paymentDetails || {}),
+      amountPaid: authoritativeAmount
+    },
+    paymentReference,
+    currentUser
+  });
+
+  if (!paymentVerification.verified || paymentVerification.status === 'FAILED') {
+    throw new Error(`Payment verification declined: ${paymentVerification.reason || 'Payment could not be verified by gateway.'}`);
+  }
+
+  const isConfirmed = paymentVerification.status === 'SUCCESS';
+  const bookingStatus = isConfirmed ? STATUS_ENUMS.BOOKING.ACTIVE : 'Pending Payment';
+  const passStatus = isConfirmed ? STATUS_ENUMS.PASS.ACTIVE : 'Pending Payment';
+
   // 2. Build canonical individual pass list (1 distinct pass per purchased ticket)
   const passList = [];
 
@@ -218,13 +245,14 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
         coverImage: p.coverImage || eventData?.coverImage || eventData?.image || bookingData.coverImage || '',
         eventCover: p.eventCover || eventData?.coverImage || eventData?.image || bookingData.eventCover || '',
         gate: p.gate || bookingData.gate || 'Gate A',
-        status: STATUS_ENUMS.PASS.ACTIVE,
+        status: passStatus,
         checkedIn: false,
         checkedInAt: null,
         checkedInBy: null,
         price: itemPrice,
         unitPrice: itemPrice,
         paymentMethod: bookingData.paymentMethod || 'UPI',
+        paymentReference,
         issuedAt: 'Just now',
         permissions: p.permissions || bookingData.permissions || ['General Area'],
         templateId: p.templateId || bookingData.templateId || 'tpl-classic-violet',
@@ -266,13 +294,14 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
           coverImage: eventData?.coverImage || eventData?.image || bookingData.coverImage || '',
           eventCover: eventData?.coverImage || eventData?.image || bookingData.eventCover || '',
           gate: bookingData.gate || 'Gate A',
-          status: STATUS_ENUMS.PASS.ACTIVE,
+          status: passStatus,
           checkedIn: false,
           checkedInAt: null,
           checkedInBy: null,
           price: itemPrice,
           unitPrice: itemPrice,
           paymentMethod: bookingData.paymentMethod || 'UPI',
+          paymentReference,
           issuedAt: 'Just now',
           permissions: bookingData.permissions || ['General Area'],
           templateId: item.templateId || bookingData.templateId || 'tpl-classic-violet',
@@ -351,8 +380,10 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
     items: validation.items || [],
     passes: passList,
     pass: passList[0], // backward compatibility
-    status: STATUS_ENUMS.BOOKING.ACTIVE,
+    status: bookingStatus,
     paymentMethod: bookingData.paymentMethod || 'UPI',
+    paymentReference,
+    paymentStatus: paymentVerification.status,
     date: bookingData.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
     createdAt: now,
     updatedAt: now
@@ -378,13 +409,15 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
           const eventRef = doc(db, 'events', eventId);
           await runTransaction(db, async (txn) => {
             const eventSnap = await txn.get(eventRef);
-            if (!eventSnap.exists()) return;
+            if (!eventSnap.exists()) {
+              throw new Error('Event does not exist.');
+            }
             const liveEvent = eventSnap.data();
 
             // Status guard
             const liveStatus = String(liveEvent.status || 'Active').toLowerCase();
-            if (['disabled', 'removed', 'cancelled', 'rejected'].includes(liveStatus)) {
-              throw new Error('This event is no longer available for booking.');
+            if (!['active', 'published'].includes(liveStatus)) {
+              throw new Error(`This event is no longer available for booking (status: ${liveEvent.status}).`);
             }
 
             // Inventory check & update
@@ -427,7 +460,11 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
             }
           });
         } catch (invErr) {
-          if (invErr.message.includes('Insufficient tickets') || invErr.message.includes('no longer available')) {
+          if (
+            invErr.message.includes('Insufficient tickets') ||
+            invErr.message.includes('no longer available') ||
+            invErr.message.includes('does not exist')
+          ) {
             throw invErr; // Abort booking on overselling or disabled event!
           }
           console.warn('[GateApass Bookings] Event inventory transaction notice:', invErr.message);
@@ -442,15 +479,17 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
       });
       await setDoc(doc(db, BOOKINGS_COLLECTION, bookingId), cleanBooking);
 
-      // 5c. Save each individual Pass into dedicated /passes collection
-      for (const passItem of passList) {
-        try {
-          await createDigitalPass({
-            ...passItem,
-            customPassId: passItem.passId
-          });
-        } catch (passErr) {
-          console.warn('[GateApass Bookings] Coordinated pass write notice:', passErr);
+      // 5c. Save each individual Pass into dedicated /passes collection (only if payment confirmed)
+      if (isConfirmed) {
+        for (const passItem of passList) {
+          try {
+            await createDigitalPass({
+              ...passItem,
+              customPassId: passItem.passId
+            });
+          } catch (passErr) {
+            console.warn('[GateApass Bookings] Coordinated pass write notice:', passErr);
+          }
         }
       }
 
@@ -463,7 +502,10 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
           participantUid: currentUser.uid,
           organizerUid,
           amount: authoritativeAmount,
-          paymentMethod: newBooking.paymentMethod
+          currency: 'INR',
+          paymentMethod: newBooking.paymentMethod,
+          gatewayRef: paymentReference,
+          status: isConfirmed ? STATUS_ENUMS.TRANSACTION.SUCCESS : 'Pending'
         });
       } catch (txErr) {
         console.warn('[GateApass Bookings] Coordinated transaction write notice:', txErr);

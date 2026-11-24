@@ -664,34 +664,74 @@ export async function fetchEventById(id) {
 export async function createEvent(eventData, currentUser) {
   if (!eventData) throw new Error('Event data is required.');
 
-  if (currentUser && !canCreateEvents(currentUser)) {
+  // 1. Strict Authentication Check
+  if (!currentUser || !currentUser.uid) {
+    throw new Error('Authentication required: You must be signed in with a valid account to create an event.');
+  }
+
+  // 2. Server-Enforced Role Authorization
+  if (!canCreateEvents(currentUser)) {
     throw new Error(
       'Authorization Required: Only authorized organizers or administrators can create campus events. Please contact the administrator to grant organizer privileges.'
     );
   }
 
-  const uniqueId = eventData.id || `evt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  const title = eventData.title || eventData.name || 'Untitled Event';
+  // 3. Strict Input Validation
+  const title = String(eventData.title || eventData.name || '').trim();
+  if (!title || title.length < 3) {
+    throw new Error('Event title must be at least 3 characters long.');
+  }
 
+  const date = String(eventData.date || eventData.startDate || '').trim();
+  if (!date) {
+    throw new Error('Event date is required.');
+  }
+
+  const venue = String(eventData.venue || eventData.venueDetails?.name || '').trim();
+  if (!venue) {
+    throw new Error('Event venue is required.');
+  }
+
+  const startingPrice = Number(eventData.startingPrice !== undefined ? eventData.startingPrice : 0);
+  if (isNaN(startingPrice) || startingPrice < 0) {
+    throw new Error('Event starting price must be a non-negative number.');
+  }
+
+  // 4. Status Authorization Workflow
+  // Non-admin organizers CANNOT create immediately Published/Active events:
+  const isAdminUser = Boolean(currentUser.role === 'admin' || currentUser.isAdmin);
+  let resolvedStatus = 'Pending';
+  if (isAdminUser) {
+    resolvedStatus = eventData.status ? normalizeEventStatus(eventData.status) : 'Active';
+  } else {
+    // Organizers submit for review or save as draft
+    const requestedStatus = normalizeEventStatus(eventData.status);
+    resolvedStatus = requestedStatus === 'Draft' ? 'Draft' : 'Pending';
+  }
+
+  const uniqueId = eventData.id || `evt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+  // 5. Enforce Authenticated UID Ownership (Never trust client-supplied organizerUid)
   const newEvent = {
     ...eventData,
     id: uniqueId,
     title,
     name: title,
-    status: normalizeEventStatus(eventData.status),
-    organizerUid: currentUser?.uid || eventData.organizerUid || '',
-    organizerEmail: currentUser?.email || eventData.organizerEmail || '',
-    organizerName: eventData.organizerName || currentUser?.displayName || 'Event Organizer',
+    status: resolvedStatus,
+    organizerUid: currentUser.uid,
+    organizerEmail: currentUser.email || '',
+    organizerName: eventData.organizerName || currentUser.displayName || currentUser.name || 'Event Organizer',
+    startingPrice,
     createdAt: eventData.createdAt || Date.now(),
     updatedAt: Date.now()
   };
 
-  // 1. Immediately persist to local cache for instant UI response
+  // 6. Immediately persist to local cache for instant UI response
   const currentLocal = getStoredLocalEvents();
   const updatedLocal = [newEvent, ...currentLocal.filter((e) => e.id !== uniqueId)];
   saveStoredLocalEvents(updatedLocal);
 
-  // 2. Persist to Firebase Firestore
+  // 7. Persist to Firebase Firestore
   if (db) {
     try {
       const cleanData = sanitizeForFirestore(newEvent);
@@ -714,23 +754,43 @@ export async function createEvent(eventData, currentUser) {
  */
 export async function updateEvent(id, updates, currentUser) {
   if (!id) throw new Error('Event ID is required for update.');
+  if (!currentUser || !currentUser.uid) {
+    throw new Error('Authentication required: You must be signed in to modify an event.');
+  }
 
   const currentLocal = getStoredLocalEvents();
   const existingEvent = currentLocal.find((e) => e.id === id);
 
-  if (existingEvent && currentUser && !canManageEvent(currentUser, existingEvent)) {
+  if (existingEvent && !canManageEvent(currentUser, existingEvent)) {
     throw new Error('Permission denied: You do not have permission to edit this event.');
   }
 
+  const isAdminUser = Boolean(currentUser.role === 'admin' || currentUser.isAdmin);
   const title = updates.title || updates.name || existingEvent?.title || 'Untitled Event';
+
+  // Non-admins cannot promote their own event status to Active or Published without admin authorization
+  let updatedStatus = existingEvent?.status || 'Pending';
+  if (updates.status) {
+    const targetStatus = normalizeEventStatus(updates.status);
+    if (!isAdminUser && (targetStatus === 'Active' || targetStatus === 'Published')) {
+      if (existingEvent?.status !== 'Active' && existingEvent?.status !== 'Published') {
+        updatedStatus = 'Pending'; // Route to pending review
+      } else {
+        updatedStatus = existingEvent.status;
+      }
+    } else {
+      updatedStatus = targetStatus;
+    }
+  }
+
   const mergedEvent = {
     ...(existingEvent || {}),
     ...updates,
     id,
     title,
     name: title,
-    status: updates.status ? normalizeEventStatus(updates.status) : (existingEvent?.status || 'Active'),
-    organizerUid: existingEvent?.organizerUid || currentUser?.uid || '',
+    status: updatedStatus,
+    organizerUid: existingEvent?.organizerUid || currentUser.uid, // Preserves immutable creator UID
     updatedAt: Date.now()
   };
 
@@ -762,11 +822,14 @@ export async function updateEvent(id, updates, currentUser) {
  */
 export async function deleteEvent(id, currentUser) {
   if (!id) return false;
+  if (!currentUser || !currentUser.uid) {
+    throw new Error('Authentication required: You must be signed in to delete an event.');
+  }
 
   const currentLocal = getStoredLocalEvents();
   const existingEvent = currentLocal.find((e) => e.id === id);
 
-  if (existingEvent && currentUser && !canManageEvent(currentUser, existingEvent)) {
+  if (existingEvent && !canManageEvent(currentUser, existingEvent)) {
     throw new Error('Permission denied: You do not have permission to delete this event.');
   }
 
@@ -789,10 +852,15 @@ export async function deleteEvent(id, currentUser) {
 }
 
 /**
- * Publishes an event (sets status to 'Active').
+ * Publishes an event (requests approval for organizers, directly activates for admins).
  */
 export async function publishEvent(id, currentUser) {
-  return updateEvent(id, { status: 'Active' }, currentUser);
+  if (!currentUser || !currentUser.uid) {
+    throw new Error('Authentication required: You must be signed in to publish an event.');
+  }
+  const isAdminUser = Boolean(currentUser.role === 'admin' || currentUser.isAdmin);
+  const targetStatus = isAdminUser ? 'Active' : 'Pending';
+  return updateEvent(id, { status: targetStatus }, currentUser);
 }
 
 /**

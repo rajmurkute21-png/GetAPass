@@ -12,7 +12,9 @@ import {
   ArrowLeft,
   Info,
   FileText,
-  Check
+  Check,
+  Lock,
+  ShieldAlert
 } from 'lucide-react';
 import Button from '../common/Button';
 import Input from '../common/Input';
@@ -60,7 +62,10 @@ export default function EventCreateWizard({
   onCancel,
   onEventCreated
 }) {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, openAuthModal } = useAuth();
+  const isAdmin = currentUser?.role === 'admin';
+  const isOrganizer = currentUser?.role === 'organizer' || isAdmin;
+
   const [currentStep, setCurrentStep] = useState(1);
   const [templates] = useState(getAllTemplates());
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -71,11 +76,11 @@ export default function EventCreateWizard({
   const [category, setCategory] = useState('Hackathons');
   const [shortDescription, setShortDescription] = useState('');
   const [fullDescription, setFullDescription] = useState('');
-  const [organizerName, setOrganizerName] = useState('Zeal College Pune');
-  const [organizerEmail, setOrganizerEmail] = useState('events@zeal.edu');
-  const [organizerPhone, setOrganizerPhone] = useState('+91 98765 43210');
+  const [organizerName, setOrganizerName] = useState(currentUser?.displayName || currentUser?.name || '');
+  const [organizerEmail, setOrganizerEmail] = useState(currentUser?.email || '');
+  const [organizerPhone, setOrganizerPhone] = useState(currentUser?.phone || '');
   const [website, setWebsite] = useState('');
-  const [status, setStatus] = useState('Active');
+  const [status, setStatus] = useState(isAdmin ? 'Active' : 'Pending');
 
   // Step 2: Schedule & Venue
   const [startDate, setStartDate] = useState('2026-11-15');
@@ -198,6 +203,17 @@ export default function EventCreateWizard({
 
   // Final Publish Event Action
   const handlePublishEvent = async () => {
+    if (!currentUser || !currentUser.uid) {
+      alert('Authentication required: You must be signed in with an authorized account to create events.');
+      if (openAuthModal) openAuthModal('login');
+      return;
+    }
+
+    if (!isOrganizer) {
+      alert('Unauthorized: Only registered Event Organizers and Administrators can create events.');
+      return;
+    }
+
     if (!name.trim()) {
       alert('Event Name is required.');
       setCurrentStep(1);
@@ -232,7 +248,10 @@ export default function EventCreateWizard({
         maxGroupSize: cp.maxSize || null
       }));
 
-      // 1. Construct Event Object
+      // Non-admin organizers must have events routed to 'Pending' for admin review
+      const effectiveStatus = isAdmin ? normalizeEventStatus(status) : 'Pending';
+
+      // 1. Construct Event Object with authoritative UID
       const newEvent = {
         id: uniqueEventId,
         title: name.trim(),
@@ -243,9 +262,9 @@ export default function EventCreateWizard({
         organizerName: organizerName || currentUser?.displayName || 'Event Organizer',
         organizerEmail: organizerEmail || currentUser?.email || '',
         organizerPhone,
-        organizerUid: currentUser?.uid || '',
+        organizerUid: currentUser.uid,
         website,
-        status: normalizeEventStatus(status),
+        status: effectiveStatus,
         date: startDate === endDate || !endDate ? startDate : `${startDate} – ${endDate}`,
         startDate,
         endDate,
@@ -304,6 +323,53 @@ export default function EventCreateWizard({
       setIsSubmitting(false);
     }
   };
+
+  // Guard 1: Logged-out visitors cannot access event creation
+  if (!currentUser || !currentUser.uid) {
+    return (
+      <div style={{ maxWidth: '640px', margin: '48px auto', padding: '40px 32px', textAlign: 'center', backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '24px', boxShadow: '0 8px 30px rgba(0,0,0,0.06)' }}>
+        <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: 'rgba(124, 58, 237, 0.1)', color: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+          <Lock size={32} />
+        </div>
+        <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#0F172A', marginBottom: '8px' }}>
+          Authentication Required to Create Events
+        </h2>
+        <p style={{ fontSize: '15px', color: '#64748B', maxWidth: '440px', margin: '0 auto 24px', lineHeight: '22px' }}>
+          You must be signed in with an authorized Event Organizer or Administrator account to publish campus events.
+        </p>
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+          <Button variant="outline" onClick={onCancel}>
+            Return to Discovery
+          </Button>
+          <Button variant="primary" onClick={() => openAuthModal && openAuthModal('login')}>
+            Sign In with Account
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Guard 2: Logged-in regular participants without organizer permission cannot create events
+  if (!isOrganizer) {
+    return (
+      <div style={{ maxWidth: '640px', margin: '48px auto', padding: '40px 32px', textAlign: 'center', backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '24px', boxShadow: '0 8px 30px rgba(0,0,0,0.06)' }}>
+        <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#EF4444', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+          <ShieldAlert size={32} />
+        </div>
+        <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#0F172A', marginBottom: '8px' }}>
+          Organizer Authorization Required
+        </h2>
+        <p style={{ fontSize: '15px', color: '#64748B', maxWidth: '460px', margin: '0 auto 24px', lineHeight: '22px' }}>
+          Your signed-in account (<strong>{currentUser.email}</strong>) has the <strong>Participant</strong> role. Only registered Event Organizers and Administrators have permission to create and publish campus events.
+        </p>
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+          <Button variant="primary" onClick={onCancel}>
+            Return to Discovery
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="gateapass-event-wizard" style={{ maxWidth: '1060px', margin: '0 auto', textAlign: 'left', padding: '24px 16px 80px' }}>
@@ -1216,15 +1282,24 @@ export default function EventCreateWizard({
                 Continue to Step {currentStep + 1} →
               </Button>
             ) : (
-              <Button
-                variant="primary"
-                icon={CheckCircle}
-                size="large"
-                disabled={isSubmitting}
-                onClick={handlePublishEvent}
-              >
-                {isSubmitting ? 'Publishing to Firestore...' : 'Publish Event & Assign Passes'}
-              </Button>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                {!isAdmin && (
+                  <span style={{ fontSize: '11px', color: 'var(--color-muted-text)', maxWidth: '280px', textAlign: 'right' }}>
+                    Event will be submitted as <strong>Pending</strong> for platform administrator approval.
+                  </span>
+                )}
+                <Button
+                  variant="primary"
+                  icon={CheckCircle}
+                  size="large"
+                  disabled={isSubmitting}
+                  onClick={handlePublishEvent}
+                >
+                  {isSubmitting
+                    ? (isAdmin ? 'Publishing Event...' : 'Submitting for Review...')
+                    : (isAdmin ? 'Publish Event & Go Live' : 'Submit Event for Admin Approval')}
+                </Button>
+              </div>
             )}
           </div>
         </div>

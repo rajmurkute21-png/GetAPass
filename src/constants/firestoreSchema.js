@@ -135,11 +135,17 @@ export function validateBookingPayload({
   const errors = [];
 
   if (!currentUser?.uid) {
-    errors.push('Authenticated user required to create a booking.');
+    errors.push('Authentication required: You must be signed in with a valid account to book tickets.');
   }
 
   if (!eventData || !eventData.id) {
     errors.push('Valid event reference required.');
+  } else {
+    // Validate event is published & available
+    const normStatus = String(eventData.status || 'Active').trim().toLowerCase();
+    if (['disabled', 'removed', 'cancelled', 'rejected', 'pending'].includes(normStatus)) {
+      errors.push(`This event is currently ${eventData.status || 'Unavailable'} and is not available for booking.`);
+    }
   }
 
   // Check if multiple items/tiers were provided
@@ -152,8 +158,8 @@ export function validateBookingPayload({
 
     rawItems.forEach((it, index) => {
       const itQty = Number(it.qty || it.quantity || 1);
-      if (isNaN(itQty) || itQty < 1) {
-        errors.push(`Item ${index + 1} has invalid quantity.`);
+      if (isNaN(itQty) || !Number.isInteger(itQty) || itQty < 1) {
+        errors.push(`Item ${index + 1} has invalid quantity. Must be a positive integer.`);
         return;
       }
       totalQty += itQty;
@@ -166,21 +172,49 @@ export function validateBookingPayload({
           )
         : null;
 
+      // Authoritative unit price derived strictly from official event configuration
       const unitPrice = eventTier?.price !== undefined
         ? Number(eventTier.price)
-        : Number(it.price !== undefined ? it.price : (it.unitPrice !== undefined ? it.unitPrice : (eventData?.startingPrice ?? 0)));
+        : (passTypeData?.price !== undefined
+            ? Number(passTypeData.price)
+            : Number(eventData?.startingPrice ?? 0));
 
       if (isNaN(unitPrice) || unitPrice < 0) {
-        errors.push(`Item "${it.name || index + 1}" has an invalid unit price.`);
+        errors.push(`Item "${it.name || index + 1}" has an invalid unit price configuration.`);
         return;
+      }
+
+      // Check available inventory against capacity if defined
+      if (eventTier && eventTier.capacity !== undefined && eventTier.soldCount !== undefined) {
+        const remaining = Math.max(0, Number(eventTier.capacity) - Number(eventTier.soldCount));
+        if (itQty > remaining) {
+          errors.push(
+            `Not enough tickets remaining for pass type "${it.name || eventTier.name}". Requested ${itQty}, but only ${remaining} remain.`
+          );
+          return;
+        }
+      }
+
+      // Check for client-side price manipulation
+      const clientSuppliedPrice = it.price !== undefined
+        ? Number(it.price)
+        : (it.unitPrice !== undefined ? Number(it.unitPrice) : null);
+
+      if (clientSuppliedPrice !== null && !isNaN(clientSuppliedPrice)) {
+        if (Math.abs(clientSuppliedPrice - unitPrice) > 0.01) {
+          errors.push(
+            `Price manipulation detected for "${it.name || 'Pass'}": Official price is ₹${unitPrice}, but received ₹${clientSuppliedPrice}.`
+          );
+          return;
+        }
       }
 
       const subtotal = unitPrice * itQty;
       authoritativeTotal += subtotal;
 
       normalizedItems.push({
-        name: it.name || it.passType || 'Standard Pass',
-        passType: it.passType || it.name || 'Standard Pass',
+        name: it.name || it.passType || eventTier?.name || 'Standard Pass',
+        passType: it.passType || it.name || eventTier?.name || 'Standard Pass',
         unitPrice,
         price: unitPrice,
         quantity: itQty,
@@ -206,8 +240,18 @@ export function validateBookingPayload({
 
   // Single-item fallback path
   const qty = Number(quantity);
-  if (isNaN(qty) || qty < 1 || qty > 50) {
-    errors.push('Ticket quantity must be between 1 and 50.');
+  if (isNaN(qty) || !Number.isInteger(qty) || qty < 1 || qty > 50) {
+    errors.push('Ticket quantity must be a positive integer between 1 and 50.');
+  }
+
+  // Check inventory ceiling for single item
+  if (passTypeData && passTypeData.capacity !== undefined && passTypeData.soldCount !== undefined) {
+    const remaining = Math.max(0, Number(passTypeData.capacity) - Number(passTypeData.soldCount));
+    if (qty > remaining) {
+      errors.push(
+        `Not enough tickets remaining for pass type "${passTypeData.name}". Requested ${qty}, but only ${remaining} remain.`
+      );
+    }
   }
 
   // Authoritative price resolution from event/passType (never trusting clientAmount)
@@ -220,6 +264,16 @@ export function validateBookingPayload({
   }
 
   const authoritativeTotal = resolvedUnitPrice * qty;
+
+  // Check for client-side price manipulation in single-item path
+  if (_clientAmount !== undefined && _clientAmount !== null) {
+    const clientAmountNum = Number(_clientAmount);
+    if (!isNaN(clientAmountNum) && Math.abs(clientAmountNum - authoritativeTotal) > 0.01) {
+      errors.push(
+        `Price manipulation detected: Authoritative total is ₹${authoritativeTotal}, but received ₹${clientAmountNum}.`
+      );
+    }
+  }
 
   return {
     isValid: errors.length === 0,

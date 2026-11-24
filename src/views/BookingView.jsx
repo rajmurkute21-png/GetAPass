@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, CreditCard, Smartphone, Building, Wallet, Calendar, Clock, MapPin, ShieldCheck, Ticket, HelpCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, CreditCard, Smartphone, Building, Wallet, Calendar, Clock, MapPin, ShieldCheck, Ticket, HelpCircle, AlertCircle, Lock } from 'lucide-react';
 import BookingStepper from '../components/booking/BookingStepper';
 import TicketCategorySelector from '../components/booking/TicketCategorySelector';
 import AttendeeDetailsForm from '../components/booking/AttendeeDetailsForm';
@@ -12,6 +12,7 @@ import Input from '../components/common/Input';
 import StatusBadge from '../components/common/StatusBadge';
 import { getPassTypesByEvent } from '../data/passTypes';
 import { acquirePaymentLock, releasePaymentLock } from '../services/paymentSupportService';
+import { useAuth } from '../context/AuthContext';
 
 /**
  * BookingView
@@ -85,12 +86,33 @@ export default function BookingView({
     return initial;
   });
 
+  // Auth & attendee resolution: strictly tie booking to authenticated account
+  const { user: authUser, openAuthModal } = useAuth();
+  const effectiveAttendee = attendee?.uid ? attendee : (authUser?.uid ? {
+    uid: authUser.uid,
+    name: authUser.displayName || authUser.name || 'Campus Attendee',
+    displayName: authUser.displayName || authUser.name,
+    email: authUser.email,
+    phone: authUser.phone || '',
+    institution: authUser.institution || 'Campus Participant'
+  } : null);
+
   // Attendee state
-  const [fullName, setFullName] = useState(attendee?.displayName || attendee?.name || '');
-  const [email, setEmail] = useState(attendee?.email || '');
-  const [phone, setPhone] = useState(attendee?.phone || '');
-  const [institution, setInstitution] = useState(attendee?.institution || 'Campus Participant');
+  const [fullName, setFullName] = useState(effectiveAttendee?.displayName || effectiveAttendee?.name || '');
+  const [email, setEmail] = useState(effectiveAttendee?.email || '');
+  const [phone, setPhone] = useState(effectiveAttendee?.phone || '');
+  const [institution, setInstitution] = useState(effectiveAttendee?.institution || 'Campus Participant');
   const [errors, setErrors] = useState({});
+
+  // Sync attendee fields when auth user logs in or profile changes
+  useEffect(() => {
+    if (authUser?.uid) {
+      if (!fullName) setFullName(authUser.displayName || authUser.name || '');
+      if (!email) setEmail(authUser.email || '');
+      if (!phone && authUser.phone) setPhone(authUser.phone);
+      if (institution === 'Campus Participant' && authUser.institution) setInstitution(authUser.institution);
+    }
+  }, [authUser]);
 
   // Payment state
   const [paymentMethod, setPaymentMethod] = useState('upi'); // 'upi' | 'card' | 'netbanking' | 'wallet'
@@ -232,11 +254,22 @@ export default function BookingView({
       alert('Please select at least 1 ticket to proceed.');
       return;
     }
+    // Strict authentication requirement before proceeding to attendee details
+    if (!effectiveAttendee?.uid) {
+      openAuthModal('login');
+      return;
+    }
     setCurrentStep(2);
   };
 
   // Step 2 -> Step 3 validation
   const handleProceedToPaymentStep = () => {
+    // Re-verify authentication
+    if (!effectiveAttendee?.uid) {
+      openAuthModal('login');
+      return;
+    }
+
     const newErrors = {};
     if (!fullName.trim()) newErrors.fullName = 'Full Name is required';
     if (!email.trim()) newErrors.email = 'Valid Email is required';
@@ -253,7 +286,7 @@ export default function BookingView({
     if (onProceedToPayment && !onPaymentSuccess) {
       onProceedToPayment({
         event: currentEvent,
-        attendee: { name: fullName, email, phone, institution },
+        attendee: { uid: effectiveAttendee.uid, name: fullName, email, phone, institution },
         passes: selectedPassesList,
         totalAmount
       });
@@ -263,8 +296,32 @@ export default function BookingView({
     setCurrentStep(3);
   };
 
-  // Step 3: Confirm & Pay execution with atomic overselling protection
+  // Step 3: Confirm & Pay execution with atomic overselling protection & verified auth
   const handleExecutePayment = async () => {
+    if (!effectiveAttendee?.uid) {
+      alert('Authentication required: You must be signed in with a valid account to purchase tickets.');
+      openAuthModal('login');
+      return;
+    }
+
+    // Input validation for payment methods
+    if (paymentMethod === 'card') {
+      const cleanCard = cardNumber.replace(/\s+/g, '');
+      if (cleanCard.length < 15 || cleanCard.length > 19) {
+        alert('Please enter a valid 16-digit card number.');
+        return;
+      }
+      if (!cardCvv || cardCvv.trim().length < 3) {
+        alert('Please enter a valid card CVV (3-4 digits).');
+        return;
+      }
+    } else if (paymentMethod === 'upi') {
+      if (upiId && !/^[a-zA-Z0-9.\-_]{2,49}@[a-zA-Z]{2,49}$/.test(upiId.trim())) {
+        alert('Please enter a valid UPI ID (e.g. username@okhdfcbank).');
+        return;
+      }
+    }
+
     const orderLockKey = `order_${currentEvent.id || 'event'}_${fullName || 'attendee'}_${totalAmount}`;
     if (!acquirePaymentLock(orderLockKey)) {
       alert('Payment processing is already underway. Please wait a moment.');
@@ -274,13 +331,21 @@ export default function BookingView({
     setIsProcessing(true);
 
     setTimeout(async () => {
-      const generatedRef = `BK-${Math.floor(100000 + Math.random() * 900000)}`;
+      const paymentRef = paymentMethod === 'upi'
+        ? (upiId ? `UPI_UTR_${Date.now()}_${Math.floor(100000 + Math.random() * 900000)}` : `PAY_UPI_${Date.now()}_${Math.floor(100000 + Math.random() * 900000)}`)
+        : `PAY_CARD_${Date.now()}_${Math.floor(100000 + Math.random() * 900000)}`;
 
       if (onPaymentSuccess) {
         try {
           const result = await onPaymentSuccess({
             amount: totalAmount,
             method: paymentMethod.toUpperCase(),
+            paymentReference: paymentRef,
+            paymentDetails: {
+              method: paymentMethod.toUpperCase(),
+              upiId: paymentMethod === 'upi' ? upiId : undefined,
+              cardLast4: paymentMethod === 'card' ? cardNumber.replace(/\s+/g, '').slice(-4) : undefined
+            },
             eventTitle: currentEvent.title,
             attendeeName: fullName,
             passType: selectedPassesList[0]?.name || 'General Admission',
@@ -293,7 +358,7 @@ export default function BookingView({
           setIsSuccess(true);
 
           setBookingConfirmation({
-            bookingReference: result?.bookingId || generatedRef,
+            bookingReference: result?.bookingId || paymentRef,
             issuedPasses: result?.passes || selectedPassesList.map((p, idx) => ({
               id: `GP-2026-${idx + 1}`,
               passId: `GP-2026-${idx + 1}`,
@@ -461,6 +526,64 @@ export default function BookingView({
             currentStep={currentStep}
             onStepClick={(stepNum) => setCurrentStep(stepNum)}
           />
+        )}
+
+        {/* Authentication Security Notice if not logged in */}
+        {currentStep <= 3 && !effectiveAttendee?.uid && (
+          <div
+            style={{
+              margin: '20px 0',
+              padding: '16px 20px',
+              background: 'linear-gradient(135deg, rgba(124, 58, 237, 0.06) 0%, rgba(236, 72, 153, 0.06) 100%)',
+              border: '1px solid rgba(124, 58, 237, 0.2)',
+              borderRadius: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+              flexWrap: 'wrap'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '10px',
+                  backgroundColor: 'rgba(124, 58, 237, 0.12)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#7C3AED'
+                }}
+              >
+                <Lock size={18} />
+              </div>
+              <div>
+                <p style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#0F172A' }}>
+                  Account Verification Required
+                </p>
+                <p style={{ margin: 0, fontSize: '13px', color: '#64748B' }}>
+                  You can select tickets now. You will be prompted to sign in with your verified account before checkout.
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="small"
+              onClick={() => openAuthModal('login')}
+              style={{
+                borderColor: '#7C3AED',
+                color: '#7C3AED',
+                padding: '8px 18px',
+                fontSize: '13px',
+                borderRadius: '9999px',
+                fontWeight: 600
+              }}
+            >
+              Sign In to Account
+            </Button>
+          </div>
         )}
 
         {/* STEP 1: Select Tickets */}

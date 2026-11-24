@@ -130,9 +130,19 @@ export default function App() {
         setAuthModalView('verify');
         openAuthModal('verify');
       }
+    } else if (activeView === 'booking' && !currentUser) {
+      console.warn('[GateApass Security] Unauthenticated attempt to access Booking Funnel redirected to login.');
+      setActiveView('events');
+      if (openAuthModal) {
+        openAuthModal('login', () => {
+          setActiveView('booking');
+        });
+      }
     }
   }, [
     portalMode,
+    activeView,
+    currentUser?.uid,
     currentUser?.role,
     currentUser?.isAdmin,
     currentUser?.isOrganizer,
@@ -421,8 +431,19 @@ export default function App() {
   };
 
   const handleBookEvent = (ev) => {
-    // Requirement 4: Require verified email for email/password accounts before granting access
-    if (currentUser && !currentUser.isEmailVerified && !currentUser.isGoogle) {
+    // 1. Requirement: Every user must have a valid authenticated Firebase account before booking tickets
+    if (!currentUser) {
+      if (openAuthModal) {
+        openAuthModal('login', () => {
+          setSelectedEvent(ev);
+          setActiveView('booking');
+        });
+      }
+      return;
+    }
+
+    // 2. Requirement: Require verified email for email/password accounts before granting access
+    if (!currentUser.isEmailVerified && !currentUser.isGoogle) {
       if (setAuthModalView && openAuthModal) {
         setAuthModalView('verify');
         openAuthModal('verify');
@@ -438,6 +459,30 @@ export default function App() {
     setActiveView('event-details');
   };
 
+  const handleCreateEventClick = () => {
+    if (!currentUser) {
+      if (openAuthModal) {
+        openAuthModal('login', (authUser) => {
+          if (canAccessOrganizerDashboard(authUser)) {
+            setOrganizerInitialTab('create-event');
+            setPortalMode('organizer-studio');
+          } else {
+            setActiveView('profile');
+            setProfileSubTab('list-event');
+          }
+        });
+      }
+      return;
+    }
+    if (canAccessOrganizerDashboard(currentUser)) {
+      setOrganizerInitialTab('create-event');
+      setPortalMode('organizer-studio');
+    } else {
+      setActiveView('profile');
+      setProfileSubTab('list-event');
+    }
+  };
+
   const handleProceedToPayment = (data) => {
     setBookingData(data);
     setActiveView('payment');
@@ -446,12 +491,18 @@ export default function App() {
   const handlePaymentSuccess = async ({
     amount,
     method,
+    paymentReference,
+    paymentDetails,
     eventTitle,
     attendeeName,
     passType,
     passes: bookedPasses,
     autoNavigate = true
   }) => {
+    // Critical: Only authenticated users can complete booking payment and receive passes
+    if (!currentUser || !currentUser.uid) {
+      throw new Error('Authentication required: You must be signed in with a valid account to purchase tickets.');
+    }
     const rawTitle = eventTitle || selectedEvent?.title || 'GP';
     const prefix = rawTitle.replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || 'GP';
 
@@ -578,19 +629,25 @@ export default function App() {
       pass: individualPasses[0]
     };
 
-    if (currentUser?.uid) {
-      try {
-        const created = await createBooking(bookingPayload, currentUser, selectedEvent);
-        if (created?.passes && created.passes.length > 0) {
-          createdPassesList = created.passes;
-        }
-        if (created?.booking) {
-          primaryBooking = created.booking;
-        }
-      } catch (err) {
-        console.error('[GateApass Bookings] Failed to save booking to Firestore:', err);
-        throw err;
+    try {
+      const created = await createBooking(
+        {
+          ...bookingPayload,
+          paymentReference,
+          paymentDetails
+        },
+        currentUser,
+        selectedEvent
+      );
+      if (created?.passes && created.passes.length > 0) {
+        createdPassesList = created.passes;
       }
+      if (created?.booking) {
+        primaryBooking = created.booking;
+      }
+    } catch (err) {
+      console.error('[GateApass Bookings] Failed to save booking to Firestore:', err);
+      throw err;
     }
 
     setPasses((prev) => [...createdPassesList, ...prev.filter((p) => !createdPassesList.some((cp) => cp.id === p.id))]);
@@ -969,15 +1026,7 @@ export default function App() {
                 }}
                 onBookEvent={handleBookEvent}
                 onViewEventDetails={handleViewEventDetails}
-                onCreateEvent={() => {
-                  if (canAccessOrganizerDashboard(currentUser)) {
-                    setOrganizerInitialTab('create-event');
-                    setPortalMode('organizer-studio');
-                  } else {
-                    setActiveView('profile');
-                    setProfileSubTab('list-event');
-                  }
-                }}
+                onCreateEvent={handleCreateEventClick}
               />
             )}
 
@@ -995,15 +1044,7 @@ export default function App() {
                 }}
                 onBookEvent={handleBookEvent}
                 onViewEventDetails={handleViewEventDetails}
-                onCreateEvent={() => {
-                  if (canAccessOrganizerDashboard(currentUser)) {
-                    setOrganizerInitialTab('create-event');
-                    setPortalMode('organizer-studio');
-                  } else {
-                    setActiveView('profile');
-                    setProfileSubTab('list-event');
-                  }
-                }}
+                onCreateEvent={handleCreateEventClick}
               />
             )}
 
@@ -1016,15 +1057,7 @@ export default function App() {
                 onSelectCategory={setSelectedCategory}
                 onBookEvent={handleBookEvent}
                 onViewEventDetails={handleViewEventDetails}
-                onCreateEvent={() => {
-                  if (canAccessOrganizerDashboard(currentUser)) {
-                    setOrganizerInitialTab('create-event');
-                    setPortalMode('organizer-studio');
-                  } else {
-                    setActiveView('profile');
-                    setProfileSubTab('list-event');
-                  }
-                }}
+                onCreateEvent={handleCreateEventClick}
               />
             )}
 
@@ -1032,7 +1065,7 @@ export default function App() {
               <EventDetailsView
                 event={selectedEvent}
                 onBack={() => setActiveView('events')}
-                onBookNow={() => setActiveView('booking')}
+                onBookNow={() => handleBookEvent(selectedEvent)}
               />
             )}
 

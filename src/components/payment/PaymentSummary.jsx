@@ -43,13 +43,21 @@ export default function PaymentSummary({
       if (upiId.toLowerCase().includes('fail')) {
         setPaymentStatus('failed');
       } else {
-        const generatedId = `TXN-2026-${Math.floor(100000 + Math.random() * 900000)}`;
-        setTxnId(generatedId);
+        const generatedRef = method === 'upi'
+          ? (upiId ? `UPI_UTR_${Date.now()}_${Math.floor(100000 + Math.random() * 900000)}` : `PAY_UPI_${Date.now()}_${Math.floor(100000 + Math.random() * 900000)}`)
+          : `PAY_CARD_${Date.now()}_${Math.floor(100000 + Math.random() * 900000)}`;
+        setTxnId(generatedRef);
         setPaymentStatus('success');
         if (onSuccess) {
           onSuccess({
             amount: total,
             method: method.toUpperCase(),
+            paymentReference: generatedRef,
+            paymentDetails: {
+              method: method.toUpperCase(),
+              upiId: method === 'upi' ? upiId : undefined,
+              cardLast4: method === 'card' ? cardNumber.replace(/\s+/g, '').slice(-4) : undefined
+            },
             eventTitle: event?.title || 'Campus Event',
             attendeeName: attendee?.name || 'Attendee',
             passType: selectedPasses[0]?.name || 'Participant Pass',
