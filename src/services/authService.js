@@ -46,6 +46,10 @@ export function mapAuthError(error) {
   switch (code) {
     case 'auth/unauthorized-domain':
       return 'This deployment domain is not authorized in Firebase. In the Firebase Console, go to Authentication > Settings > Authorized Domains and add your Vercel domain (e.g. get-a-pass-sooty.vercel.app).';
+    case 'auth/invalid-api-key':
+      return 'Invalid Firebase API Key. Please verify that VITE_FIREBASE_API_KEY is configured correctly in Vercel Project Settings.';
+    case 'auth/app-deleted':
+      return 'Firebase application instance was terminated. Please refresh the page.';
     case 'auth/invalid-credential':
     case 'auth/wrong-password':
     case 'auth/user-not-found':
@@ -73,6 +77,10 @@ export function mapAuthError(error) {
     default:
       return error.message || 'Authentication failed. Please verify your details.';
   }
+}
+
+export function isAuthInitialized() {
+  return Boolean(auth);
 }
 
 function ensureAuthInitialized() {

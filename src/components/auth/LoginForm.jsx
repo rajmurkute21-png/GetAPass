@@ -8,7 +8,7 @@ import GoogleButton from './GoogleButton';
 import AuthError from './AuthError';
 
 export default function LoginForm({ onSwitchToSignup, onSwitchToForgot }) {
-  const { loginWithEmail, loginWithGoogle, isFirebaseConfigured } = useAuth();
+  const { loginWithEmail, loginWithGoogle, isFirebaseConfigured, configStatus } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -85,7 +85,15 @@ export default function LoginForm({ onSwitchToSignup, onSwitchToForgot }) {
             lineHeight: '19px'
           }}
         >
-          <strong>Configuration Required:</strong> Firebase environment variables are not detected on this deployment. Please configure <code>VITE_FIREBASE_*</code> keys in Vercel Project Settings and redeploy.
+          <strong>Configuration Required:</strong> Firebase Authentication is not initialized on this deployment.
+          {configStatus?.missing?.length > 0 && (
+            <div style={{ marginTop: '6px', fontSize: '12px' }}>
+              Missing environment variables: <code>{configStatus.missing.join(', ')}</code>
+            </div>
+          )}
+          <div style={{ marginTop: '6px', fontSize: '12px' }}>
+            To fix: Add these keys in <strong>Vercel Dashboard &gt; Project Settings &gt; Environment Variables</strong>, then trigger a redeploy.
+          </div>
         </div>
       )}
 
@@ -95,7 +103,7 @@ export default function LoginForm({ onSwitchToSignup, onSwitchToForgot }) {
       <GoogleButton
         onClick={handleGoogleLogin}
         loading={googleSubmitting}
-        disabled={submitting || googleSubmitting}
+        disabled={submitting || googleSubmitting || !isFirebaseConfigured}
         text="Continue with Google"
       />
 
@@ -158,9 +166,9 @@ export default function LoginForm({ onSwitchToSignup, onSwitchToForgot }) {
           variant="primary"
           size="large"
           fullWidth
-          disabled={submitting || googleSubmitting}
+          disabled={submitting || googleSubmitting || !isFirebaseConfigured}
         >
-          {submitting ? 'Signing In...' : 'LOGIN'}
+          {submitting ? 'Signing In...' : !isFirebaseConfigured ? 'Configuration Required' : 'LOGIN'}
         </Button>
       </form>
 

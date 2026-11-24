@@ -23,7 +23,7 @@ export default function ProtectedRoute({
   allowedRoles = null,
   onNavigateHome = null
 }) {
-  const { isAuthenticated, user, loading, openAuthModal, setAuthModalView } = useAuth();
+  const { isAuthenticated, user, loading, openAuthModal, setAuthModalView, isFirebaseConfigured } = useAuth();
 
   // 1. Loading state (Signature GetAPass Official Logo Loader)
   if (loading) {
@@ -32,6 +32,51 @@ export default function ProtectedRoute({
         variant="full-page"
         text="Checking authorization session..."
       />
+    );
+  }
+
+  // 1b. Unconfigured Firebase environment state
+  if (!isFirebaseConfigured) {
+    if (fallback) return fallback;
+
+    return (
+      <div
+        style={{
+          padding: '64px 24px',
+          maxWidth: '520px',
+          margin: '0 auto',
+          textAlign: 'center',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '16px'
+        }}
+      >
+        <div
+          style={{
+            width: '48px',
+            height: '48px',
+            borderRadius: '50%',
+            backgroundColor: '#FEF0C7',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#B54708'
+          }}
+        >
+          <ShieldAlert size={24} />
+        </div>
+        <h3 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-dark-text)' }}>
+          Authentication Service Offline
+        </h3>
+        <p style={{ fontSize: '14px', color: 'var(--color-muted-text)', lineHeight: '20px' }}>
+          Firebase Authentication environment variables are not detected on this deployment.
+          If you are an administrator, please configure <code>VITE_FIREBASE_*</code> keys in Vercel Project Settings.
+        </p>
+        <Button variant="outline" size="default" onClick={() => openAuthModal('login')}>
+          View Configuration Details
+        </Button>
+      </div>
     );
   }
 

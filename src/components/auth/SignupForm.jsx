@@ -8,7 +8,7 @@ import GoogleButton from './GoogleButton';
 import AuthError from './AuthError';
 
 export default function SignupForm({ onSwitchToLogin }) {
-  const { signupWithEmail, loginWithGoogle, isFirebaseConfigured } = useAuth();
+  const { signupWithEmail, loginWithGoogle, isFirebaseConfigured, configStatus } = useAuth();
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -103,7 +103,15 @@ export default function SignupForm({ onSwitchToLogin }) {
             lineHeight: '19px'
           }}
         >
-          <strong>Configuration Required:</strong> Firebase environment variables are not detected on this deployment. Please configure <code>VITE_FIREBASE_*</code> keys in Vercel Project Settings and redeploy.
+          <strong>Configuration Required:</strong> Firebase Authentication is not initialized on this deployment.
+          {configStatus?.missing?.length > 0 && (
+            <div style={{ marginTop: '6px', fontSize: '12px' }}>
+              Missing environment variables: <code>{configStatus.missing.join(', ')}</code>
+            </div>
+          )}
+          <div style={{ marginTop: '6px', fontSize: '12px' }}>
+            To fix: Add these keys in <strong>Vercel Dashboard &gt; Project Settings &gt; Environment Variables</strong>, then trigger a redeploy.
+          </div>
         </div>
       )}
 
@@ -113,7 +121,7 @@ export default function SignupForm({ onSwitchToLogin }) {
       <GoogleButton
         onClick={handleGoogleLogin}
         loading={googleSubmitting}
-        disabled={submitting || googleSubmitting}
+        disabled={submitting || googleSubmitting || !isFirebaseConfigured}
         text="Continue with Google"
       />
 
@@ -177,10 +185,10 @@ export default function SignupForm({ onSwitchToLogin }) {
           variant="primary"
           size="large"
           fullWidth
-          disabled={submitting || googleSubmitting}
+          disabled={submitting || googleSubmitting || !isFirebaseConfigured}
           style={{ marginTop: '6px' }}
         >
-          {submitting ? 'Creating Account...' : 'CREATE ACCOUNT'}
+          {submitting ? 'Creating Account...' : !isFirebaseConfigured ? 'Configuration Required' : 'CREATE ACCOUNT'}
         </Button>
       </form>
 

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import { auth, db, isFirebaseConfigured } from '../config/firebase';
+import { auth, db, isFirebaseConfigured, getFirebaseConfigStatus } from '../config/firebase';
 import {
   signupUserWithEmail,
   loginUserWithEmail,
@@ -314,11 +314,14 @@ export function AuthProvider({ children }) {
     return null;
   }, [firebaseUser, user?.role]);
 
+  const configStatus = useMemo(() => getFirebaseConfigStatus(), []);
+
   const value = useMemo(() => ({
     user,
     firebaseUser,
     loading,
     isFirebaseConfigured,
+    configStatus,
     isAuthenticated: Boolean(user),
     isEmailVerified: Boolean(user?.isEmailVerified),
     needsEmailVerification: Boolean(user && !user.isEmailVerified && !user.isGoogle),
