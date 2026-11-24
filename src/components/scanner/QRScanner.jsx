@@ -24,7 +24,8 @@ import {
   MapPin,
   Calendar,
   X,
-  ArrowRight
+  ArrowRight,
+  ChevronDown
 } from 'lucide-react';
 import Button from '../common/Button';
 import Input from '../common/Input';
@@ -36,7 +37,7 @@ import {
   VERIFICATION_TITLES,
   playVerificationChime,
   triggerVerificationHaptic
-} from '../../services/passVerificationEngine';
+} from '../../services/passVerificationEngine.js';
 
 export default function QRScanner({
   onAllowEntry,
@@ -46,17 +47,25 @@ export default function QRScanner({
   gate = 'Gate A',
   verifierUser = null
 }) {
+  // Navigation & Sub-Tabs
   const [activeTab, setActiveTab] = useState('scan'); // 'scan' | 'history' | 'manual'
-  const [cameraActive, setCameraActive] = useState(false);
+
+  // Camera Status: 'idle' | 'requesting-permission' | 'initializing' | 'ready' | 'verifying' | 'error'
+  const [cameraStatus, setCameraStatus] = useState('idle');
+  const [statusMessage, setStatusMessage] = useState('Initializing camera...');
   const [cameraError, setCameraError] = useState(null);
+
+  // Camera Stream & Device Management
+  const [availableCameras, setAvailableCameras] = useState([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState('');
   const [facingMode, setFacingMode] = useState('environment'); // 'environment' (rear) | 'user' (front)
   const [torchOn, setTorchOn] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // Scanning loop & verification state
+  // Verification & Modal State
   const [isVerifying, setIsVerifying] = useState(false);
-  const [verificationResult, setVerificationResult] = useState(null); // null | result object
+  const [verificationResult, setVerificationResult] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
 
   // Manual code & upload state
@@ -69,15 +78,38 @@ export default function QRScanner({
     typeof navigator !== 'undefined' ? !navigator.onLine : false
   );
 
-  // DOM Refs
+  // DOM Refs & Loop Synchronization Refs (Prevents React stale closures in rAF loop)
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const scanLoopRef = useRef(null);
-  const lastScannedCodeRef = useRef(null);
+  const isScanningActiveRef = useRef(false);
+  const isVerifyingRef = useRef(false);
+  const modalOpenRef = useRef(false);
   const scanCooldownRef = useRef(false);
+  const lastScannedCodeRef = useRef(null);
+  const lastDecodeTimeRef = useRef(0);
+  const facingModeRef = useRef('environment');
+  const selectedDeviceIdRef = useRef('');
 
-  // Monitor network status
+  // Keep refs in sync with state
+  useEffect(() => {
+    isVerifyingRef.current = isVerifying;
+  }, [isVerifying]);
+
+  useEffect(() => {
+    modalOpenRef.current = modalOpen;
+  }, [modalOpen]);
+
+  useEffect(() => {
+    facingModeRef.current = facingMode;
+  }, [facingMode]);
+
+  useEffect(() => {
+    selectedDeviceIdRef.current = selectedDeviceId;
+  }, [selectedDeviceId]);
+
+  // Monitor network connectivity
   useEffect(() => {
     const handleOnline = () => setIsOfflineMode(false);
     const handleOffline = () => setIsOfflineMode(true);
@@ -89,7 +121,7 @@ export default function QRScanner({
     };
   }, []);
 
-  // Safe sound trigger respecting user's mute preference
+  // Safe sound & vibration trigger
   const playSound = useCallback((type) => {
     if (soundEnabled) {
       playVerificationChime(type);
@@ -98,128 +130,216 @@ export default function QRScanner({
   }, [soundEnabled]);
 
   /**
-   * Stop any running camera streams and clean up media tracks
+   * Enumerate available video devices (front and rear cameras)
+   */
+  const enumerateVideoDevices = useCallback(async () => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) return;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoInputs = devices.filter((d) => d.kind === 'videoinput');
+      setAvailableCameras(videoInputs);
+      return videoInputs;
+    } catch (err) {
+      console.warn('[GateApass Scanner] Error enumerating devices:', err);
+      return [];
+    }
+  }, []);
+
+  /**
+   * Stop all camera tracks and clean up video streams completely
    */
   const stopCamera = useCallback(() => {
+    isScanningActiveRef.current = false;
     if (scanLoopRef.current) {
       cancelAnimationFrame(scanLoopRef.current);
       scanLoopRef.current = null;
     }
     if (streamRef.current) {
       try {
-        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current.getTracks().forEach((track) => {
+          track.stop();
+        });
       } catch (err) {
-        console.warn('[GateApass Scanner] Error stopping tracks:', err);
+        console.warn('[GateApass Scanner] Error stopping media tracks:', err);
       }
       streamRef.current = null;
     }
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
-    setCameraActive(false);
     setTorchOn(false);
+    setTorchSupported(false);
+    setCameraStatus('idle');
   }, []);
 
   /**
-   * Start device camera with specific facing mode (rear default on mobile)
+   * Start device camera with resilient fallback for Android Chrome & mobile webcams
    */
-  const startCamera = useCallback(async (facing = facingMode) => {
-    setCameraError(null);
+  const startCamera = useCallback(async (facing = facingModeRef.current, specificDeviceId = selectedDeviceIdRef.current) => {
+    // Stop any existing stream before opening a new one
     stopCamera();
+    setCameraError(null);
 
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      setCameraError('Camera access is not supported by your current browser or connection (HTTPS required).');
+    // Check secure context
+    if (typeof window !== 'undefined' && !window.isSecureContext && window.location.hostname !== 'localhost') {
+      const errText = 'Camera requires a secure HTTPS connection. Please load this website over HTTPS.';
+      setCameraError(errText);
+      setCameraStatus('error');
+      setStatusMessage(errText);
       return;
     }
 
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      const errText = 'Camera access is not supported by your current browser.';
+      setCameraError(errText);
+      setCameraStatus('error');
+      setStatusMessage(errText);
+      return;
+    }
+
+    setCameraStatus('requesting-permission');
+    setStatusMessage('Requesting camera permission...');
+
     try {
-      const constraints = {
-        video: {
-          facingMode: { ideal: facing },
-          width: { ideal: 1280, min: 640 },
-          height: { ideal: 720, min: 480 }
-        },
+      // 1. Build camera constraints with multi-stage fallback
+      // Stage 1: Ideal 720p with target facing mode or deviceId
+      let constraints = {
+        video: specificDeviceId
+          ? { deviceId: { exact: specificDeviceId } }
+          : {
+              facingMode: { ideal: facing },
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            },
         audio: false
       };
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      streamRef.current = stream;
-
-      // Check torch capability
-      const videoTrack = stream.getVideoTracks()[0];
-      if (videoTrack?.getCapabilities) {
-        const capabilities = videoTrack.getCapabilities();
-        setTorchSupported(Boolean(capabilities?.torch));
-      } else {
-        setTorchSupported(false);
+      let stream = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (constraintErr) {
+        console.warn('[GateApass Scanner] Initial constraints rejected, attempting fallback:', constraintErr);
+        // Stage 2: Fallback without resolution constraints (prevents OverconstrainedError on budget Android phones)
+        try {
+          constraints = {
+            video: specificDeviceId
+              ? { deviceId: { exact: specificDeviceId } }
+              : { facingMode: facing },
+            audio: false
+          };
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (stage2Err) {
+          console.warn('[GateApass Scanner] Stage 2 fallback rejected, trying bare video constraint:', stage2Err);
+          // Stage 3: Bare video constraint
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
       }
 
+      if (!stream) {
+        throw new Error('Could not acquire video stream from camera hardware.');
+      }
+
+      streamRef.current = stream;
+      setCameraStatus('initializing');
+      setStatusMessage('Initializing camera...');
+
+      // Inspect video track capabilities (torch support)
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        if (videoTrack.getCapabilities) {
+          const capabilities = videoTrack.getCapabilities();
+          setTorchSupported(Boolean(capabilities?.torch));
+        }
+        // Save the active device ID if available
+        const settings = videoTrack.getSettings ? videoTrack.getSettings() : {};
+        if (settings.deviceId) {
+          setSelectedDeviceId(settings.deviceId);
+          selectedDeviceIdRef.current = settings.deviceId;
+        }
+      }
+
+      // Attach stream to video element
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.setAttribute('playsinline', 'true');
-        videoRef.current.muted = true;
-        await videoRef.current.play();
-        setCameraActive(true);
-        startFrameDecoding();
+        const video = videoRef.current;
+        video.srcObject = stream;
+        video.setAttribute('playsinline', 'true');
+        video.setAttribute('webkit-playsinline', 'true');
+        video.muted = true;
+        video.playsInline = true;
+
+        // Await loadedmetadata to guarantee non-zero videoWidth/videoHeight
+        await new Promise((resolve) => {
+          if (video.readyState >= 1 && video.videoWidth > 0) {
+            resolve();
+          } else {
+            video.onloadedmetadata = () => resolve();
+            // Fallback timeout in case onloadedmetadata was already dispatched
+            setTimeout(resolve, 600);
+          }
+        });
+
+        try {
+          await video.play();
+        } catch (playErr) {
+          console.warn('[GateApass Scanner] video.play() warning:', playErr);
+        }
+
+        // Camera is now streaming and ready
+        setCameraStatus('ready');
+        setStatusMessage('Camera ready – Position QR code inside the frame.');
+        isScanningActiveRef.current = true;
+
+        // Query available camera devices for the camera switcher
+        enumerateVideoDevices();
+
+        // Start the jsQR frame decoding loop
+        startDecodingLoop();
       }
     } catch (err) {
-      console.warn('[GateApass Scanner] Camera initialization error:', err);
+      console.warn('[GateApass Scanner] Camera access error:', err);
+      let userFriendlyMsg = 'Camera initialization failed.';
+
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setCameraError('Camera permission was denied. Please allow camera permissions in your browser address bar.');
+        userFriendlyMsg = 'Camera permission denied. Please allow camera access in your browser settings (look for the lock or site settings icon in your address bar).';
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        setCameraError('No camera found on this device. You can verify passes using manual entry or file upload.');
+        userFriendlyMsg = 'No camera found on this device. You can verify passes using manual entry or file upload.';
       } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-        setCameraError('Camera is already in use by another application or tab.');
+        userFriendlyMsg = 'Camera is already in use by another application or browser tab.';
+      } else if (err.name === 'OverconstrainedError') {
+        userFriendlyMsg = 'Requested camera resolution is not supported by your device hardware.';
+      } else if (err.name === 'SecurityError') {
+        userFriendlyMsg = 'Camera access blocked due to insecure context (HTTPS required).';
       } else {
-        setCameraError(`Camera error: ${err.message || 'Unable to start camera'}`);
+        userFriendlyMsg = `Camera unavailable: ${err.message || 'Unknown error'}`;
       }
-      setCameraActive(false);
-    }
-  }, [facingMode, stopCamera]);
 
-  /**
-   * Toggle between Rear ('environment') and Front ('user') cameras
-   */
-  const toggleCameraFacing = () => {
-    const nextFacing = facingMode === 'environment' ? 'user' : 'environment';
-    setFacingMode(nextFacing);
-    startCamera(nextFacing);
-  };
-
-  /**
-   * Toggle Flashlight / Torch if supported by the device hardware
-   */
-  const toggleTorch = async () => {
-    if (!streamRef.current) return;
-    const track = streamRef.current.getVideoTracks()[0];
-    if (track && torchSupported) {
-      try {
-        const nextTorch = !torchOn;
-        await track.applyConstraints({ advanced: [{ torch: nextTorch }] });
-        setTorchOn(nextTorch);
-      } catch (err) {
-        console.warn('[GateApass Scanner] Torch error:', err);
-      }
+      setCameraError(userFriendlyMsg);
+      setStatusMessage(userFriendlyMsg);
+      setCameraStatus('error');
+      stopCamera();
     }
-  };
+  }, [stopCamera, enumerateVideoDevices]);
 
   /**
    * Process a scanned or submitted code through the authoritative verification engine
    */
   const handleProcessCode = useCallback(async (rawPayload) => {
-    if (!rawPayload || isVerifying || scanCooldownRef.current) return;
+    if (!rawPayload || isVerifyingRef.current || scanCooldownRef.current) return;
 
     const trimmed = String(rawPayload).trim();
     if (!trimmed) return;
 
-    // Prevent immediate repeated scans of the exact same code in a rapid loop
+    // Prevent immediate repeated scans of the exact same code
     if (lastScannedCodeRef.current === trimmed && scanCooldownRef.current) {
       return;
     }
 
     setIsVerifying(true);
+    isVerifyingRef.current = true;
     scanCooldownRef.current = true;
     lastScannedCodeRef.current = trimmed;
+    setCameraStatus('verifying');
+    setStatusMessage('QR code detected – Verifying pass in Cloud Firestore...');
 
     try {
       const result = await verifyAndCheckInPassAuthoritative({
@@ -232,11 +352,12 @@ export default function QRScanner({
 
       setVerificationResult(result);
       setModalOpen(true);
+      modalOpenRef.current = true;
 
-      // Play sound and trigger haptic feedback
+      // Audio and haptic feedback
       playSound(result.valid ? 'success' : 'error');
 
-      // Notify parent view (e.g. for live turnstile history logs)
+      // Inform parent view / check-in history
       if (onAllowEntry) {
         onAllowEntry({
           passId: result.passId || trimmed,
@@ -262,18 +383,23 @@ export default function QRScanner({
       };
       setVerificationResult(fallbackResult);
       setModalOpen(true);
+      modalOpenRef.current = true;
       playSound('error');
     } finally {
       setIsVerifying(false);
+      isVerifyingRef.current = false;
     }
-  }, [currentEvent, gate, verifierUser, isOfflineMode, isVerifying, onAllowEntry, playSound]);
+  }, [currentEvent, gate, verifierUser, isOfflineMode, onAllowEntry, playSound]);
 
   /**
-   * Continuous frame decoding loop using jsQR
+   * Continuous, CPU-optimized frame decoding loop using jsQR
+   * Throttled to ~8-10 scans/second to prevent mobile thread blocking and battery drain.
    */
-  const startFrameDecoding = useCallback(() => {
-    const video = videoRef.current;
-    if (!video) return;
+  const startDecodingLoop = useCallback(() => {
+    if (scanLoopRef.current) {
+      cancelAnimationFrame(scanLoopRef.current);
+      scanLoopRef.current = null;
+    }
 
     let canvas = canvasRef.current;
     if (!canvas) {
@@ -283,35 +409,50 @@ export default function QRScanner({
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
     const scanFrame = () => {
-      if (
-        !video ||
-        video.readyState < 2 ||
-        !streamRef.current ||
-        modalOpen ||
-        isVerifying ||
-        scanCooldownRef.current
-      ) {
+      // Guard: Stop loop if scanning inactive or stream lost
+      if (!isScanningActiveRef.current || !streamRef.current) {
+        return;
+      }
+
+      // If modal is open, or verifier is busy, or in cooldown, keep rAF alive but skip decoding
+      if (modalOpenRef.current || isVerifyingRef.current || scanCooldownRef.current) {
         scanLoopRef.current = requestAnimationFrame(scanFrame);
         return;
       }
 
-      if (video.videoWidth > 0 && video.videoHeight > 0) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const now = performance.now();
+      const video = videoRef.current;
+
+      // Throttle jsQR computation to every 120ms (prevents Android Chrome UI freeze)
+      if (now - lastDecodeTimeRef.current >= 120 && video && video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+        lastDecodeTimeRef.current = now;
 
         try {
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: 'dontInvert'
+          // Optimized downsampling: clamp max dimension to 640px for fast mobile CPU execution
+          const maxDim = 640;
+          const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
+          const targetW = Math.round(video.videoWidth * scale);
+          const targetH = Math.round(video.videoHeight * scale);
+
+          if (canvas.width !== targetW || canvas.height !== targetH) {
+            canvas.width = targetW;
+            canvas.height = targetH;
+          }
+
+          ctx.drawImage(video, 0, 0, targetW, targetH);
+          const imgData = ctx.getImageData(0, 0, targetW, targetH);
+
+          const qrCode = jsQR(imgData.data, imgData.width, imgData.height, {
+            inversionAttempts: 'attemptBoth'
           });
 
           if (qrCode && qrCode.data) {
             handleProcessCode(qrCode.data);
-            return; // Pause loop until modal reset
+            // Return to pause until modal is handled
+            return;
           }
-        } catch {
-          // ignore transient frame capture drops
+        } catch (decodeErr) {
+          // Ignore transient capture drops
         }
       }
 
@@ -319,33 +460,82 @@ export default function QRScanner({
     };
 
     scanLoopRef.current = requestAnimationFrame(scanFrame);
-  }, [handleProcessCode, isVerifying, modalOpen]);
-
-  // Handle Tab Switch & Modal open/close
-  useEffect(() => {
-    if (activeTab === 'scan' && !modalOpen) {
-      startCamera(facingMode);
-    } else {
-      stopCamera();
-    }
-    return () => stopCamera();
-  }, [activeTab, modalOpen, facingMode, startCamera, stopCamera]);
+  }, [handleProcessCode]);
 
   /**
-   * Reset scanner for next pass
+   * Switch between available physical cameras
+   */
+  const handleSelectCamera = (deviceId) => {
+    setSelectedDeviceId(deviceId);
+    selectedDeviceIdRef.current = deviceId;
+    startCamera(facingModeRef.current, deviceId);
+  };
+
+  /**
+   * Toggle between Rear ('environment') and Front ('user') cameras
+   */
+  const toggleCameraFacing = () => {
+    const nextFacing = facingMode === 'environment' ? 'user' : 'environment';
+    setFacingMode(nextFacing);
+    facingModeRef.current = nextFacing;
+    setSelectedDeviceId('');
+    selectedDeviceIdRef.current = '';
+    startCamera(nextFacing, '');
+  };
+
+  /**
+   * Toggle Flashlight / Torch
+   */
+  const toggleTorch = async () => {
+    if (!streamRef.current) return;
+    const track = streamRef.current.getVideoTracks()[0];
+    if (track && torchSupported) {
+      try {
+        const nextTorch = !torchOn;
+        await track.applyConstraints({ advanced: [{ torch: nextTorch }] });
+        setTorchOn(nextTorch);
+      } catch (err) {
+        console.warn('[GateApass Scanner] Torch error:', err);
+      }
+    }
+  };
+
+  /**
+   * Reset scanner for next pass (called by "Scan Next Pass" button)
    */
   const handleScanNext = () => {
     setModalOpen(false);
+    modalOpenRef.current = false;
     setVerificationResult(null);
-    // Allow brief cooldown to prevent re-triggering the same pass currently in front of lens
+    setCameraStatus('ready');
+    setStatusMessage('Camera ready – Position QR code inside the frame.');
+
+    // 400ms cooldown so attendee can withdraw scanned ticket from lens view
+    scanCooldownRef.current = true;
     setTimeout(() => {
       scanCooldownRef.current = false;
       lastScannedCodeRef.current = null;
       if (activeTab === 'scan') {
-        startCamera(facingMode);
+        if (!streamRef.current || !isScanningActiveRef.current) {
+          startCamera(facingModeRef.current, selectedDeviceIdRef.current);
+        } else {
+          startDecodingLoop();
+        }
       }
     }, 400);
   };
+
+  // Handle Tab Switch & Mount/Unmount Lifecycle
+  useEffect(() => {
+    if (activeTab === 'scan' && !modalOpen) {
+      startCamera(facingMode, selectedDeviceId);
+    } else {
+      stopCamera();
+    }
+    return () => {
+      stopCamera();
+    };
+  }, [activeTab, modalOpen, startCamera, stopCamera]);
 
   /**
    * Handle Manual Pass Code Form Submit
@@ -408,12 +598,13 @@ export default function QRScanner({
     <div
       className="gateapass-qr-scanner-container"
       style={{
+        width: '100%',
         maxWidth: '440px',
         margin: '0 auto',
         backgroundColor: '#FFFFFF',
         border: '1px solid #E2E8F0',
-        borderRadius: '20px',
-        boxShadow: '0 20px 40px -15px rgba(124, 58, 237, 0.1)',
+        borderRadius: '24px',
+        boxShadow: '0 20px 40px -15px rgba(124, 58, 237, 0.12)',
         overflow: 'hidden',
         textAlign: 'left',
         position: 'relative'
@@ -469,7 +660,9 @@ export default function QRScanner({
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              minWidth: '34px',
+              minHeight: '34px'
             }}
           >
             {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
@@ -489,7 +682,8 @@ export default function QRScanner({
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '4px'
+              gap: '4px',
+              minHeight: '34px'
             }}
           >
             <History size={14} />
@@ -508,7 +702,7 @@ export default function QRScanner({
           }}
           style={{
             flex: 1,
-            height: '42px',
+            height: '44px',
             border: 'none',
             borderBottom: activeTab === 'scan' ? '2px solid #7C3AED' : 'none',
             backgroundColor: activeTab === 'scan' ? '#FFFFFF' : 'transparent',
@@ -522,7 +716,7 @@ export default function QRScanner({
             gap: '6px'
           }}
         >
-          <Camera size={15} />
+          <Camera size={16} />
           Camera Scan
         </button>
 
@@ -534,7 +728,7 @@ export default function QRScanner({
           }}
           style={{
             flex: 1,
-            height: '42px',
+            height: '44px',
             border: 'none',
             borderBottom: activeTab === 'manual' ? '2px solid #7C3AED' : 'none',
             backgroundColor: activeTab === 'manual' ? '#FFFFFF' : 'transparent',
@@ -548,18 +742,18 @@ export default function QRScanner({
             gap: '6px'
           }}
         >
-          <Keyboard size={15} />
+          <Keyboard size={16} />
           Manual / Upload
         </button>
       </div>
 
-      {/* ── TAB 1: Real Camera Viewport ── */}
+      {/* ── TAB 1: Real Mobile Camera Viewport ── */}
       {activeTab === 'scan' && (
         <>
           <div
             style={{
-              backgroundColor: '#0A0F1D',
-              height: '320px',
+              backgroundColor: '#0B0F19',
+              height: '340px',
               position: 'relative',
               display: 'flex',
               alignItems: 'center',
@@ -567,22 +761,62 @@ export default function QRScanner({
               overflow: 'hidden'
             }}
           >
-            {/* Live Video Feed */}
+            {/* Live Video Feed (Always positioned in container, not display:none) */}
             <video
               ref={videoRef}
               playsInline
+              webkit-playsinline="true"
               muted
               autoPlay
               style={{
+                position: 'absolute',
+                inset: 0,
                 width: '100%',
                 height: '100%',
                 objectFit: 'cover',
-                display: cameraActive ? 'block' : 'none'
+                opacity: cameraStatus === 'ready' || cameraStatus === 'verifying' ? 1 : 0,
+                transition: 'opacity 0.25s ease'
               }}
             />
 
+            {/* Initializing / Requesting Permission View */}
+            {(cameraStatus === 'requesting-permission' || cameraStatus === 'initializing') && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '12px',
+                  color: '#FFFFFF',
+                  padding: '20px',
+                  textAlign: 'center',
+                  zIndex: 2
+                }}
+              >
+                <div
+                  style={{
+                    width: '48px',
+                    height: '48px',
+                    border: '3px solid rgba(124, 58, 237, 0.3)',
+                    borderTopColor: '#A855F7',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }}
+                />
+                <p style={{ fontSize: '13px', fontWeight: 600, color: '#E2E8F0', margin: 0 }}>
+                  {statusMessage}
+                </p>
+                <p style={{ fontSize: '11px', color: '#94A3B8', margin: 0 }}>
+                  Tap Allow if your browser asks for camera permission
+                </p>
+              </div>
+            )}
+
             {/* Error or Permission Denied State */}
-            {cameraError && (
+            {cameraStatus === 'error' && (
               <div
                 style={{
                   position: 'absolute',
@@ -595,7 +829,8 @@ export default function QRScanner({
                   padding: '24px',
                   textAlign: 'center',
                   gap: '12px',
-                  color: '#FFFFFF'
+                  color: '#FFFFFF',
+                  zIndex: 3
                 }}
               >
                 <div
@@ -613,14 +848,14 @@ export default function QRScanner({
                   <CameraOff size={26} />
                 </div>
                 <p style={{ fontSize: '13px', margin: 0, color: '#E2E8F0', maxWidth: '300px', lineHeight: '18px' }}>
-                  {cameraError}
+                  {cameraError || statusMessage}
                 </p>
                 <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                   <Button
                     variant="primary"
                     size="sm"
                     icon={RefreshCw}
-                    onClick={() => startCamera(facingMode)}
+                    onClick={() => startCamera(facingMode, selectedDeviceId)}
                     style={{ fontSize: '12px', backgroundColor: '#7C3AED' }}
                   >
                     Retry Camera
@@ -639,59 +874,62 @@ export default function QRScanner({
             )}
 
             {/* Target Scanning Reticle with Animated Laser Line */}
-            {cameraActive && !cameraError && (
+            {(cameraStatus === 'ready' || cameraStatus === 'verifying') && (
               <div
                 style={{
-                  width: '210px',
-                  height: '210px',
+                  width: '220px',
+                  height: '220px',
                   border: '2.5px solid #7C3AED',
-                  borderRadius: '16px',
+                  borderRadius: '20px',
                   position: 'relative',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  boxShadow: '0 0 0 9999px rgba(10, 15, 29, 0.55)',
-                  backgroundColor: 'rgba(124, 58, 237, 0.04)'
+                  boxShadow: '0 0 0 9999px rgba(11, 15, 25, 0.58)',
+                  backgroundColor: 'rgba(124, 58, 237, 0.03)',
+                  zIndex: 1
                 }}
               >
                 {/* 4 Framing Corner Brackets */}
-                <div style={{ position: 'absolute', top: '-2px', left: '-2px', width: '20px', height: '20px', borderTop: '4px solid #A855F7', borderLeft: '4px solid #A855F7', borderTopLeftRadius: '14px' }} />
-                <div style={{ position: 'absolute', top: '-2px', right: '-2px', width: '20px', height: '20px', borderTop: '4px solid #A855F7', borderRight: '4px solid #A855F7', borderTopRightRadius: '14px' }} />
-                <div style={{ position: 'absolute', bottom: '-2px', left: '-2px', width: '20px', height: '20px', borderBottom: '4px solid #A855F7', borderLeft: '4px solid #A855F7', borderBottomLeftRadius: '14px' }} />
-                <div style={{ position: 'absolute', bottom: '-2px', right: '-2px', width: '20px', height: '20px', borderBottom: '4px solid #A855F7', borderRight: '4px solid #A855F7', borderBottomRightRadius: '14px' }} />
+                <div style={{ position: 'absolute', top: '-2px', left: '-2px', width: '22px', height: '22px', borderTop: '4px solid #A855F7', borderLeft: '4px solid #A855F7', borderTopLeftRadius: '18px' }} />
+                <div style={{ position: 'absolute', top: '-2px', right: '-2px', width: '22px', height: '22px', borderTop: '4px solid #A855F7', borderRight: '4px solid #A855F7', borderTopRightRadius: '18px' }} />
+                <div style={{ position: 'absolute', bottom: '-2px', left: '-2px', width: '22px', height: '22px', borderBottom: '4px solid #A855F7', borderLeft: '4px solid #A855F7', borderBottomLeftRadius: '18px' }} />
+                <div style={{ position: 'absolute', bottom: '-2px', right: '-2px', width: '22px', height: '22px', borderBottom: '4px solid #A855F7', borderRight: '4px solid #A855F7', borderBottomRightRadius: '18px' }} />
 
                 {/* Animated Pulsing Laser Beam */}
                 <div
                   style={{
                     position: 'absolute',
                     top: '40%',
-                    left: '8px',
-                    right: '8px',
+                    left: '10px',
+                    right: '10px',
                     height: '2px',
-                    backgroundColor: '#EC4899',
-                    boxShadow: '0 0 10px #EC4899, 0 0 20px #7C3AED',
-                    animation: 'scanLaser 2s infinite ease-in-out'
+                    backgroundColor: cameraStatus === 'verifying' ? '#10B981' : '#EC4899',
+                    boxShadow: cameraStatus === 'verifying' ? '0 0 12px #10B981' : '0 0 10px #EC4899, 0 0 20px #7C3AED',
+                    animation: 'scanLaser 2.2s infinite ease-in-out'
                   }}
                 />
               </div>
             )}
 
-            {/* In-view Floating Camera Controls (Flip Camera, Torch, Stop/Start) */}
-            {cameraActive && (
+            {/* In-view Floating Camera Controls (Flip Camera, Torch, Switch Camera Device) */}
+            {(cameraStatus === 'ready' || cameraStatus === 'verifying') && (
               <div
                 style={{
                   position: 'absolute',
                   bottom: '12px',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '10px',
-                  backgroundColor: 'rgba(15, 23, 42, 0.75)',
-                  backdropFilter: 'blur(8px)',
+                  gap: '8px',
+                  backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                  backdropFilter: 'blur(10px)',
                   padding: '6px 12px',
                   borderRadius: '30px',
-                  border: '1px solid rgba(255, 255, 255, 0.15)'
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  zIndex: 2
                 }}
               >
+                {/* Flip between Rear & Front */}
                 <button
                   type="button"
                   onClick={toggleCameraFacing}
@@ -705,13 +943,42 @@ export default function QRScanner({
                     alignItems: 'center',
                     gap: '4px',
                     fontSize: '11px',
-                    fontWeight: 600
+                    fontWeight: 600,
+                    padding: '4px 6px'
                   }}
                 >
                   <SwitchCamera size={16} />
                   <span>{facingMode === 'environment' ? 'Rear' : 'Front'}</span>
                 </button>
 
+                {/* Device Selector Dropdown (When multiple physical cameras available on phone) */}
+                {availableCameras.length > 1 && (
+                  <>
+                    <div style={{ width: '1px', height: '14px', backgroundColor: 'rgba(255,255,255,0.2)' }} />
+                    <select
+                      value={selectedDeviceId}
+                      onChange={(e) => handleSelectCamera(e.target.value)}
+                      style={{
+                        backgroundColor: 'transparent',
+                        color: '#FFFFFF',
+                        border: 'none',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        maxWidth: '90px',
+                        outline: 'none'
+                      }}
+                    >
+                      {availableCameras.map((cam, idx) => (
+                        <option key={cam.deviceId || idx} value={cam.deviceId} style={{ backgroundColor: '#0F172A', color: '#FFFFFF' }}>
+                          {cam.label || `Cam ${idx + 1}`}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                )}
+
+                {/* Torch / Flashlight Toggle */}
                 {torchSupported && (
                   <>
                     <div style={{ width: '1px', height: '14px', backgroundColor: 'rgba(255,255,255,0.2)' }} />
@@ -728,20 +995,22 @@ export default function QRScanner({
                         alignItems: 'center',
                         gap: '4px',
                         fontSize: '11px',
-                        fontWeight: 600
+                        fontWeight: 600,
+                        padding: '4px 6px'
                       }}
                     >
                       <Flashlight size={16} />
-                      <span>{torchOn ? 'Torch On' : 'Torch'}</span>
+                      <span>{torchOn ? 'On' : 'Torch'}</span>
                     </button>
                   </>
                 )}
 
+                {/* Stop Camera Button */}
                 <div style={{ width: '1px', height: '14px', backgroundColor: 'rgba(255,255,255,0.2)' }} />
                 <button
                   type="button"
                   onClick={stopCamera}
-                  title="Stop Camera Stream"
+                  title="Pause Camera"
                   style={{
                     backgroundColor: 'transparent',
                     border: 'none',
@@ -751,34 +1020,35 @@ export default function QRScanner({
                     alignItems: 'center',
                     gap: '4px',
                     fontSize: '11px',
-                    fontWeight: 600
+                    fontWeight: 600,
+                    padding: '4px 6px'
                   }}
                 >
                   <CameraOff size={16} />
-                  <span>Stop</span>
+                  <span>Pause</span>
                 </button>
               </div>
             )}
 
-            {/* Restart Camera Button when stopped */}
-            {!cameraActive && !cameraError && (
+            {/* Restart Camera Button when paused or idle */}
+            {cameraStatus === 'idle' && (
               <Button
                 variant="primary"
                 icon={Camera}
-                onClick={() => startCamera(facingMode)}
-                style={{ backgroundColor: '#7C3AED' }}
+                onClick={() => startCamera(facingMode, selectedDeviceId)}
+                style={{ backgroundColor: '#7C3AED', zIndex: 2 }}
               >
                 Start Camera Scanner
               </Button>
             )}
           </div>
 
-          {/* Scanner Guidance Bar */}
+          {/* Scanner Guidance & Status Bar */}
           <div style={{ padding: '16px 20px', backgroundColor: '#FFFFFF' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Scan size={18} style={{ color: '#7C3AED' }} />
-              <span style={{ fontSize: '14px', fontWeight: 600, color: '#0F172A' }}>
-                {isVerifying ? 'Verifying Pass Signature...' : 'Position QR Pass Inside Frame'}
+              <Scan size={18} style={{ color: cameraStatus === 'verifying' ? '#10B981' : '#7C3AED' }} />
+              <span style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>
+                {statusMessage}
               </span>
             </div>
             <p style={{ fontSize: '12px', color: '#64748B', margin: '4px 0 0', lineHeight: '17px' }}>
@@ -1098,7 +1368,7 @@ export default function QRScanner({
                 <Button
                   variant="outline"
                   onClick={handleScanNext}
-                  style={{ flex: 1, borderColor: '#CBD5E1', color: '#475569' }}
+                  style={{ flex: 1, borderColor: '#CBD5E1', color: '#475569', minHeight: '44px' }}
                 >
                   Close
                 </Button>
@@ -1106,7 +1376,7 @@ export default function QRScanner({
                   variant="primary"
                   icon={ArrowRight}
                   onClick={handleScanNext}
-                  style={{ flex: 1.4, backgroundColor: '#059669', borderColor: '#059669', color: '#FFFFFF' }}
+                  style={{ flex: 1.4, backgroundColor: '#059669', borderColor: '#059669', color: '#FFFFFF', minHeight: '44px' }}
                 >
                   Scan Next Pass
                 </Button>
@@ -1240,14 +1510,14 @@ export default function QRScanner({
                 <Button
                   variant="outline"
                   onClick={handleScanNext}
-                  style={{ flex: 1, borderColor: '#CBD5E1', color: '#475569' }}
+                  style={{ flex: 1, borderColor: '#CBD5E1', color: '#475569', minHeight: '44px' }}
                 >
                   Close
                 </Button>
                 <Button
                   variant="primary"
                   onClick={handleScanNext}
-                  style={{ flex: 1.4, backgroundColor: '#DC2626', borderColor: '#DC2626', color: '#FFFFFF' }}
+                  style={{ flex: 1.4, backgroundColor: '#DC2626', borderColor: '#DC2626', color: '#FFFFFF', minHeight: '44px' }}
                 >
                   Scan Next Pass
                 </Button>
@@ -1271,6 +1541,10 @@ export default function QRScanner({
         @keyframes scaleIn {
           from { opacity: 0; transform: scale(0.92); }
           to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
       `}</style>
     </div>

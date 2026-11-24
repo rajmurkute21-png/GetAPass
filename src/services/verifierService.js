@@ -372,6 +372,61 @@ export function queueOfflineCheckin(checkinData) {
 }
 
 /**
+ * Marks a pass as Used in the cached offline roster so repeat offline scans are blocked.
+ */
+export function markPassUsedOffline(passId, targetEventId = null, gate = 'Gate A', verifierUid = null) {
+  if (!passId) return false;
+  const cleanLower = String(passId).trim().toLowerCase();
+  const now = Date.now();
+
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const keysToUpdate = [];
+      if (targetEventId) keysToUpdate.push(`${OFFLINE_PASS_ROSTER_KEY}_${targetEventId}`);
+
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const k = window.localStorage.key(i);
+        if (k && k.startsWith(OFFLINE_PASS_ROSTER_KEY) && !keysToUpdate.includes(k)) {
+          keysToUpdate.push(k);
+        }
+      }
+
+      for (const k of keysToUpdate) {
+        const raw = window.localStorage.getItem(k);
+        if (raw) {
+          const list = JSON.parse(raw);
+          let modified = false;
+          const updated = list.map((item) => {
+            if (
+              (item.passId && item.passId.toLowerCase() === cleanLower) ||
+              (item.id && item.id.toLowerCase() === cleanLower)
+            ) {
+              modified = true;
+              return {
+                ...item,
+                checkedIn: true,
+                status: 'Used',
+                checkedInAt: now,
+                gate,
+                checkedInBy: verifierUid
+              };
+            }
+            return item;
+          });
+          if (modified) {
+            window.localStorage.setItem(k, JSON.stringify(updated));
+            return true;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[GateApass Offline Verifier] Error marking pass used offline:', err);
+  }
+  return false;
+}
+
+/**
  * Real-time subscription to turnstile check-in logs based on the user's platform role.
  * - Admin: Platform-wide turnstile check-ins
  * - Organizer: Check-ins for events owned by this organizer

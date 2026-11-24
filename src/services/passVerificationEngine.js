@@ -22,7 +22,7 @@ import { doc, getDoc, updateDoc, runTransaction, query, collection, where, getDo
 import { db } from '../config/firebase.js';
 import { COLLECTIONS, STATUS_ENUMS, generateDocId } from '../constants/firestoreSchema.js';
 import { canValidatePasses } from './permissionService.js';
-import { recordCheckInAuditLog, verifyPassOffline, queueOfflineCheckin } from './verifierService.js';
+import { recordCheckInAuditLog, verifyPassOffline, queueOfflineCheckin, markPassUsedOffline } from './verifierService.js';
 import {
   getStoredUserPasses,
   saveStoredUserPasses,
@@ -244,6 +244,7 @@ export async function verifyAndCheckInPassAuthoritative({
       code: VERIFICATION_CODES.PASS_ALREADY_USED,
       title: VERIFICATION_TITLES[VERIFICATION_CODES.PASS_ALREADY_USED],
       reason: 'Pass is currently being processed at another scanner. Duplicate attempt blocked.',
+      alreadyUsed: true,
       passId,
       timestamp: now,
       gate
@@ -549,6 +550,8 @@ export async function verifyAndCheckInPassAuthoritative({
         timestamp: now,
         status: STATUS_ENUMS.CHECK_IN.GRANTED
       });
+
+      markPassUsedOffline(passId, currentEventId, gate, verifierUser?.uid);
 
       return {
         valid: true,
