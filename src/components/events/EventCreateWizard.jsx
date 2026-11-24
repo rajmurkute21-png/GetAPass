@@ -1248,7 +1248,7 @@ export default function EventCreateWizard({
                 title: name || 'Campus Event',
                 category: category || 'Hackathons',
                 passType: previewPassItem.name || 'Standard Pass',
-                attendeeName: currentUser?.displayName || currentUser?.name || 'Aarav Shah',
+                attendeeName: currentUser?.displayName || currentUser?.name || 'Attendee',
                 authority: previewPassItem.authority || 'Participant',
                 date: startDate || '15 October 2026',
                 time: startTime || '10:00 AM',

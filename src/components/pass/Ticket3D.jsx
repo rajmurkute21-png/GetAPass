@@ -90,7 +90,7 @@ export default function Ticket3D({
 
   // Extract dynamic data from pass / booking record with graceful fallbacks
   const {
-    id = 'GP-TF26-9481',
+    id = '',
     passId,
     eventTitle = 'Campus Event',
     title,
@@ -107,14 +107,14 @@ export default function Ticket3D({
     status = 'Active',
     price = 499,
     amount,
-    bookingId = 'GAP12345678',
+    bookingId = '',
     paymentMethod = 'UPI',
     permissions = ['General Area'],
     eventCover,
     coverImage
   } = pass || {};
 
-  const resolvedPassId = passId || id || 'GP-TF26-9481';
+  const resolvedPassId = passId || id || (pass?.id ? `GP-${String(pass.id).slice(-8)}` : '');
   const resolvedTitle = title || eventTitle || 'GetAPass Event';
   const resolvedAttendee = participantName || attendeeName || 'Pass Holder';
   const resolvedBookingId = bookingId || `BK-${String(resolvedPassId).replace(/[^0-9]/g, '').slice(-6) || '849102'}`;

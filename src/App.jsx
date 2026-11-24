@@ -699,8 +699,8 @@ export default function App() {
         organizerUid: b.organizerUid
       }));
     }
-    return participants;
-  }, [adminBookings, participants]);
+    return [];
+  }, [adminBookings]);
 
   return (
     <div className="gateapass-app">
@@ -745,6 +745,8 @@ export default function App() {
               initialTab={adminInitialTab}
               events={adminEvents.length > 0 ? adminEvents : events}
               participants={adminParticipantsList}
+              bookings={adminBookings}
+              checkinHistory={checkinHistory}
               onUpdateParticipants={setParticipants}
               onCreateEvent={(newEvent) => {
                 const saved = saveEvent(newEvent, currentUser);

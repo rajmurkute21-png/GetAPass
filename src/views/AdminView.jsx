@@ -17,7 +17,9 @@ import {
   Play,
   XCircle,
   FileText,
-  Clock
+  Clock,
+  TrendingUp,
+  CreditCard
 } from 'lucide-react';
 import AdminSidebar from '../components/navigation/AdminSidebar';
 import Button from '../components/common/Button';
@@ -53,6 +55,8 @@ import {
 export default function AdminView({
   events = [],
   participants = [],
+  bookings = [],
+  checkinHistory = [],
   onUpdateParticipants,
   onCreateEvent,
   onAuthorizeEvent,
@@ -313,20 +317,46 @@ export default function AdminView({
   const [isAddStaffOpen, setIsAddStaffOpen] = useState(false);
   const [newStaff, setNewStaff] = useState({ name: '', email: '', role: 'Verifier', gate: 'Gate A' });
 
+  // Dynamic aggregations from genuine database records
+  const totalPassesIssued = React.useMemo(() => {
+    return bookings.reduce((sum, b) => {
+      if (Array.isArray(b.passes) && b.passes.length > 0) {
+        return sum + b.passes.length;
+      }
+      return sum + (Number(b.quantity) || 1);
+    }, 0);
+  }, [bookings]);
+
+  const totalRevenue = React.useMemo(() => {
+    return bookings.reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
+  }, [bookings]);
+
+  const successfulBookingsCount = React.useMemo(() => {
+    return bookings.filter(b => b.status === 'Active' || b.status === 'Confirmed' || b.status === 'Success' || !b.status).length;
+  }, [bookings]);
+
+  const failedBookingsCount = React.useMemo(() => {
+    return bookings.filter(b => b.status === 'Failed').length;
+  }, [bookings]);
+
+  const refundedBookingsAmount = React.useMemo(() => {
+    return bookings.filter(b => b.status === 'Refunded' || b.status === 'Cancelled').reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
+  }, [bookings]);
+
   // Dynamic 3D Pass Builder & Library State
   const [passBuilderConfig, setPassBuilderConfig] = useState({
     id: 'GP-BUILD-001',
-    eventTitle: 'TechFest 2026',
-    tagline: 'Annual National Technology Summit',
+    eventTitle: 'Campus Event',
+    tagline: 'Annual Summit & Conference',
     category: 'Hackathons',
     passType: 'VIP Pass',
     authority: 'VIP',
     price: 499,
-    venue: 'Zeal College, Pune',
+    venue: 'Campus Auditorium',
     date: '15 October 2026',
     time: '10:00 AM – 8:00 PM',
     gate: 'Gate VIP',
-    attendeeName: 'Aarav Shah',
+    attendeeName: currentUser?.displayName || 'Attendee',
     status: 'Active',
     permissions: ['General Area', 'Workshop Area', 'VIP Area', 'Backstage'],
     coverImage: ''
@@ -522,10 +552,30 @@ export default function AdminView({
               }}
             >
               {[
-                { label: 'Total Events', value: events.length.toString(), change: '+2 this month', status: 'Active' },
-                { label: 'Passes Issued', value: '3,842', change: '+18% vs last week', status: 'Active' },
-                { label: 'Total Revenue', value: '₹4,12,650', change: '+24% revenue', status: 'Active' },
-                { label: 'Turnstile Check-ins', value: '2,918', change: '76% scan rate', status: 'Active' }
+                {
+                  label: 'Total Events',
+                  value: events.length.toString(),
+                  change: `${events.filter(e => e.status === 'Active' || e.status === 'Published').length} active on campus`,
+                  status: 'Active'
+                },
+                {
+                  label: 'Passes Issued',
+                  value: totalPassesIssued.toLocaleString(),
+                  change: `${bookings.length} ${bookings.length === 1 ? 'order' : 'orders'} confirmed`,
+                  status: 'Active'
+                },
+                {
+                  label: 'Total Revenue',
+                  value: `₹${totalRevenue.toLocaleString()}`,
+                  change: totalRevenue > 0 ? 'Verified transactions' : 'No revenue yet',
+                  status: 'Active'
+                },
+                {
+                  label: 'Turnstile Check-ins',
+                  value: checkinHistory.length.toLocaleString(),
+                  change: totalPassesIssued > 0 ? `${Math.round((checkinHistory.length / totalPassesIssued) * 100)}% scan rate` : '0% scan rate',
+                  status: 'Active'
+                }
               ].map((kpi, idx) => (
                 <div
                   key={idx}
@@ -552,7 +602,7 @@ export default function AdminView({
               ))}
             </div>
 
-            {/* Revenue Chart Section (Clean flat SVG chart, NO GRADIENTS) */}
+            {/* Revenue Chart Section (Dynamic flat SVG chart or graceful empty state, NO GRADIENTS) */}
             <div
               style={{
                 padding: '24px',
@@ -567,100 +617,169 @@ export default function AdminView({
                     Revenue & Check-in Trajectory
                   </h3>
                   <p style={{ fontSize: '13px', color: 'var(--color-muted-text)' }}>
-                    Daily bookings across all registered campus events (October 2026)
+                    Daily bookings and gate check-ins across all registered campus events
                   </p>
                 </div>
-                <StatusBadge status="Active" />
+                <StatusBadge status={events.length > 0 ? 'Active' : 'Pending'} />
               </div>
 
-              {/* Responsive SVG Chart */}
-              <div style={{ width: '100%', height: '220px' }}>
-                <svg width="100%" height="100%" viewBox="0 0 800 200" preserveAspectRatio="none">
-                  {/* Grid Lines */}
-                  <line x1="0" y1="40" x2="800" y2="40" stroke="#F0F0F0" strokeWidth="1" />
-                  <line x1="0" y1="90" x2="800" y2="90" stroke="#F0F0F0" strokeWidth="1" />
-                  <line x1="0" y1="140" x2="800" y2="140" stroke="#F0F0F0" strokeWidth="1" />
-                  <line x1="0" y1="190" x2="800" y2="190" stroke="#E8E8E8" strokeWidth="1" />
-
-                  {/* Revenue Line (Solid Violet #AC58E9 - NO GRADIENTS) */}
-                  <polyline
-                    fill="none"
-                    stroke="#AC58E9"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    points="0,170 100,150 200,120 300,135 400,90 500,75 600,45 700,60 800,25"
-                  />
-
-                  {/* Check-in Line (Solid Black #000000 - NO GRADIENTS) */}
-                  <polyline
-                    fill="none"
-                    stroke="#000000"
-                    strokeWidth="2.5"
-                    strokeDasharray="4 4"
-                    points="0,185 100,165 200,145 300,150 400,115 500,100 600,80 700,85 800,60"
-                  />
-
-                  {/* Data Points */}
-                  <circle cx="600" cy="45" r="5" fill="#AC58E9" />
-                  <circle cx="800" cy="25" r="5" fill="#AC58E9" />
-                </svg>
-              </div>
-
-              <div style={{ display: 'flex', gap: '24px', marginTop: '12px', fontSize: '13px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ width: '12px', height: '3px', backgroundColor: '#AC58E9', display: 'inline-block' }} />
-                  <span>Revenue (₹)</span>
+              {bookings.length === 0 ? (
+                <div
+                  style={{
+                    padding: '48px 24px',
+                    textAlign: 'center',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '12px'
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '50%',
+                      backgroundColor: '#F3E8FF',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#7C3AED'
+                    }}
+                  >
+                    <TrendingUp size={24} />
+                  </div>
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-dark-text)' }}>
+                    No Revenue Trajectory Recorded Yet
+                  </div>
+                  <p style={{ fontSize: '13px', color: 'var(--color-muted-text)', maxWidth: '420px', lineHeight: 1.5 }}>
+                    Real-time transaction graphs will plot automatically as participants book passes and gate verifiers record turnstile admissions.
+                  </p>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ width: '12px', height: '2px', backgroundColor: '#000000', display: 'inline-block' }} />
-                  <span>Verified Turnstile Admissions</span>
-                </div>
-              </div>
+              ) : (
+                <>
+                  <div style={{ width: '100%', height: '220px' }}>
+                    <svg width="100%" height="100%" viewBox="0 0 800 200" preserveAspectRatio="none">
+                      {/* Grid Lines */}
+                      <line x1="0" y1="40" x2="800" y2="40" stroke="#F0F0F0" strokeWidth="1" />
+                      <line x1="0" y1="90" x2="800" y2="90" stroke="#F0F0F0" strokeWidth="1" />
+                      <line x1="0" y1="140" x2="800" y2="140" stroke="#F0F0F0" strokeWidth="1" />
+                      <line x1="0" y1="190" x2="800" y2="190" stroke="#E8E8E8" strokeWidth="1" />
+
+                      {/* Dynamic polyline computed from bookings */}
+                      {(() => {
+                        const step = bookings.length > 1 ? 800 / (bookings.length - 1) : 400;
+                        const maxAmt = Math.max(...bookings.map(b => Number(b.amount) || 0), 100);
+                        const points = bookings.map((b, i) => {
+                          const x = bookings.length === 1 ? 400 : Math.round(i * step);
+                          const amt = Number(b.amount) || 0;
+                          const y = Math.round(180 - (amt / maxAmt) * 140);
+                          return `${x},${y}`;
+                        }).join(' ');
+
+                        return (
+                          <>
+                            <polyline
+                              fill="none"
+                              stroke="#AC58E9"
+                              strokeWidth="3"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              points={points}
+                            />
+                            {bookings.map((b, i) => {
+                              const x = bookings.length === 1 ? 400 : Math.round(i * step);
+                              const amt = Number(b.amount) || 0;
+                              const y = Math.round(180 - (amt / maxAmt) * 140);
+                              return <circle key={i} cx={x} cy={y} r="5" fill="#AC58E9" />;
+                            })}
+                          </>
+                        );
+                      })()}
+                    </svg>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '24px', marginTop: '12px', fontSize: '13px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ width: '12px', height: '3px', backgroundColor: '#AC58E9', display: 'inline-block' }} />
+                      <span>Revenue (₹)</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ width: '12px', height: '2px', backgroundColor: '#000000', display: 'inline-block' }} />
+                      <span>Verified Turnstile Admissions ({checkinHistory.length})</span>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Event Performance & Recent Activity Columns */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
               {/* Event Performance */}
-              <div style={{ padding: '24px', border: '1px solid var(--color-gray)', borderRadius: 'var(--radius-card)' }}>
+              <div style={{ padding: '24px', border: '1px solid var(--color-gray)', borderRadius: 'var(--radius-card)', backgroundColor: 'var(--color-white)' }}>
                 <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>
                   Top Event Performance
                 </h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  {events.slice(0, 3).map((ev) => (
-                    <div key={ev.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px' }}>
-                      <div>
-                        <div style={{ fontWeight: 600 }}>{ev.title}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--color-muted-text)' }}>{ev.category} · {ev.date}</div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontWeight: 700, color: 'var(--color-deep-violet)' }}>₹{ev.startingPrice * 42}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--color-success)' }}>94% capacity</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                {events.length === 0 ? (
+                  <div style={{ fontSize: '13px', color: 'var(--color-muted-text)', padding: '24px 0', textAlign: 'center' }}>
+                    No events registered on platform yet.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {events.slice(0, 5).map((ev) => {
+                      const evBookings = bookings.filter((b) => b.eventId === ev.id || (b.eventTitle && b.eventTitle.toLowerCase() === (ev.title || ev.name || '').toLowerCase()));
+                      const evRevenue = evBookings.reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
+                      const evPasses = evBookings.reduce((sum, b) => sum + (Array.isArray(b.passes) ? b.passes.length : (Number(b.quantity) || 1)), 0);
+
+                      return (
+                        <div key={ev.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px' }}>
+                          <div>
+                            <div style={{ fontWeight: 600 }}>{ev.title || ev.name}</div>
+                            <div style={{ fontSize: '12px', color: 'var(--color-muted-text)' }}>
+                              {ev.category || 'Event'} · {ev.date || 'TBA'}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontWeight: 700, color: 'var(--color-deep-violet)' }}>
+                              ₹{evRevenue.toLocaleString()}
+                            </div>
+                            <div style={{ fontSize: '12px', color: evPasses > 0 ? 'var(--color-success)' : 'var(--color-muted-text)' }}>
+                              {evPasses} {evPasses === 1 ? 'pass' : 'passes'} issued
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Recent Activity */}
-              <div style={{ padding: '24px', border: '1px solid var(--color-gray)', borderRadius: 'var(--radius-card)' }}>
+              <div style={{ padding: '24px', border: '1px solid var(--color-gray)', borderRadius: 'var(--radius-card)', backgroundColor: 'var(--color-white)' }}>
                 <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>
                   Recent Turnstile Activity
                 </h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13px' }}>
-                  <div style={{ padding: '10px 12px', backgroundColor: 'var(--color-off-white)', borderRadius: '4px', display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Pass GP-TF26-9481 (Aarav Shah) scanned at Gate A</span>
-                    <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>Allowed</span>
+                {checkinHistory.length === 0 ? (
+                  <div style={{ fontSize: '13px', color: 'var(--color-muted-text)', padding: '24px 0', textAlign: 'center' }}>
+                    No turnstile check-ins recorded yet. Gate admissions will appear here in real time.
                   </div>
-                  <div style={{ padding: '10px 12px', backgroundColor: 'var(--color-off-white)', borderRadius: '4px', display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Pass GP-EXP-0012 scanned at Gate A</span>
-                    <span style={{ color: 'var(--color-warning)', fontWeight: 600 }}>Expired</span>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13px' }}>
+                    {checkinHistory.slice(0, 5).map((chk, idx) => (
+                      <div key={chk.id || idx} style={{ padding: '10px 12px', backgroundColor: 'var(--color-off-white)', borderRadius: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span style={{ fontWeight: 600 }}>Pass {chk.passId || chk.id}</span>
+                          {chk.participant ? ` (${chk.participant})` : ''} scanned at {chk.gate || 'Gate'}
+                          <div style={{ fontSize: '11px', color: 'var(--color-muted-text)' }}>
+                            {chk.time || 'Just now'} · {chk.event || 'Campus Event'}
+                          </div>
+                        </div>
+                        <span style={{ color: chk.result === 'Valid' || chk.result === 'Allowed' ? 'var(--color-success)' : 'var(--color-warning)', fontWeight: 600 }}>
+                          {chk.result || 'Allowed'}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                  <div style={{ padding: '10px 12px', backgroundColor: 'var(--color-off-white)', borderRadius: '4px', display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Payment ₹499 confirmed for Buildathon 2026</span>
-                    <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>Success</span>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
@@ -1597,7 +1716,7 @@ export default function AdminView({
                                 title: tpl.eventTitle || tpl.name,
                                 category: tplCategory,
                                 passType: tpl.passType || 'Standard Pass',
-                                attendeeName: 'Aarav Shah',
+                                attendeeName: currentUser?.displayName || 'Attendee',
                                 authority: tpl.authority || 'Participant',
                                 date: tpl.date || '15 October 2026',
                                 time: tpl.time || '10:00 AM',
@@ -1716,7 +1835,7 @@ export default function AdminView({
                       tagline: previewTicketModal.tagline,
                       category: previewTicketModal.category || 'Concert',
                       passType: previewTicketModal.passType || 'VIP Pass',
-                      attendeeName: 'Aarav Shah',
+                      attendeeName: currentUser?.displayName || 'Attendee',
                       authority: previewTicketModal.authority || 'VIP',
                       price: previewTicketModal.price || 499,
                       venue: previewTicketModal.venue || 'Zeal College, Pune',
@@ -1831,52 +1950,60 @@ export default function AdminView({
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
               <div style={{ padding: '16px', border: '1px solid var(--color-gray)', borderRadius: '4px' }}>
                 <span style={{ fontSize: '12px', color: 'var(--color-muted-text)', textTransform: 'uppercase' }}>Gross Revenue</span>
-                <div style={{ fontSize: '24px', fontWeight: 700, marginTop: '4px' }}>₹4,12,650</div>
+                <div style={{ fontSize: '24px', fontWeight: 700, marginTop: '4px' }}>₹{totalRevenue.toLocaleString()}</div>
               </div>
               <div style={{ padding: '16px', border: '1px solid var(--color-gray)', borderRadius: '4px' }}>
                 <span style={{ fontSize: '12px', color: 'var(--color-muted-text)', textTransform: 'uppercase' }}>Successful</span>
-                <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-success)', marginTop: '4px' }}>1,842</div>
+                <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-success)', marginTop: '4px' }}>{successfulBookingsCount.toLocaleString()}</div>
               </div>
               <div style={{ padding: '16px', border: '1px solid var(--color-gray)', borderRadius: '4px' }}>
                 <span style={{ fontSize: '12px', color: 'var(--color-muted-text)', textTransform: 'uppercase' }}>Failed</span>
-                <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-error)', marginTop: '4px' }}>14</div>
+                <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-error)', marginTop: '4px' }}>{failedBookingsCount.toLocaleString()}</div>
               </div>
               <div style={{ padding: '16px', border: '1px solid var(--color-gray)', borderRadius: '4px' }}>
                 <span style={{ fontSize: '12px', color: 'var(--color-muted-text)', textTransform: 'uppercase' }}>Refunds</span>
-                <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-warning)', marginTop: '4px' }}>₹3,200</div>
+                <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-warning)', marginTop: '4px' }}>₹{refundedBookingsAmount.toLocaleString()}</div>
               </div>
             </div>
 
             {/* Transactions Table */}
             <div style={{ border: '1px solid var(--color-gray)', borderRadius: 'var(--radius-card)', overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--color-gray)', backgroundColor: 'var(--color-white)' }}>
-                    <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px' }}>TRANSACTION</th>
-                    <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px' }}>PARTICIPANT</th>
-                    <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px' }}>AMOUNT</th>
-                    <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px' }}>METHOD</th>
-                    <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px' }}>STATUS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { id: 'TXN-9021', name: 'Aarav Shah', amount: '₹199', method: 'UPI', status: 'Active' },
-                    { id: 'TXN-9020', name: 'Pooja Kulkarni', amount: '₹99', method: 'UPI', status: 'Active' },
-                    { id: 'TXN-9019', name: 'Devendra Rathore', amount: '₹499', method: 'Card', status: 'Active' },
-                    { id: 'TXN-9018', name: 'Tanvi Joshi', amount: '₹199', method: 'UPI', status: 'Failed' },
-                    { id: 'TXN-9017', name: 'Rohan Verma', amount: '₹149', method: 'Net Banking', status: 'Cancelled' }
-                  ].map((t) => (
-                    <tr key={t.id} style={{ borderBottom: '1px solid var(--color-gray)' }}>
-                      <td style={{ padding: '14px 16px', fontWeight: 600 }}>{t.id}</td>
-                      <td style={{ padding: '14px 16px' }}>{t.name}</td>
-                      <td style={{ padding: '14px 16px', fontWeight: 600 }}>{t.amount}</td>
-                      <td style={{ padding: '14px 16px', color: 'var(--color-muted-text)' }}>{t.method}</td>
-                      <td style={{ padding: '14px 16px' }}><StatusBadge status={t.status} /></td>
+              {bookings.length === 0 ? (
+                <div style={{ padding: '48px 24px', textAlign: 'center', backgroundColor: 'var(--color-white)' }}>
+                  <CreditCard size={36} style={{ color: 'var(--color-deep-violet)', marginBottom: '12px' }} />
+                  <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-dark-text)' }}>
+                    No Transactions Recorded Yet
+                  </div>
+                  <p style={{ fontSize: '13px', color: 'var(--color-muted-text)', maxWidth: '420px', margin: '6px auto 0' }}>
+                    All attendee ticket orders and payment transactions from the database will be audited and displayed here.
+                  </p>
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--color-gray)', backgroundColor: 'var(--color-white)' }}>
+                      <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px' }}>TRANSACTION</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px' }}>PARTICIPANT</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px' }}>EVENT</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px' }}>AMOUNT</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px' }}>METHOD</th>
+                      <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px' }}>STATUS</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {bookings.map((t) => (
+                      <tr key={t.id || t.bookingId} style={{ borderBottom: '1px solid var(--color-gray)' }}>
+                        <td style={{ padding: '14px 16px', fontWeight: 600 }}>{t.transactionId || t.id || t.bookingId}</td>
+                        <td style={{ padding: '14px 16px' }}>{t.participantName || t.attendeeName || t.userEmail || 'Attendee'}</td>
+                        <td style={{ padding: '14px 16px', color: 'var(--color-muted-text)' }}>{t.eventTitle || 'Campus Event'}</td>
+                        <td style={{ padding: '14px 16px', fontWeight: 600 }}>₹{t.amount}</td>
+                        <td style={{ padding: '14px 16px', color: 'var(--color-muted-text)' }}>{t.paymentMethod || 'UPI'}</td>
+                        <td style={{ padding: '14px 16px' }}><StatusBadge status={t.status || 'Active'} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         )}

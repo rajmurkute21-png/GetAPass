@@ -19,7 +19,7 @@ export default function PaymentSummary({
   const [cardCvv, setCardCvv] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState('idle'); // 'idle' | 'success' | 'failed'
-  const [txnId, setTxnId] = useState('TXN-2026-881920');
+  const [txnId, setTxnId] = useState('');
   const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   const subtotal = selectedPasses.reduce((acc, p) => acc + p.price * p.qty, 0);
@@ -50,8 +50,8 @@ export default function PaymentSummary({
           onSuccess({
             amount: total,
             method: method.toUpperCase(),
-            eventTitle: event?.title || 'TechFest 2026',
-            attendeeName: attendee.name || 'Aarav Shah',
+            eventTitle: event?.title || 'Campus Event',
+            attendeeName: attendee?.name || 'Attendee',
             passType: selectedPasses[0]?.name || 'Participant Pass',
             passes: selectedPasses
           });
@@ -96,7 +96,7 @@ export default function PaymentSummary({
             Payment Successful
           </h2>
           <p style={{ fontSize: '14px', color: 'var(--color-muted-text)', marginTop: '4px' }}>
-            Your GateApass has been generated and sent to {attendee.email || 'aarav@campus.edu'}.
+            Your GateApass has been generated and sent to {attendee?.email || 'your registered email'}.
           </p>
         </div>
 
@@ -123,7 +123,7 @@ export default function PaymentSummary({
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ color: 'var(--color-muted-text)' }}>Event</span>
-            <span style={{ fontWeight: 600 }}>{event?.title || 'TechFest 2026'}</span>
+            <span style={{ fontWeight: 600 }}>{event?.title || 'Campus Event'}</span>
           </div>
         </div>
       </div>
