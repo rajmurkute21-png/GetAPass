@@ -353,3 +353,44 @@ export function queueOfflineCheckin(checkinData) {
   } catch {}
   return false;
 }
+
+/**
+ * Real-time subscription to turnstile check-in logs based on the user's platform role.
+ * - Admin: Platform-wide turnstile check-ins
+ * - Organizer: Check-ins for events owned by this organizer
+ * - Verifier: Check-ins logged by this verifier
+ */
+export function subscribeToRoleCheckIns(actor, onUpdate, onError) {
+  if (!actor || !actor.uid) {
+    if (onUpdate) onUpdate([]);
+    return () => {};
+  }
+
+  const isAdmin = Boolean(actor.role === 'admin' || actor.isAdmin);
+  const isOrganizer = Boolean(actor.role === 'organizer' || actor.isOrganizer);
+
+  let constraints = [];
+  if (isAdmin) {
+    constraints = [];
+  } else if (isOrganizer) {
+    constraints = [where('organizerUid', '==', actor.uid)];
+  } else {
+    // Verifier
+    constraints = [where('verifierUid', '==', actor.uid)];
+  }
+
+  return subscribeToCollection({
+    collectionName: COLLECTIONS.CHECK_INS,
+    constraints,
+    orderByField: 'timestamp',
+    orderDirection: 'desc',
+    limitCount: 50,
+    onUpdate: (items) => {
+      if (onUpdate) onUpdate(items);
+    },
+    onError: (err) => {
+      console.warn('[GateApass Turnstile] Role check-ins subscription notice:', err);
+      if (onError) onError(err);
+    }
+  });
+}

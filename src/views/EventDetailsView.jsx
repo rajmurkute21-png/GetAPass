@@ -64,6 +64,9 @@ export default function EventDetailsView({
     faqs = []
   } = event;
 
+  const isSoldOut = Boolean(event.isSoldOut || (event.capacity && Number(event.totalSoldCount || 0) >= Number(event.capacity)));
+  const isUnavailable = isSoldOut || ['disabled', 'removed', 'pending', 'rejected', 'cancelled'].includes(String(status).toLowerCase());
+
   return (
     <div className="gateapass-event-details-view" style={{ textAlign: 'left', padding: '32px 0 64px' }}>
       {/* Sticky Top Booking Summary Bar */}
@@ -342,12 +345,13 @@ export default function EventDetailsView({
               </div>
 
               <Button
-                variant="liquid-glass"
+                variant={isUnavailable ? 'secondary' : 'liquid-glass'}
                 size="large"
                 fullWidth
-                onClick={onBookNow}
+                disabled={isUnavailable}
+                onClick={isUnavailable ? undefined : onBookNow}
               >
-                Book Your Pass →
+                {isSoldOut ? 'Event Sold Out' : isUnavailable ? 'Event Unavailable' : 'Book Your Pass →'}
               </Button>
 
               <p style={{ fontSize: '12px', color: 'var(--color-muted-text)', textAlign: 'center', lineHeight: '16px' }}>
@@ -369,11 +373,12 @@ export default function EventDetailsView({
           </div>
         </div>
         <Button
-          variant="liquid-glass"
-          onClick={onBookNow}
+          variant={isUnavailable ? 'secondary' : 'liquid-glass'}
+          disabled={isUnavailable}
+          onClick={isUnavailable ? undefined : onBookNow}
           style={{ minWidth: '150px' }}
         >
-          Book Now →
+          {isSoldOut ? 'Sold Out' : isUnavailable ? 'Unavailable' : 'Book Now →'}
         </Button>
       </div>
     </div>

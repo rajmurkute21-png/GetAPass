@@ -25,6 +25,9 @@ export default function EventCard({
   const [isExpanded, setIsExpanded] = useState(false);
   const [isImgHovered, setIsImgHovered] = useState(false);
 
+  const isSoldOut = Boolean(event.isSoldOut || (event.capacity && Number(event.totalSoldCount || 0) >= Number(event.capacity)));
+  const isUnavailable = isSoldOut || ['disabled', 'removed', 'pending', 'rejected', 'cancelled'].includes(String(status).toLowerCase());
+
   return (
     <motion.div
       className="gateapass-card gateapass-event-card"
@@ -138,7 +141,25 @@ export default function EventCard({
           >
             {category}
           </span>
-          <StatusBadge status={status} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <StatusBadge status={status} />
+            {isSoldOut && (
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  color: '#DC2626',
+                  backgroundColor: '#FEE2E2',
+                  padding: '2px 8px',
+                  borderRadius: '9999px',
+                  letterSpacing: '0.4px'
+                }}
+              >
+                Sold Out
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Title & Description */}
@@ -253,12 +274,13 @@ export default function EventCard({
 
         {/* Action Button */}
         <Button
-          variant="primary"
-          icon={Check}
+          variant={isUnavailable ? 'secondary' : 'primary'}
+          icon={isSoldOut ? null : Check}
           fullWidth
-          onClick={onBook}
+          disabled={isUnavailable}
+          onClick={isUnavailable ? undefined : onBook}
         >
-          Book event
+          {isSoldOut ? 'Sold Out' : isUnavailable ? 'Unavailable' : 'Book event'}
         </Button>
       </div>
     </motion.div>

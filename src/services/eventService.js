@@ -13,7 +13,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '../config/firebase.js';
 import { INITIAL_EVENTS } from '../data/mockData.js';
 import { savePassType } from '../data/passTypes.js';
-import { fetchPaginatedCollection } from './firestoreService.js';
+import { fetchPaginatedCollection, subscribeToDocument } from './firestoreService.js';
 
 export const EVENTS_COLLECTION = 'events';
 export const EVENTS_STORAGE_KEY = 'gateapass_events';
@@ -1086,4 +1086,45 @@ export async function fetchOrganizerEventsPaginated(organizerUid, actor, { pageS
     pageSize,
     lastDoc
   });
+}
+
+/**
+ * Real-time listener for a single event document (details, availability, capacity, status).
+ */
+export function subscribeToEventById(eventId, onUpdate, onError) {
+  if (!eventId) {
+    if (onUpdate) onUpdate(null);
+    return () => {};
+  }
+
+  // First deliver from local memory/localStorage cache
+  const local = getStoredLocalEvents();
+  const cached = local.find((e) => e.id === eventId);
+  if (cached && onUpdate) {
+    onUpdate(cached);
+  }
+
+  return subscribeToDocument(EVENTS_COLLECTION, eventId, (liveDoc) => {
+    if (liveDoc) {
+      const normalized = {
+        ...liveDoc,
+        id: liveDoc.id || eventId,
+        title: liveDoc.title || liveDoc.name || 'Untitled Event',
+        name: liveDoc.title || liveDoc.name || 'Untitled Event',
+        status: normalizeEventStatus(liveDoc.status)
+      };
+
+      // Keep local cache fresh
+      const currentLocal = getStoredLocalEvents();
+      const updatedLocal = currentLocal.map((e) => (e.id === eventId ? normalized : e));
+      if (!currentLocal.some((e) => e.id === eventId)) {
+        updatedLocal.unshift(normalized);
+      }
+      saveStoredLocalEvents(updatedLocal);
+
+      if (onUpdate) onUpdate(normalized);
+    } else {
+      if (onUpdate) onUpdate(null);
+    }
+  }, onError);
 }

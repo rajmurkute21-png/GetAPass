@@ -33,31 +33,54 @@ export default function BookingView({
   const [currentStep, setCurrentStep] = useState(1);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
 
-  // Resolve available passes dynamically
+  // Resolve available passes dynamically with real-time inventory calculation
   const eventPassTypes = currentEvent.id ? getPassTypesByEvent(currentEvent.id) : [];
-  const passes = (currentEvent.passes && currentEvent.passes.length > 0)
+  const rawPasses = (currentEvent.passTypes && currentEvent.passTypes.length > 0)
+    ? currentEvent.passTypes
+    : (currentEvent.passes && currentEvent.passes.length > 0)
     ? currentEvent.passes
     : (eventPassTypes.length > 0)
-    ? eventPassTypes.map((pt) => ({
-        id: pt.id,
-        name: pt.name,
-        price: pt.price,
-        description: pt.description || ''
-      }))
+    ? eventPassTypes
     : [
         {
           id: `pass-${currentEvent.id || 'standard'}`,
           name: 'Standard Admission',
           price: currentEvent.startingPrice || 0,
-          description: 'Official digital entry pass with QR gate validation'
+          description: 'Official digital entry pass with QR gate validation',
+          capacity: currentEvent.capacity || 100,
+          soldCount: currentEvent.totalSoldCount || 0
         }
       ];
 
-  // Quantities per pass tier
+  const passes = rawPasses.map((p) => {
+    const capacity = Number(p.capacity !== undefined ? p.capacity : 100);
+    const sold = Number(p.soldCount || 0);
+    const remaining = capacity > 0 ? Math.max(0, capacity - sold) : (p.remaining !== undefined ? p.remaining : undefined);
+    const isSoldOut = Boolean(p.isSoldOut || (capacity > 0 && remaining === 0));
+    return {
+      ...p,
+      price: Number(p.price || 0),
+      remaining,
+      capacity,
+      soldCount: sold,
+      isSoldOut
+    };
+  });
+
+  const isAllTiersSoldOut = passes.length > 0 && passes.every((p) => p.isSoldOut);
+  const isEventSoldOut = Boolean(currentEvent.isSoldOut || isAllTiersSoldOut);
+
+  // Quantities per pass tier - default 1 to first available tier if not sold out
   const [quantities, setQuantities] = useState(() => {
     const initial = {};
-    passes.forEach((p, idx) => {
-      initial[p.id] = idx === 0 ? 1 : 0;
+    let firstAvailableFound = false;
+    passes.forEach((p) => {
+      if (!firstAvailableFound && !p.isSoldOut) {
+        initial[p.id] = 1;
+        firstAvailableFound = true;
+      } else {
+        initial[p.id] = 0;
+      }
     });
     return initial;
   });
@@ -110,10 +133,86 @@ export default function BookingView({
     );
   }
 
+  // Early check for Sold Out event
+  if (isEventSoldOut) {
+    return (
+      <div className="gateapass-booking-view" style={{ textAlign: 'left', padding: '48px 0 64px' }}>
+        <div className="container-desktop" style={{ maxWidth: '640px', margin: '0 auto' }}>
+          <button
+            type="button"
+            onClick={onBack}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '14px',
+              fontWeight: 500,
+              color: 'var(--color-dark-text)',
+              marginBottom: '24px',
+              cursor: 'pointer',
+              backgroundColor: 'transparent',
+              border: 'none',
+              padding: 0
+            }}
+          >
+            <ArrowLeft size={16} />
+            <span>Back to Discovery</span>
+          </button>
+
+          <div
+            style={{
+              padding: '40px 32px',
+              backgroundColor: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '24px',
+              boxShadow: '0 8px 30px rgba(0, 0, 0, 0.05)',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '16px'
+            }}
+          >
+            <div
+              style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                color: '#EF4444',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <AlertCircle size={28} />
+            </div>
+            <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+              Event Sold Out
+            </h2>
+            <p style={{ fontSize: '15px', color: '#64748B', maxWidth: '440px', lineHeight: '22px', margin: 0 }}>
+              All tickets for <strong>{currentEvent.title}</strong> have been fully booked. Stay tuned for additional pass releases or check out other upcoming campus events.
+            </p>
+            <Button variant="primary" onClick={onBack} style={{ marginTop: '8px' }}>
+              Explore Other Events
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const updateQuantity = (passId, delta) => {
+    const targetPass = passes.find((p) => p.id === passId);
+    if (!targetPass) return;
+
     setQuantities((prev) => {
       const current = prev[passId] || 0;
       const next = Math.max(0, current + delta);
+      // Enforce inventory ceiling if remaining is defined
+      if (delta > 0 && targetPass.remaining !== undefined && next > targetPass.remaining) {
+        return prev;
+      }
       return { ...prev, [passId]: next };
     });
   };
@@ -164,7 +263,7 @@ export default function BookingView({
     setCurrentStep(3);
   };
 
-  // Step 3: Confirm & Pay execution
+  // Step 3: Confirm & Pay execution with atomic overselling protection
   const handleExecutePayment = async () => {
     const orderLockKey = `order_${currentEvent.id || 'event'}_${fullName || 'attendee'}_${totalAmount}`;
     if (!acquirePaymentLock(orderLockKey)) {
@@ -175,38 +274,55 @@ export default function BookingView({
     setIsProcessing(true);
 
     setTimeout(async () => {
-      setIsProcessing(false);
-      releasePaymentLock(orderLockKey);
-      setIsSuccess(true);
-
       const generatedRef = `BK-${Math.floor(100000 + Math.random() * 900000)}`;
 
       if (onPaymentSuccess) {
-        const result = await onPaymentSuccess({
-          amount: totalAmount,
-          method: paymentMethod.toUpperCase(),
-          eventTitle: currentEvent.title,
-          attendeeName: fullName,
-          passType: selectedPassesList[0]?.name || 'General Admission',
-          passes: selectedPassesList,
-          autoNavigate: false // keep user inside the success confirmation view
-        });
-
-        setBookingConfirmation({
-          bookingReference: result?.bookingId || generatedRef,
-          issuedPasses: result?.passes || selectedPassesList.map((p, idx) => ({
-            id: `GP-2026-${idx + 1}`,
-            passId: `GP-2026-${idx + 1}`,
-            title: currentEvent.title,
+        try {
+          const result = await onPaymentSuccess({
+            amount: totalAmount,
+            method: paymentMethod.toUpperCase(),
+            eventTitle: currentEvent.title,
             attendeeName: fullName,
-            passType: p.name,
-            date: currentEvent.date,
-            time: currentEvent.time,
-            venue: currentEvent.venue,
-            category: currentEvent.category
-          }))
-        });
+            passType: selectedPassesList[0]?.name || 'General Admission',
+            passes: selectedPassesList,
+            autoNavigate: false // keep user inside the success confirmation view
+          });
+
+          setIsProcessing(false);
+          releasePaymentLock(orderLockKey);
+          setIsSuccess(true);
+
+          setBookingConfirmation({
+            bookingReference: result?.bookingId || generatedRef,
+            issuedPasses: result?.passes || selectedPassesList.map((p, idx) => ({
+              id: `GP-2026-${idx + 1}`,
+              passId: `GP-2026-${idx + 1}`,
+              title: currentEvent.title,
+              attendeeName: fullName,
+              passType: p.name,
+              date: currentEvent.date,
+              time: currentEvent.time,
+              venue: currentEvent.venue,
+              category: currentEvent.category
+            }))
+          });
+
+          // Smoothly advance to Confirmation screen after SVG checkmark plays
+          setTimeout(() => {
+            setCurrentStep(4);
+          }, 700);
+        } catch (bookingErr) {
+          setIsProcessing(false);
+          setIsSuccess(false);
+          releasePaymentLock(orderLockKey);
+          alert(bookingErr?.message || 'Booking failed. Tickets may no longer be available.');
+          return;
+        }
       } else {
+        setIsProcessing(false);
+        releasePaymentLock(orderLockKey);
+        setIsSuccess(true);
+
         setBookingConfirmation({
           bookingReference: generatedRef,
           issuedPasses: selectedPassesList.map((p, idx) => ({
@@ -221,12 +337,11 @@ export default function BookingView({
             category: currentEvent.category
           }))
         });
-      }
 
-      // Smoothly advance to Confirmation screen after SVG checkmark plays
-      setTimeout(() => {
-        setCurrentStep(4);
-      }, 700);
+        setTimeout(() => {
+          setCurrentStep(4);
+        }, 700);
+      }
     }, 1200);
   };
 

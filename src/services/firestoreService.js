@@ -17,7 +17,9 @@ import {
   orderBy,
   limit,
   startAfter,
-  onSnapshot
+  onSnapshot,
+  serverTimestamp,
+  runTransaction
 } from 'firebase/firestore';
 import { db } from '../config/firebase.js';
 
@@ -332,4 +334,95 @@ export function subscribeToCollection({
     if (onError) onError(new Error(mapFirestoreError(err)));
     return () => {};
   }
+}
+
+/**
+ * Returns a Firestore server timestamp or numeric epoch in local/test mode.
+ */
+export function getServerTimestamp() {
+  if (_inMemoryStore || !db) {
+    return Date.now();
+  }
+  return serverTimestamp();
+}
+
+/**
+ * Establishes a real-time subscription to a single document with automatic teardown.
+ */
+export function subscribeToDocument(collectionName, docId, onUpdate, onError) {
+  if (_inMemoryStore) {
+    const key = `${collectionName}/${docId}`;
+    const item = _inMemoryStore.get(key);
+    if (onUpdate) onUpdate(item ? { ...item, id: docId } : null);
+    return () => {};
+  }
+
+  if (!db || !docId) {
+    if (onUpdate) onUpdate(null);
+    return () => {};
+  }
+
+  try {
+    const docRef = doc(db, collectionName, docId);
+    const unsubscribe = onSnapshot(
+      docRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          if (onUpdate) onUpdate({ ...docSnap.data(), id: docSnap.id });
+        } else {
+          if (onUpdate) onUpdate(null);
+        }
+      },
+      (error) => {
+        console.warn(`[FirestoreService] Document snapshot error on ${collectionName}/${docId}:`, error);
+        if (onError) onError(new Error(mapFirestoreError(error)));
+      }
+    );
+
+    return unsubscribe;
+  } catch (err) {
+    console.warn(`[FirestoreService] Failed to establish document listener on ${collectionName}/${docId}:`, err);
+    if (onError) onError(new Error(mapFirestoreError(err)));
+    return () => {};
+  }
+}
+
+/**
+ * Executes an atomic Firestore transaction across documents with test-environment simulation.
+ */
+export async function runFirestoreTransaction(updateFunction) {
+  if (_inMemoryStore) {
+    const mockTxn = {
+      get: async (docRef) => {
+        const path = docRef._path || docRef.path || (docRef.id ? `${docRef.parent?.id || 'events'}/${docRef.id}` : 'events/doc');
+        const item = _inMemoryStore.get(path);
+        return {
+          exists: () => Boolean(item),
+          data: () => (item ? { ...item } : null),
+          id: docRef.id || 'doc'
+        };
+      },
+      set: (docRef, data, options = {}) => {
+        const path = docRef._path || docRef.path || (docRef.id ? `${docRef.parent?.id || 'events'}/${docRef.id}` : 'events/doc');
+        const existing = options.merge ? (_inMemoryStore.get(path) || {}) : {};
+        _inMemoryStore.set(path, { ...existing, ...sanitizeForFirestore(data), id: docRef.id });
+      },
+      update: (docRef, data) => {
+        const path = docRef._path || docRef.path || (docRef.id ? `${docRef.parent?.id || 'events'}/${docRef.id}` : 'events/doc');
+        const existing = _inMemoryStore.get(path) || {};
+        _inMemoryStore.set(path, { ...existing, ...sanitizeForFirestore(data), id: docRef.id });
+      },
+      delete: (docRef) => {
+        const path = docRef._path || docRef.path || (docRef.id ? `${docRef.parent?.id || 'events'}/${docRef.id}` : 'events/doc');
+        _inMemoryStore.delete(path);
+      }
+    };
+    return await updateFunction(mockTxn);
+  }
+
+  if (!db) {
+    throw new Error('Firestore is not configured.');
+  }
+
+  return await runTransaction(db, updateFunction);
 }

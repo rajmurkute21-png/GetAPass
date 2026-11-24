@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured } from '../config/firebase';
 import {
   signupUserWithEmail,
@@ -34,12 +34,12 @@ function getInitials(name, email) {
  * Maps raw Firebase User to clean GateApass user entity.
  * Uses Firebase UID as the primary stable identifier.
  */
-function mapFirebaseUser(rawUser, role = 'participant') {
+function mapFirebaseUser(rawUser, role = 'participant', profileData = null) {
   if (!rawUser) return null;
 
-  const displayName = rawUser.displayName || rawUser.email?.split('@')[0] || 'GateApass User';
-  const email = rawUser.email || '';
-  const photoURL = rawUser.photoURL || null;
+  const displayName = profileData?.name || profileData?.displayName || rawUser.displayName || rawUser.email?.split('@')[0] || 'GateApass User';
+  const email = profileData?.email || rawUser.email || '';
+  const photoURL = profileData?.photoURL || rawUser.photoURL || null;
   const uid = rawUser.uid; // Primary identity reference
 
   const providerData = rawUser.providerData?.[0];
@@ -62,11 +62,14 @@ function mapFirebaseUser(rawUser, role = 'participant') {
     isEmailVerified,
     isGoogle,
     providerId,
-    role, // Server-enforced role ('admin' | 'organizer' | 'participant')
+    role, // Server-enforced role ('admin' | 'organizer' | 'participant' | 'verifier')
     isAdmin: role === 'admin',
     isOrganizer: role === 'organizer' || role === 'admin',
+    isVerifier: role === 'verifier' || role === 'admin',
     avatarInitials: getInitials(displayName, email),
-    college: 'Campus Participant' // Default profile field for GateApass
+    college: profileData?.college || 'Campus Participant',
+    phone: profileData?.phone || '',
+    ...(profileData || {})
   };
 }
 
@@ -82,14 +85,22 @@ export function AuthProvider({ children }) {
     postLoginCallback: null
   });
 
-  // Listen to Firebase auth state changes with server-verified role resolution and profile sync
+  // Listen to Firebase auth state changes with real-time profile & role sync
   useEffect(() => {
     if (!auth) {
       setLoading(false);
       return;
     }
 
+    let profileUnsub = null;
+
     const unsubscribe = onAuthStateChanged(auth, async (rawUser) => {
+      // Clean up previous profile listener on auth state transition
+      if (profileUnsub) {
+        profileUnsub();
+        profileUnsub = null;
+      }
+
       if (!rawUser) {
         setFirebaseUser(null);
         setUser(null);
@@ -119,6 +130,7 @@ export function AuthProvider({ children }) {
 
         // 2. Check trusted Firestore /users/{uid} document and sync profile fields
         // Requirement 5: Create or update Firestore user profiles with UID, name, email, photoURL, role, emailVerified, createdAt and updatedAt
+        let initialProfileData = null;
         if (db) {
           try {
             const userDocRef = doc(db, 'users', rawUser.uid);
@@ -133,6 +145,7 @@ export function AuthProvider({ children }) {
 
             if (userDocSnap.exists()) {
               const existingData = userDocSnap.data();
+              initialProfileData = existingData;
               if (existingData?.role) {
                 serverRole = existingData.role;
               }
@@ -161,14 +174,26 @@ export function AuthProvider({ children }) {
                 updatedAt: Date.now()
               };
               await setDoc(userDocRef, initialProfile);
+              initialProfileData = initialProfile;
             }
+
+            // Real-time listener for profile & role promotions
+            profileUnsub = onSnapshot(userDocRef, (snap) => {
+              if (snap.exists()) {
+                const liveData = snap.data();
+                const activeRole = liveData.role || serverRole || 'participant';
+                setUser(mapFirebaseUser(rawUser, activeRole, liveData));
+              }
+            }, (err) => {
+              console.warn('[GateApass Auth] Real-time user profile sync notice:', err);
+            });
           } catch (err) {
             console.warn('[GateApass Auth] User profile document sync notice:', err);
           }
         }
 
         // Set verified user state with settled role
-        setUser(mapFirebaseUser(rawUser, serverRole));
+        setUser(mapFirebaseUser(rawUser, serverRole, initialProfileData));
       } catch (err) {
         console.warn('[GateApass Auth] Background role resolution error:', err);
         setUser(mapFirebaseUser(rawUser, 'participant'));
@@ -177,7 +202,10 @@ export function AuthProvider({ children }) {
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      if (profileUnsub) profileUnsub();
+      unsubscribe();
+    };
   }, []);
 
   const openAuthModal = useCallback((view = 'login', callback = null) => {

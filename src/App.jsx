@@ -31,6 +31,8 @@ import {
   getStoredUserPasses,
   saveStoredUserPasses
 } from './services/bookingService';
+import { subscribeToRoleCheckIns } from './services/verifierService';
+import { subscribeToUserNotifications } from './services/notificationService';
 import {
   INITIAL_PASSES,
   INITIAL_BOOKINGS,
@@ -45,6 +47,7 @@ import {
   updateEvent,
   deleteEvent,
   subscribeToEvents,
+  subscribeToEventById,
   subscribeToOrganizerEvents,
   subscribeToAllEventsAdmin,
   migrateLocalEventsToFirestore,
@@ -75,9 +78,9 @@ export default function App() {
   const [eventsSyncError, setEventsSyncError] = useState(null);
 
   // Personal participant data
-  const [passes, setPasses] = useState(INITIAL_PASSES);
-  const [bookings, setBookings] = useState(INITIAL_BOOKINGS);
-  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  const [passes, setPasses] = useState([]);
+  const [bookings, setBookings] = useState([]);
+  const [notifications, setNotifications] = useState([]);
 
   // Role-isolated data stores
   const [organizerEvents, setOrganizerEvents] = useState([]);
@@ -85,9 +88,12 @@ export default function App() {
   const [adminEvents, setAdminEvents] = useState([]);
   const [adminBookings, setAdminBookings] = useState([]);
 
-  // Mock fallbacks for turnstile and staff
-  const [participants, setParticipants] = useState(INITIAL_PARTICIPANTS);
-  const [checkinHistory, setCheckinHistory] = useState(INITIAL_CHECKINS);
+  // Live turnstile admissions & participants
+  const [participants, setParticipants] = useState([]);
+  const [checkinHistory, setCheckinHistory] = useState([]);
+
+  // Network connection state
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
 
   // Responsive mobile detection
   const [isMobile, setIsMobile] = useState(false);
@@ -310,6 +316,77 @@ export default function App() {
     };
   }, [currentUser?.uid, currentUser?.role, currentUser?.isAdmin]);
 
+  // 5. Active / Selected Event Real-Time Subscription
+  useEffect(() => {
+    if (!selectedEvent?.id) return;
+
+    const unsubscribe = subscribeToEventById(
+      selectedEvent.id,
+      (updatedEvent) => {
+        if (updatedEvent) {
+          setSelectedEvent((prev) => {
+            if (!prev || prev.id !== updatedEvent.id) return prev;
+            return { ...prev, ...updatedEvent };
+          });
+        }
+      },
+      (err) => console.warn('[GateApass Events] Live selected event subscription notice:', err)
+    );
+
+    return () => unsubscribe();
+  }, [selectedEvent?.id]);
+
+  // 6. Role-Based Check-in Admissions Real-Time Subscription
+  useEffect(() => {
+    if (!currentUser?.uid) {
+      setCheckinHistory([]);
+      return;
+    }
+
+    const unsubscribe = subscribeToRoleCheckIns(
+      currentUser,
+      (liveCheckins) => {
+        setCheckinHistory(liveCheckins);
+      },
+      (err) => console.warn('[GateApass Turnstile] Role check-ins subscription notice:', err)
+    );
+
+    return () => unsubscribe();
+  }, [currentUser?.uid, currentUser?.role, currentUser?.isAdmin, currentUser?.isOrganizer]);
+
+  // 7. User-Specific Real-Time Notifications Feed Subscription
+  useEffect(() => {
+    if (!currentUser?.uid) {
+      setNotifications([]);
+      return;
+    }
+
+    const unsubscribe = subscribeToUserNotifications(
+      currentUser.uid,
+      (userNotifs) => {
+        setNotifications(userNotifs);
+      },
+      (err) => console.warn('[GateApass Notifications] Real-time subscription notice:', err)
+    );
+
+    return () => unsubscribe();
+  }, [currentUser?.uid]);
+
+  // 8. Graceful Network Connection (Online / Offline) Monitoring
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   // Listen to local persistent event changes across windows/components
   useEffect(() => {
     const handleEventsChanged = (e) => {
@@ -512,6 +589,7 @@ export default function App() {
         }
       } catch (err) {
         console.error('[GateApass Bookings] Failed to save booking to Firestore:', err);
+        throw err;
       }
     }
 
@@ -704,6 +782,32 @@ export default function App() {
 
   return (
     <div className="gateapass-app">
+      {/* Network Connection Warning (when offline) */}
+      {!isOnline && (
+        <div
+          role="status"
+          style={{
+            backgroundColor: '#FEF3C7',
+            color: '#92400E',
+            padding: '10px 16px',
+            fontSize: '13px',
+            fontWeight: 600,
+            textAlign: 'center',
+            borderBottom: '1px solid #FDE68A',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            position: 'sticky',
+            top: 0,
+            zIndex: 9999
+          }}
+        >
+          <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#F59E0B' }} />
+          <span>You are currently offline. Showing cached records. Real-time updates will resume once reconnected.</span>
+        </div>
+      )}
+
       {/* SEPARATED PUBLIC ATTENDEE HEADER (Only rendered outside organizer studio and admin) */}
       {portalMode === 'participant' && (
         <>

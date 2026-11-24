@@ -33,11 +33,13 @@ export default function TicketCategorySelector({
         {passes.map((pass) => {
           const qty = quantities[pass.id] || 0;
           const isSelected = qty > 0;
+          const isSoldOut = Boolean(pass.isSoldOut || (pass.capacity && pass.remaining === 0));
+          const isMaxReached = pass.remaining !== undefined && qty >= pass.remaining;
 
           return (
             <motion.div
               key={pass.id}
-              whileHover={{ y: -2 }}
+              whileHover={isSoldOut ? {} : { y: -2 }}
               transition={{ duration: 0.18 }}
               style={{
                 padding: '20px',
@@ -45,7 +47,12 @@ export default function TicketCategorySelector({
                 border: isSelected
                   ? '2px solid #7C3AED'
                   : '1px solid rgba(226, 232, 240, 0.95)',
-                backgroundColor: isSelected ? 'rgba(245, 243, 255, 0.65)' : '#FFFFFF',
+                backgroundColor: isSoldOut
+                  ? '#F8FAFC'
+                  : isSelected
+                  ? 'rgba(245, 243, 255, 0.65)'
+                  : '#FFFFFF',
+                opacity: isSoldOut ? 0.7 : 1,
                 boxShadow: isSelected
                   ? '0 8px 24px -4px rgba(124, 58, 237, 0.15)'
                   : '0 2px 8px rgba(0, 0, 0, 0.04)',
@@ -59,7 +66,7 @@ export default function TicketCategorySelector({
             >
               {/* Pass Tier Details */}
               <div style={{ flex: 1, minWidth: '220px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
                   <span
                     style={{
                       fontSize: '11px',
@@ -74,9 +81,40 @@ export default function TicketCategorySelector({
                   >
                     Official Pass
                   </span>
-                  <span style={{ fontSize: '12px', color: '#10B981', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                    <ShieldCheck size={14} /> Instant Access
-                  </span>
+
+                  {isSoldOut ? (
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        color: '#DC2626',
+                        background: '#FEE2E2',
+                        padding: '2px 8px',
+                        borderRadius: '9999px',
+                        letterSpacing: '0.4px'
+                      }}
+                    >
+                      Sold Out
+                    </span>
+                  ) : pass.remaining !== undefined ? (
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        color: pass.remaining <= 10 ? '#D97706' : '#10B981',
+                        background: pass.remaining <= 10 ? '#FEF3C7' : 'rgba(16, 185, 129, 0.12)',
+                        padding: '2px 8px',
+                        borderRadius: '9999px'
+                      }}
+                    >
+                      {pass.remaining <= 10 ? `Only ${pass.remaining} left!` : `${pass.remaining} remaining`}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '12px', color: '#10B981', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <ShieldCheck size={14} /> Instant Access
+                    </span>
+                  )}
                 </div>
 
                 <h4 style={{ fontSize: '17px', fontWeight: 700, color: '#0F172A', margin: '4px 0' }}>
@@ -108,9 +146,9 @@ export default function TicketCategorySelector({
               >
                 <motion.button
                   type="button"
-                  whileTap={{ scale: 0.85 }}
+                  whileTap={qty === 0 ? {} : { scale: 0.85 }}
                   onClick={() => onUpdateQuantity(pass.id, -1)}
-                  disabled={qty === 0}
+                  disabled={qty === 0 || isSoldOut}
                   aria-label={`Decrease ${pass.name} quantity`}
                   style={{
                     width: '32px',
@@ -118,11 +156,11 @@ export default function TicketCategorySelector({
                     borderRadius: '50%',
                     border: '1px solid #CBD5E1',
                     background: '#FFFFFF',
-                    color: qty === 0 ? '#CBD5E1' : '#0F172A',
+                    color: qty === 0 || isSoldOut ? '#CBD5E1' : '#0F172A',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    cursor: qty === 0 ? 'not-allowed' : 'pointer',
+                    cursor: qty === 0 || isSoldOut ? 'not-allowed' : 'pointer',
                     boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
                   }}
                 >
@@ -135,29 +173,30 @@ export default function TicketCategorySelector({
                     fontWeight: 700,
                     minWidth: '24px',
                     textAlign: 'center',
-                    color: '#0F172A'
+                    color: isSoldOut ? '#94A3B8' : '#0F172A'
                   }}
                 >
-                  {qty}
+                  {isSoldOut ? 0 : qty}
                 </span>
 
                 <motion.button
                   type="button"
-                  whileTap={{ scale: 0.85 }}
+                  whileTap={isSoldOut || isMaxReached ? {} : { scale: 0.85 }}
                   onClick={() => onUpdateQuantity(pass.id, 1)}
+                  disabled={isSoldOut || isMaxReached}
                   aria-label={`Increase ${pass.name} quantity`}
                   style={{
                     width: '32px',
                     height: '32px',
                     borderRadius: '50%',
                     border: 'none',
-                    backgroundColor: '#7C3AED',
+                    backgroundColor: isSoldOut || isMaxReached ? '#CBD5E1' : '#7C3AED',
                     color: '#FFFFFF',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    cursor: 'pointer',
-                    boxShadow: '0 2px 8px rgba(124, 58, 237, 0.35)'
+                    cursor: isSoldOut || isMaxReached ? 'not-allowed' : 'pointer',
+                    boxShadow: isSoldOut || isMaxReached ? 'none' : '0 2px 8px rgba(124, 58, 237, 0.35)'
                   }}
                 >
                   <Plus size={15} />
