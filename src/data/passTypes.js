@@ -6,6 +6,15 @@
 
 const PASS_TYPES_STORAGE_KEY = 'gateapass_event_pass_types_v1';
 
+const LEGACY_PREDEFINED_EVENT_IDS = [
+  'techfest-2026',
+  'buildathon-2026',
+  'ai-conf-2026',
+  'devops-workshop',
+  'waves-college-fest',
+  'inter-sports-league'
+];
+
 /**
  * Initial Event Pass Types mapped to system templates
  */
@@ -22,7 +31,7 @@ function getStoredPassTypes() {
         if (Array.isArray(parsed)) {
           // If stored contains legacy predefined events, filter them out
           const cleaned = parsed.filter(
-            (pt) => pt.eventId !== 'techfest-2026' && pt.eventId !== 'buildathon-2026'
+            (pt) => !LEGACY_PREDEFINED_EVENT_IDS.includes(pt.eventId)
           );
           if (cleaned.length !== parsed.length) {
             setStoredPassTypes(cleaned);

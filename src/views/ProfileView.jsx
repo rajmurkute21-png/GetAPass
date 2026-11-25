@@ -35,6 +35,7 @@ import PaymentHelpModal from '../components/payment/PaymentHelpModal';
 import Modal from '../components/common/Modal';
 import DigitalPass from '../components/pass/DigitalPass';
 import { useAuth } from '../context/AuthContext';
+import { updateUserProfile } from '../services/userService';
 import {
   canAccessAdminDashboard,
   canAccessOrganizerDashboard,
@@ -158,8 +159,8 @@ export default function ProfileView({
 
   // Isolate passes and bookings strictly to the current active user UID
   const userPasses = React.useMemo(() => {
-    if (!activeUser?.uid) return passes;
-    return passes.filter((p) => !p.participantUid || p.participantUid === activeUser.uid);
+    if (!activeUser?.uid) return [];
+    return passes.filter((p) => p.participantUid === activeUser.uid);
   }, [passes, activeUser]);
 
   // Classify passes into Active vs History (Used, Expired) vs Terminated
@@ -235,8 +236,8 @@ export default function ProfileView({
   }, [userPasses, events]);
 
   const userBookings = React.useMemo(() => {
-    if (!activeUser?.uid) return bookings;
-    return bookings.filter((b) => !b.participantUid || b.participantUid === activeUser.uid);
+    if (!activeUser?.uid) return [];
+    return bookings.filter((b) => b.participantUid === activeUser.uid);
   }, [bookings, activeUser]);
 
   const menuItems = React.useMemo(() => {
@@ -264,14 +265,22 @@ export default function ProfileView({
     return items;
   }, [isAdmin, isOrganizer, activePasses.length, historyPasses.length, userBookings.length, notifications.length]);
 
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
+    if (!activeUser?.uid) return;
     const initials = getInitials(name);
+    try {
+      await updateUserProfile(activeUser.uid, { name, phone, college }, activeUser);
+      if (reloadUser) {
+        await reloadUser();
+      }
+    } catch (err) {
+      console.error('[GateApass Profile] Failed to save profile to Firestore:', err);
+    }
     if (onUpdateUser) {
       onUpdateUser({
-        ...user,
+        ...activeUser,
         name,
-        email,
         phone,
         college,
         avatarInitials: initials
@@ -796,7 +805,7 @@ export default function ProfileView({
                         Mobile Phone
                       </span>
                       <p style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-dark-text)', marginTop: '4px' }}>
-                        {activeUser?.phone || '+91 98765 43210'}
+                        {activeUser?.phone || 'Not provided'}
                       </p>
                     </div>
 
@@ -805,7 +814,7 @@ export default function ProfileView({
                         Institution
                       </span>
                       <p style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-dark-text)', marginTop: '4px' }}>
-                        {activeUser?.college || 'Zeal College of Engineering, Pune'}
+                        {activeUser?.college || 'Not provided'}
                       </p>
                     </div>
                   </div>

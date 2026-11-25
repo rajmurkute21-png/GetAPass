@@ -90,18 +90,19 @@ export default function BookingView({
   const { user: authUser, openAuthModal } = useAuth();
   const effectiveAttendee = attendee?.uid ? attendee : (authUser?.uid ? {
     uid: authUser.uid,
-    name: authUser.displayName || authUser.name || 'Campus Attendee',
-    displayName: authUser.displayName || authUser.name,
-    email: authUser.email,
+    name: authUser.displayName || authUser.name || '',
+    displayName: authUser.displayName || authUser.name || '',
+    email: authUser.email || '',
     phone: authUser.phone || '',
-    institution: authUser.institution || 'Campus Participant'
+    college: authUser.college || '',
+    institution: authUser.college || authUser.institution || ''
   } : null);
 
   // Attendee state
   const [fullName, setFullName] = useState(effectiveAttendee?.displayName || effectiveAttendee?.name || '');
   const [email, setEmail] = useState(effectiveAttendee?.email || '');
   const [phone, setPhone] = useState(effectiveAttendee?.phone || '');
-  const [institution, setInstitution] = useState(effectiveAttendee?.institution || 'Campus Participant');
+  const [institution, setInstitution] = useState(effectiveAttendee?.college || effectiveAttendee?.institution || '');
   const [errors, setErrors] = useState({});
 
   // Sync attendee fields when auth user logs in or profile changes
@@ -110,7 +111,7 @@ export default function BookingView({
       if (!fullName) setFullName(authUser.displayName || authUser.name || '');
       if (!email) setEmail(authUser.email || '');
       if (!phone && authUser.phone) setPhone(authUser.phone);
-      if (institution === 'Campus Participant' && authUser.institution) setInstitution(authUser.institution);
+      if (!institution && (authUser.college || authUser.institution)) setInstitution(authUser.college || authUser.institution);
     }
   }, [authUser]);
 

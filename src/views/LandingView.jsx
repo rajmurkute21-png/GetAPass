@@ -13,6 +13,12 @@ export default function LandingView({
   onViewEventDetails,
   onCreateEvent
 }) {
+  const publishedEvents = React.useMemo(() => {
+    return (events || []).filter((e) =>
+      ['active', 'published'].includes(String(e.status || 'Active').trim().toLowerCase())
+    );
+  }, [events]);
+
   return (
     <div className="gateapass-landing-page" style={{ textAlign: 'left' }}>
       {/* Editorial Top Ribbon matching Screenshot 18 */}
@@ -216,7 +222,7 @@ export default function LandingView({
             </h2>
           </div>
 
-          {events.length === 0 ? (
+          {publishedEvents.length === 0 ? (
             <div
               style={{
                 padding: '48px 24px',
@@ -275,10 +281,7 @@ export default function LandingView({
                 gap: '24px'
               }}
             >
-              {events
-                .filter((e) => ['active', 'published'].includes(String(e.status || 'Active').trim().toLowerCase()))
-                .slice(0, 3)
-                .map((event) => (
+              {publishedEvents.slice(0, 3).map((event) => (
                 <EventCard
                   key={event.id}
                   event={event}

@@ -1838,7 +1838,7 @@ export default function AdminView({
                       attendeeName: currentUser?.displayName || 'Attendee',
                       authority: previewTicketModal.authority || 'VIP',
                       price: previewTicketModal.price || 499,
-                      venue: previewTicketModal.venue || 'Zeal College, Pune',
+                      venue: previewTicketModal.venue || 'Campus Auditorium',
                       date: previewTicketModal.date || '15 October 2026',
                       time: previewTicketModal.time || '10:00 AM',
                       gate: previewTicketModal.gate || 'Gate VIP',
@@ -2304,8 +2304,8 @@ export default function AdminView({
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <Input label="Workspace Name" value="Zeal College Pune" readOnly />
-              <Input label="Authorized Domain" value="zeal.campus.edu" readOnly />
+              <Input label="Workspace Name" value={currentUser?.college || 'Campus Workspace'} readOnly />
+              <Input label="Authorized Domain" value={currentUser?.email ? (currentUser.email.split('@')[1] || 'campus.edu') : 'campus.edu'} readOnly />
               <Input label="Gate Webhook Endpoint" value="https://api.getapass.io/v1/turnstiles/sync" readOnly />
               <div style={{ padding: '16px', border: '1px solid var(--color-gray)', borderRadius: '4px' }}>
                 <h4 style={{ fontSize: '14px', fontWeight: 600 }}>Cryptographic QR Rotation</h4>
@@ -2448,7 +2448,7 @@ export default function AdminView({
 
           <Input
             label="Venue Location"
-            placeholder="Auditorium, Zeal College"
+            placeholder="Auditorium / Campus Main Hall"
             value={newEvent.venue}
             onChange={(e) => setNewEvent({ ...newEvent, venue: e.target.value })}
             required

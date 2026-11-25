@@ -47,7 +47,7 @@ export default function OrganizerStudioView({
 
   // Enforce organizer UID ownership boundary (never show another organizer's events)
   const organizerEvents = React.useMemo(() => {
-    if (!currentUser?.uid) return events;
+    if (!currentUser?.uid) return [];
     return events.filter((e) => e.organizerUid === currentUser.uid);
   }, [events, currentUser?.uid]);
 

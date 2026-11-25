@@ -33,14 +33,7 @@ import {
 } from './services/bookingService';
 import { subscribeToRoleCheckIns } from './services/verifierService';
 import { subscribeToUserNotifications } from './services/notificationService';
-import {
-  INITIAL_PASSES,
-  INITIAL_BOOKINGS,
-  INITIAL_NOTIFICATIONS,
-  INITIAL_PARTICIPANTS,
-  INITIAL_CHECKINS,
-  INITIAL_USER
-} from './data/mockData';
+import { updateUserProfile } from './services/userService';
 import {
   getAllEvents,
   saveEvent,
@@ -72,7 +65,6 @@ export default function App() {
   const [bookingData, setBookingData] = useState(null);
 
   // App Data Stores
-  const [user, setUser] = useState(INITIAL_USER);
   const [events, setEvents] = useState(getAllEvents);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [eventsSyncError, setEventsSyncError] = useState(null);
@@ -100,7 +92,7 @@ export default function App() {
 
   // Authentication Context integration
   const { user: authUser, logout, openAuthModal, setAuthModalView } = useAuth();
-  const currentUser = authUser || user;
+  const currentUser = authUser;
 
   // Route security guard: enforce verified server-role boundaries and email verification
   useEffect(() => {
@@ -768,6 +760,15 @@ export default function App() {
     }
   };
 
+  const handleUpdateProfile = async (updatedFields) => {
+    if (!currentUser?.uid) return;
+    try {
+      await updateUserProfile(currentUser.uid, updatedFields, currentUser);
+    } catch (err) {
+      console.error('[App] Failed to update user profile in Firestore:', err);
+    }
+  };
+
   const handleMobileNavSelect = (id) => {
     if (id === 'landing') {
       setActiveView('landing');
@@ -1110,7 +1111,7 @@ export default function App() {
                 <ProfileView
                   user={currentUser}
                   currentUser={currentUser}
-                  onUpdateUser={setUser}
+                  onUpdateUser={handleUpdateProfile}
                   passes={passes}
                   events={events}
                   onDeletePass={handleDeletePass}
