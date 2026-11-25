@@ -156,6 +156,79 @@ export default function BookingView({
     );
   }
 
+  // Early check for Disabled / Removed / Unavailable event (Requirement 15)
+  const canonicalEventStatus = String(currentEvent?.status || 'Active').trim().toLowerCase();
+  const isEventUnavailable = ['disabled', 'removed', 'pending', 'rejected', 'cancelled'].includes(canonicalEventStatus) ||
+    Boolean(currentEvent?.isSoftRemoved || currentEvent?.isDisabled);
+
+  if (isEventUnavailable) {
+    return (
+      <div className="gateapass-booking-view" style={{ textAlign: 'left', padding: '48px 0 64px' }}>
+        <div className="container-desktop" style={{ maxWidth: '640px', margin: '0 auto' }}>
+          <button
+            type="button"
+            onClick={onBack}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '14px',
+              fontWeight: 500,
+              color: 'var(--color-dark-text)',
+              marginBottom: '24px',
+              cursor: 'pointer',
+              backgroundColor: 'transparent',
+              border: 'none',
+              padding: 0
+            }}
+          >
+            <ArrowLeft size={16} />
+            <span>Back to Discovery</span>
+          </button>
+
+          <div
+            style={{
+              padding: '40px 32px',
+              backgroundColor: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '24px',
+              boxShadow: '0 8px 30px rgba(0, 0, 0, 0.05)',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '16px'
+            }}
+          >
+            <div
+              style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                color: '#EF4444',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <AlertCircle size={28} />
+            </div>
+            <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+              Event Booking Unavailable
+            </h2>
+            <p style={{ fontSize: '15px', color: '#64748B', maxWidth: '440px', lineHeight: '22px', margin: 0 }}>
+              Ticket reservations for <strong>{currentEvent.title}</strong> are currently unavailable ({currentEvent.status || 'Unavailable'}).
+            </p>
+            <Button variant="primary" onClick={onBack} style={{ marginTop: '8px' }}>
+              Explore Other Events
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Early check for Sold Out event
   if (isEventSoldOut) {
     return (

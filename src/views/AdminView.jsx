@@ -40,6 +40,7 @@ import {
   authorizeEvent,
   rejectEvent,
   disableEvent,
+  enableEvent,
   removeUnauthorizedEvent,
   getEventAuditLogs,
   normalizeEventStatus
@@ -62,6 +63,7 @@ export default function AdminView({
   onAuthorizeEvent,
   onRejectEvent,
   onDisableEvent,
+  onEnableEvent,
   onRemoveUnauthorizedEvent,
   onLogout,
   onBackToPortal,
@@ -69,6 +71,7 @@ export default function AdminView({
   initialTab = 'dashboard'
 }) {
   const [activeTab, setActiveTab] = useState(initialTab || 'dashboard');
+  const isAdmin = Boolean(currentUser?.role === 'admin' || currentUser?.isAdmin);
 
   useEffect(() => {
     if (initialTab) {
@@ -158,9 +161,69 @@ export default function AdminView({
     }
   };
 
-  // Event Action Handlers (Authorization, Removal, Disabling, Rejection)
+  // Event Action Handlers (Authorization, Removal, Disabling, Rejection, Re-enabling)
   const handleAuthorizeAction = async (ev) => {
-    if (!ev || processingEventId) return;
+    if (!ev) return;
+    if (processingEventId) return; // Prevent duplicate clicks (Requirement 7)
+
+    if (!isAdmin) {
+      setEventActionFeedback({
+        type: 'error',
+        message: 'Unauthorized: Only platform administrators can authorize events.'
+      });
+      return;
+    }
+
+    const canonicalStatus = normalizeEventStatus(ev.status);
+    if (canonicalStatus === 'Active' || canonicalStatus === 'Published') {
+      setEventActionFeedback({
+        type: 'error',
+        message: `Event "${ev.title || ev.name}" is already authorized and active.`
+      });
+      return;
+    }
+
+    if (canonicalStatus !== 'Pending') {
+      setEventActionFeedback({
+        type: 'error',
+        message: `Cannot authorize event with status "${canonicalStatus}". Only pending submissions can be authorized.`
+      });
+      return;
+    }
+
+    const title = (ev.title || ev.name || '').trim();
+    if (!title || title.length < 3) {
+      setEventActionFeedback({
+        type: 'error',
+        message: 'Event title must be at least 3 characters before authorization.'
+      });
+      return;
+    }
+
+    if (!ev.date?.trim() && !ev.startDate?.trim()) {
+      setEventActionFeedback({
+        type: 'error',
+        message: 'Event must have a scheduled date before authorization.'
+      });
+      return;
+    }
+
+    if (!ev.venue?.trim()) {
+      setEventActionFeedback({
+        type: 'error',
+        message: 'Event must have a venue location before authorization.'
+      });
+      return;
+    }
+
+    if (ev.capacity !== undefined && (isNaN(Number(ev.capacity)) || Number(ev.capacity) <= 0)) {
+      setEventActionFeedback({
+        type: 'error',
+        message: 'Event ticket inventory capacity must be greater than zero.'
+      });
+      return;
+    }
+
     setProcessingEventId(ev.id);
     setEventActionFeedback(null);
     try {
@@ -171,12 +234,43 @@ export default function AdminView({
       }
       setEventActionFeedback({
         type: 'success',
-        message: `Event "${ev.title || ev.name}" has been authorized and published to discovery!`
+        message: `Event "${title}" has been authorized and published to discovery!`
       });
     } catch (err) {
       setEventActionFeedback({
         type: 'error',
         message: err?.message || 'Failed to authorize event.'
+      });
+    } finally {
+      setProcessingEventId(null);
+    }
+  };
+
+  const handleReenableAction = async (ev) => {
+    if (!ev || processingEventId) return;
+    if (!isAdmin) {
+      setEventActionFeedback({
+        type: 'error',
+        message: 'Unauthorized: Only platform administrators can re-enable events.'
+      });
+      return;
+    }
+    setProcessingEventId(ev.id);
+    setEventActionFeedback(null);
+    try {
+      if (onEnableEvent) {
+        await onEnableEvent(ev.id);
+      } else {
+        await enableEvent(ev.id, currentUser);
+      }
+      setEventActionFeedback({
+        type: 'success',
+        message: `Event "${ev.title || ev.name}" has been re-enabled and restored to public discovery!`
+      });
+    } catch (err) {
+      setEventActionFeedback({
+        type: 'error',
+        message: err?.message || 'Failed to re-enable event.'
       });
     } finally {
       setProcessingEventId(null);
@@ -930,7 +1024,14 @@ export default function AdminView({
                       .map((ev) => {
                         const canonicalStatus = normalizeEventStatus(ev.status);
                         const isProcessing = processingEventId === ev.id;
-                        const canAuthorize = !isProcessing && (canonicalStatus === 'Pending' || canonicalStatus === 'Draft' || canonicalStatus === 'Disabled' || canonicalStatus === 'Removed');
+                        const isPending = canonicalStatus === 'Pending';
+                        const hasValidTitle = Boolean((ev.title || ev.name)?.trim()?.length >= 3);
+                        const hasValidDate = Boolean(ev.date?.trim() || ev.startDate?.trim());
+                        const hasValidVenue = Boolean(ev.venue?.trim());
+                        const hasValidInventory = Boolean(!ev.capacity || Number(ev.capacity) > 0);
+                        const isEligiblePendingEvent = isPending && hasValidTitle && hasValidDate && hasValidVenue && hasValidInventory;
+                        const canAuthorize = isAdmin && isPending;
+                        const isActionDisabled = !isAdmin || !isEligiblePendingEvent || Boolean(processingEventId);
 
                         return (
                           <tr key={ev.id} style={{ borderBottom: '1px solid var(--color-gray)' }}>
@@ -956,14 +1057,28 @@ export default function AdminView({
                             </td>
                             <td style={{ padding: '16px', textAlign: 'right' }}>
                               <div style={{ display: 'inline-flex', gap: '8px', alignItems: 'center' }}>
-                                {/* Authorize / Approve Action */}
+                                {/* Authorize / Approve Action — strictly for authorized admins on eligible pending events */}
                                 {canAuthorize && (
                                   <Button
                                     variant="primary"
                                     size="sm"
                                     icon={CheckCircle2}
-                                    disabled={isProcessing || !ev.title}
+                                    loading={isProcessing}
+                                    disabled={isActionDisabled}
                                     onClick={() => handleAuthorizeAction(ev)}
+                                    title={
+                                      !isAdmin
+                                        ? 'Administrator privileges required'
+                                        : !hasValidTitle
+                                        ? 'Event must have a valid title (at least 3 characters)'
+                                        : !hasValidDate
+                                        ? 'Event must have a valid scheduled date'
+                                        : !hasValidVenue
+                                        ? 'Event must have a venue location'
+                                        : !hasValidInventory
+                                        ? 'Event ticket inventory capacity must be greater than zero'
+                                        : 'Authorize and publish to public discovery'
+                                    }
                                     style={{
                                       backgroundColor: '#7C3AED',
                                       fontSize: '12px',
@@ -971,7 +1086,28 @@ export default function AdminView({
                                       padding: '0 12px'
                                     }}
                                   >
-                                    {isProcessing ? 'Authorizing...' : canonicalStatus === 'Pending' ? 'Authorize' : 'Approve & Activate'}
+                                    {isProcessing ? 'Authorizing...' : 'Authorize'}
+                                  </Button>
+                                )}
+
+                                {/* Re-enable Action for Disabled Events */}
+                                {isAdmin && canonicalStatus === 'Disabled' && (
+                                  <Button
+                                    variant="primary"
+                                    size="sm"
+                                    icon={Play}
+                                    loading={isProcessing}
+                                    disabled={Boolean(processingEventId)}
+                                    onClick={() => handleReenableAction(ev)}
+                                    title="Re-enable Event for public discovery and admissions"
+                                    style={{
+                                      backgroundColor: '#059669',
+                                      fontSize: '12px',
+                                      height: '32px',
+                                      padding: '0 12px'
+                                    }}
+                                  >
+                                    {isProcessing ? 'Re-enabling...' : 'Re-enable'}
                                   </Button>
                                 )}
 

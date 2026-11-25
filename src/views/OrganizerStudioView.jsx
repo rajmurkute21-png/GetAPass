@@ -114,8 +114,9 @@ export default function OrganizerStudioView({
     if (!deleteConfirmationModal.event) return;
     const ev = deleteConfirmationModal.event;
     const title = ev.title || ev.name || 'this event';
+    const reason = deleteConfirmationModal.reason || 'Terminated by organizer';
     if (onDeleteEvent) {
-      onDeleteEvent(ev.id, title);
+      onDeleteEvent(ev.id, title, reason);
     }
     setDeleteConfirmationModal({ isOpen: false, event: null, reason: '' });
   };

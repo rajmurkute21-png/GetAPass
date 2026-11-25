@@ -28,6 +28,7 @@ import {
   authorizeEvent,
   rejectEvent,
   disableEvent,
+  enableEvent,
   removeUnauthorizedEvent,
   logEventAudit,
   getEventAuditLogs
@@ -53,6 +54,7 @@ export {
   authorizeEvent,
   rejectEvent,
   disableEvent,
+  enableEvent,
   removeUnauthorizedEvent,
   logEventAudit,
   getEventAuditLogs

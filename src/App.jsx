@@ -47,6 +47,7 @@ import {
   authorizeEvent,
   rejectEvent,
   disableEvent,
+  enableEvent,
   removeUnauthorizedEvent
 } from './data/eventsData';
 
@@ -424,6 +425,18 @@ export default function App() {
 
   const handleBookEvent = (ev) => {
     const eventTitle = ev?.title || ev?.name || 'this event';
+    const canonicalStatus = normalizeEventStatus(ev?.status);
+
+    // Prevent new purchases for disabled, removed, pending, or cancelled events (Requirement 15)
+    if (canonicalStatus !== 'Active' && canonicalStatus !== 'Published') {
+      alert(`Booking Unavailable: "${eventTitle}" is currently ${canonicalStatus} and not open for ticket reservations.`);
+      return;
+    }
+    if (ev?.isSoftRemoved || ev?.isRemoved || ev?.isDisabled) {
+      alert(`Booking Unavailable: "${eventTitle}" has been disabled or removed by administration.`);
+      return;
+    }
+
     // 1. Requirement: Every user must have a valid authenticated Firebase account before booking tickets
     if (!currentUser) {
       if (openAuthModal) {
@@ -712,7 +725,7 @@ export default function App() {
     }
   };
 
-  const handleEventTerminationOrDeletion = (eventId, eventTitle, isDelete = true) => {
+  const handleEventTerminationOrDeletion = (eventId, eventTitle, isDelete = false, reason = '') => {
     if (isDelete) {
       deleteEvent(eventId, currentUser);
       setEvents((prev) => prev.filter((e) => e.id !== eventId));
@@ -721,9 +734,9 @@ export default function App() {
         setSelectedEvent(null);
       }
     } else {
-      updateEvent(eventId, { status: 'Cancelled' }, currentUser);
-      setEvents((prev) => prev.map((e) => (e.id === eventId ? { ...e, status: 'Cancelled' } : e)));
-      setOrganizerEvents((prev) => prev.map((e) => (e.id === eventId ? { ...e, status: 'Cancelled' } : e)));
+      updateEvent(eventId, { status: 'Cancelled', terminationReason: reason || 'Terminated by organizer' }, currentUser);
+      setEvents((prev) => prev.map((e) => (e.id === eventId ? { ...e, status: 'Cancelled', terminationReason: reason } : e)));
+      setOrganizerEvents((prev) => prev.map((e) => (e.id === eventId ? { ...e, status: 'Cancelled', terminationReason: reason } : e)));
     }
 
     // Purge passes linked to this event from attendee passes
@@ -930,6 +943,11 @@ export default function App() {
                 setEvents((prev) => prev.map((e) => (e.id === eventId ? updated : e)));
                 return updated;
               }}
+              onEnableEvent={async (eventId) => {
+                const updated = await enableEvent(eventId, currentUser);
+                setEvents((prev) => prev.map((e) => (e.id === eventId ? updated : e)));
+                return updated;
+              }}
               onRemoveUnauthorizedEvent={async (eventId, options) => {
                 const res = await removeUnauthorizedEvent(eventId, options, currentUser);
                 if (options?.permanent) {
@@ -974,10 +992,10 @@ export default function App() {
                   handleEventTerminationOrDeletion(updatedEvent.id, updatedEvent.title, false);
                 }
               }}
-              onDeleteEvent={(eventId, eventTitle) => {
+              onDeleteEvent={(eventId, eventTitle, reason) => {
                 const ev = events.find((e) => e.id === eventId);
                 const title = eventTitle || ev?.title || '';
-                handleEventTerminationOrDeletion(eventId, title, true);
+                handleEventTerminationOrDeletion(eventId, title, false, reason);
               }}
               participants={organizerParticipantsList}
               onUpdateParticipants={setParticipants}

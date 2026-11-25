@@ -89,12 +89,12 @@ export default function EventCreateWizard({
   const [endTime, setEndTime] = useState('06:00 PM');
   const [regStartDate, setRegStartDate] = useState('');
   const [regEndDate, setRegEndDate] = useState('');
-  const [venueName, setVenueName] = useState('Main Campus Auditorium, Zeal College');
-  const [address, setAddress] = useState('Survey No. 39, Narhe');
-  const [city, setCity] = useState('Pune');
-  const [state, setState] = useState('Maharashtra');
-  const [pincode, setPincode] = useState('411041');
-  const [landmark, setLandmark] = useState('Near Narhe Flyover');
+  const [venueName, setVenueName] = useState('');
+  const [address, setAddress] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [pincode, setPincode] = useState('');
+  const [landmark, setLandmark] = useState('');
   const [mapsUrl, setMapsUrl] = useState('');
 
   // Step 3: Event Branding
@@ -201,6 +201,47 @@ export default function EventCreateWizard({
     setCustomPassDesc('');
   };
 
+  // Step validation helper (Requirement 1 & 2)
+  const validateStep = (step) => {
+    setPublishError('');
+    if (step === 1) {
+      if (!name.trim() || name.trim().length < 3) {
+        setPublishError('Event Name is required and must be at least 3 characters.');
+        return false;
+      }
+      if (!category) {
+        setPublishError('Please select a valid event category.');
+        return false;
+      }
+    } else if (step === 2) {
+      if (!startDate) {
+        setPublishError('Event Start Date is required.');
+        return false;
+      }
+      if (endDate && new Date(endDate).getTime() < new Date(startDate).getTime()) {
+        setPublishError('Event End Date cannot be earlier than Start Date.');
+        return false;
+      }
+      if (!venueName.trim()) {
+        setPublishError('Venue Name is required.');
+        return false;
+      }
+    } else if (step === 4) {
+      if (!configuredPasses || configuredPasses.length === 0) {
+        setPublishError('At least one ticket pass tier is required.');
+        return false;
+      }
+      const invalidPass = configuredPasses.find(
+        (p) => !p.name?.trim() || isNaN(Number(p.capacity)) || Number(p.capacity) <= 0 || isNaN(Number(p.price)) || Number(p.price) < 0
+      );
+      if (invalidPass) {
+        setPublishError(`Pass tier "${invalidPass.name || 'Untitled'}" must have capacity > 0 and price >= 0.`);
+        return false;
+      }
+    }
+    return true;
+  };
+
   // Final Publish Event Action
   const handlePublishEvent = async () => {
     if (isSubmitting) return;
@@ -219,9 +260,16 @@ export default function EventCreateWizard({
       return;
     }
 
-    if (!name.trim()) {
-      alert('Event Name is required.');
+    if (!validateStep(1)) {
       setCurrentStep(1);
+      return;
+    }
+    if (!validateStep(2)) {
+      setCurrentStep(2);
+      return;
+    }
+    if (!validateStep(4)) {
+      setCurrentStep(4);
       return;
     }
 
@@ -1282,7 +1330,10 @@ export default function EventCreateWizard({
               <Button
                 variant="primary"
                 icon={ArrowRight}
-                onClick={() => setCurrentStep((prev) => Math.min(6, prev + 1))}
+                onClick={() => {
+                  if (!validateStep(currentStep)) return;
+                  setCurrentStep((prev) => Math.min(6, prev + 1));
+                }}
               >
                 Continue to Step {currentStep + 1} →
               </Button>
