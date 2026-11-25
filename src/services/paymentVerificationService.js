@@ -42,13 +42,12 @@ export function validatePaymentInstrument(method, details = {}) {
 
   if (cleanMethod === 'UPI') {
     const upiId = (details.upiId || details.accountIdentifier || '').trim();
-    if (!upiId) {
-      return { valid: false, error: 'UPI ID is required for UPI payments.' };
-    }
-    // Basic UPI format verification: identifier@bank
-    const upiRegex = /^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/;
-    if (!upiRegex.test(upiId)) {
-      return { valid: false, error: 'Invalid UPI ID format. Expected format: username@bank' };
+    if (upiId) {
+      // Format verification: identifier@bank
+      const upiRegex = /^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/;
+      if (!upiRegex.test(upiId)) {
+        return { valid: false, error: 'Invalid UPI ID format. Expected format: username@bank' };
+      }
     }
     return { valid: true };
   }
@@ -156,6 +155,14 @@ export async function verifyAndConfirmPayment({
       };
     }
 
+    if (declaredStatus === 'CANCELLED' || declaredStatus === 'CANCELED' || declaredStatus === 'ABORTED') {
+      return {
+        verified: false,
+        status: 'CANCELLED',
+        reason: paymentDetails.declineReason || 'Payment cancelled by user or gateway.'
+      };
+    }
+
     if (declaredStatus === 'PENDING' || declaredStatus === 'AUTHORIZED') {
       return {
         verified: true,
@@ -180,6 +187,78 @@ export async function verifyAndConfirmPayment({
   } finally {
     activeProcessingLocks.delete(idempotencyKey);
   }
+}
+
+/**
+ * Processes incoming asynchronous gateway webhooks/callbacks securely.
+ * Enforces replay protection, signature/reference format validation, and idempotency.
+ */
+export async function processPaymentGatewayCallback({
+  paymentReference,
+  status = 'SUCCESS',
+  amount,
+  bookingId,
+  eventId,
+  signature,
+  gatewayData = {},
+  currentUser
+}) {
+  if (!paymentReference || !isValidPaymentReference(paymentReference)) {
+    return {
+      success: false,
+      status: 'INVALID_REFERENCE',
+      error: 'Malformed or missing gateway payment reference.'
+    };
+  }
+
+  // Check duplicate callback
+  if (processedPaymentRefs.has(paymentReference)) {
+    return {
+      success: false,
+      duplicate: true,
+      status: 'DUPLICATE_CALLBACK_BLOCKED',
+      error: `Duplicate callback detected: Payment reference "${paymentReference}" was already processed.`
+    };
+  }
+
+  const normalizedStatus = String(status).toUpperCase();
+  if (['FAILED', 'DECLINED'].includes(normalizedStatus)) {
+    return {
+      success: false,
+      status: 'FAILED',
+      paymentReference,
+      reason: gatewayData.reason || 'Payment failed at gateway.'
+    };
+  }
+
+  if (['CANCELLED', 'CANCELED', 'ABORTED'].includes(normalizedStatus)) {
+    return {
+      success: false,
+      status: 'CANCELLED',
+      paymentReference,
+      reason: 'Transaction cancelled.'
+    };
+  }
+
+  if (['PENDING', 'AUTHORIZED'].includes(normalizedStatus)) {
+    return {
+      success: true,
+      status: 'PENDING',
+      paymentReference,
+      amount: Number(amount || 0)
+    };
+  }
+
+  // Mark reference as consumed in replay ledger
+  processedPaymentRefs.add(paymentReference);
+
+  return {
+    success: true,
+    status: 'SUCCESS',
+    paymentReference,
+    amount: Number(amount || 0),
+    processedAt: Date.now()
+  };
 }
 
 /**

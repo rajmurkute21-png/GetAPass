@@ -43,10 +43,18 @@ import { createNotification } from './notificationService.js';
 import { recordCheckInAuditLog } from './verifierService.js';
 import { verifyAndConfirmPayment } from './paymentVerificationService.js';
 import { verifyAndCheckInPassAuthoritative } from './passVerificationEngine.js';
+import { getStoredLocalEvents, saveStoredLocalEvents } from './eventService.js';
 
 export const BOOKINGS_COLLECTION = COLLECTIONS.BOOKINGS;
 export const BOOKINGS_STORAGE_KEY_PREFIX = 'gateapass_bookings_';
 export const PASSES_STORAGE_KEY_PREFIX = 'gateapass_passes_';
+
+// In-flight concurrency lock to prevent duplicate concurrent submissions
+const inFlightBookingLocks = new Set();
+
+export function resetBookingServiceLocks() {
+  inFlightBookingLocks.clear();
+}
 
 // In-memory caches isolated per user
 let _currentParticipantUid = null;
@@ -192,27 +200,39 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
     bookingData.paymentDetails?.reference ||
     `PAY_${now.toString(36).toUpperCase()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
-  // 1b. Server-Side Payment Verification & Idempotency / Replay Guard
-  const paymentVerification = await verifyAndConfirmPayment({
-    bookingId,
-    eventId,
-    authoritativeAmount,
-    paymentMethod: bookingData.paymentMethod || 'UPI',
-    paymentDetails: {
-      ...(bookingData.paymentDetails || {}),
-      amountPaid: authoritativeAmount
-    },
-    paymentReference,
-    currentUser
-  });
-
-  if (!paymentVerification.verified || paymentVerification.status === 'FAILED') {
-    throw new Error(`Payment verification declined: ${paymentVerification.reason || 'Payment could not be verified by gateway.'}`);
+  // Concurrency lock to prevent duplicate in-flight booking submissions
+  const bookingLockKey = `in_flight_${bookingId}_${paymentReference}`;
+  if (inFlightBookingLocks.has(bookingLockKey)) {
+    throw new Error('Duplicate booking submission in progress. Please wait.');
   }
+  inFlightBookingLocks.add(bookingLockKey);
 
-  const isConfirmed = paymentVerification.status === 'SUCCESS';
-  const bookingStatus = isConfirmed ? STATUS_ENUMS.BOOKING.ACTIVE : 'Pending Payment';
-  const passStatus = isConfirmed ? STATUS_ENUMS.PASS.ACTIVE : 'Pending Payment';
+  try {
+    // 1b. Server-Side Payment Verification & Idempotency / Replay Guard
+    const paymentVerification = await verifyAndConfirmPayment({
+      bookingId,
+      eventId,
+      authoritativeAmount,
+      paymentMethod: bookingData.paymentMethod || 'UPI',
+      paymentDetails: {
+        ...(bookingData.paymentDetails || {}),
+        amountPaid: authoritativeAmount
+      },
+      paymentReference,
+      currentUser
+    });
+
+    if (!paymentVerification.verified || paymentVerification.status === 'FAILED') {
+      throw new Error(`Payment verification declined: ${paymentVerification.reason || 'Payment could not be verified by gateway.'}`);
+    }
+
+    if (paymentVerification.status === 'CANCELLED') {
+      throw new Error(`Payment cancelled: ${paymentVerification.reason || 'Transaction was cancelled.'}`);
+    }
+
+    const isConfirmed = paymentVerification.status === 'SUCCESS';
+    const bookingStatus = isConfirmed ? STATUS_ENUMS.BOOKING.ACTIVE : 'Pending Payment';
+    const passStatus = isConfirmed ? STATUS_ENUMS.PASS.ACTIVE : 'Pending Payment';
 
   // 2. Build canonical individual pass list (1 distinct pass per purchased ticket)
   const passList = [];
@@ -417,8 +437,18 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
 
             // Status guard
             const liveStatus = String(liveEvent.status || 'Active').toLowerCase();
-            if (!['active', 'published'].includes(liveStatus)) {
-              throw new Error(`This event is no longer available for booking (status: ${liveEvent.status}).`);
+            if (!['active', 'published'].includes(liveStatus) || liveEvent.isSoftRemoved || liveEvent.isDisabled || liveEvent.isRemoved) {
+              throw new Error(`This event is no longer available for booking (status: ${liveEvent.status || 'Unavailable'}).`);
+            }
+
+            // Check total event capacity if defined
+            if (liveEvent.capacity !== undefined && liveEvent.capacity !== null) {
+              const cap = Number(liveEvent.capacity);
+              const sold = Number(liveEvent.totalSoldCount || 0);
+              const remaining = Math.max(0, cap - sold);
+              if (validation.quantity > remaining) {
+                throw new Error(`Insufficient tickets remaining for this event. Requested ${validation.quantity}, but only ${remaining} remain.`);
+              }
             }
 
             // Inventory check & update
@@ -427,7 +457,7 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
                 const purchased = (validation.items || []).find((it) =>
                   (it.passType && it.passType.toLowerCase() === pt.name.toLowerCase()) ||
                   (it.name && it.name.toLowerCase() === pt.name.toLowerCase()) ||
-                  it.id === pt.id
+                  (it.id && pt.id && it.id === pt.id)
                 );
 
                 if (purchased) {
@@ -458,6 +488,14 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
                 isSoldOut,
                 updatedAt: Date.now()
               });
+            } else if (liveEvent.capacity !== undefined && liveEvent.capacity !== null) {
+              const sold = Number(liveEvent.totalSoldCount || 0) + validation.quantity;
+              const cap = Number(liveEvent.capacity);
+              txn.update(eventRef, {
+                totalSoldCount: sold,
+                isSoldOut: sold >= cap,
+                updatedAt: Date.now()
+              });
             }
           });
         } catch (invErr) {
@@ -466,10 +504,51 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
             invErr.message.includes('no longer available') ||
             invErr.message.includes('does not exist')
           ) {
-            throw invErr; // Abort booking on overselling or disabled event!
+            throw invErr; // Abort booking on overselling, inventory exhaustion, or disabled event!
           }
           console.warn('[GateApass Bookings] Event inventory transaction notice:', invErr.message);
         }
+      }
+
+      // Synchronously decrement local storage event inventory so UI is immediately consistent
+      try {
+        const localEvents = getStoredLocalEvents();
+        const targetIndex = localEvents.findIndex((e) => e.id === eventId);
+        if (targetIndex !== -1) {
+          const ev = localEvents[targetIndex];
+          let newPassTypes = ev.passTypes;
+          if (Array.isArray(ev.passTypes) && ev.passTypes.length > 0) {
+            newPassTypes = ev.passTypes.map((pt) => {
+              const purchased = (validation.items || []).find((it) =>
+                (it.passType && it.passType.toLowerCase() === pt.name.toLowerCase()) ||
+                (it.name && it.name.toLowerCase() === pt.name.toLowerCase()) ||
+                (it.id && pt.id && it.id === pt.id)
+              );
+              if (purchased) {
+                const qty = Number(purchased.quantity || purchased.qty || 1);
+                const sold = Number(pt.soldCount || 0) + qty;
+                return {
+                  ...pt,
+                  soldCount: sold,
+                  isSoldOut: pt.capacity !== undefined && sold >= Number(pt.capacity)
+                };
+              }
+              return pt;
+            });
+          }
+          const newTotalSold = (Number(ev.totalSoldCount) || 0) + validation.quantity;
+          const isSoldOut = ev.capacity !== undefined && newTotalSold >= Number(ev.capacity);
+          const updatedEvents = [...localEvents];
+          updatedEvents[targetIndex] = {
+            ...ev,
+            passTypes: newPassTypes,
+            totalSoldCount: newTotalSold,
+            isSoldOut
+          };
+          saveStoredLocalEvents(updatedEvents);
+        }
+      } catch (locErr) {
+        console.warn('[GateApass Bookings] Local events inventory update notice:', locErr);
       }
 
       // 5b. Save Booking into /bookings collection with server timestamp
@@ -533,6 +612,9 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
   }
 
   return { booking: newBooking, passes: passList, pass: passList[0], transaction: createdTransaction };
+} finally {
+  inFlightBookingLocks.delete(bookingLockKey);
+}
 }
 
 /**

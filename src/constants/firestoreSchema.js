@@ -73,8 +73,8 @@ export function generateDocId(prefix) {
 }
 
 export function generateBookingId() {
-  const ts = Date.now().toString().slice(-6);
-  const rand = Math.floor(1000 + Math.random() * 9000);
+  const ts = Date.now().toString(36).toUpperCase();
+  const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
   return `BK-${ts}-${rand}`;
 }
 
@@ -143,7 +143,7 @@ export function validateBookingPayload({
   } else {
     // Validate event is published & available
     const normStatus = String(eventData.status || 'Active').trim().toLowerCase();
-    if (['disabled', 'removed', 'cancelled', 'rejected', 'pending'].includes(normStatus)) {
+    if (['disabled', 'removed', 'cancelled', 'rejected', 'pending'].includes(normStatus) || eventData.isSoftRemoved || eventData.isDisabled || eventData.isRemoved) {
       errors.push(`This event is currently ${eventData.status || 'Unavailable'} and is not available for booking.`);
     }
   }
@@ -228,6 +228,26 @@ export function validateBookingPayload({
       errors.push('Total ticket quantity must be between 1 and 50.');
     }
 
+    // Check overall event capacity if defined
+    if (eventData?.capacity !== undefined && eventData?.capacity !== null && eventData?.totalSoldCount !== undefined) {
+      const overallRemaining = Math.max(0, Number(eventData.capacity) - Number(eventData.totalSoldCount));
+      if (totalQty > overallRemaining) {
+        errors.push(
+          `Not enough tickets remaining for this event. Requested ${totalQty}, but only ${overallRemaining} remain.`
+        );
+      }
+    }
+
+    // Check for root client-side price manipulation
+    if (_clientAmount !== undefined && _clientAmount !== null) {
+      const clientAmountNum = Number(_clientAmount);
+      if (!isNaN(clientAmountNum) && Math.abs(clientAmountNum - authoritativeTotal) > 0.01) {
+        errors.push(
+          `Price manipulation detected: Authoritative total is ₹${authoritativeTotal}, but received ₹${clientAmountNum}.`
+        );
+      }
+    }
+
     return {
       isValid: errors.length === 0,
       errors,
@@ -250,6 +270,16 @@ export function validateBookingPayload({
     if (qty > remaining) {
       errors.push(
         `Not enough tickets remaining for pass type "${passTypeData.name}". Requested ${qty}, but only ${remaining} remain.`
+      );
+    }
+  }
+
+  // Check overall event capacity if defined
+  if (eventData?.capacity !== undefined && eventData?.capacity !== null && eventData?.totalSoldCount !== undefined) {
+    const overallRemaining = Math.max(0, Number(eventData.capacity) - Number(eventData.totalSoldCount));
+    if (qty > overallRemaining) {
+      errors.push(
+        `Not enough tickets remaining for this event. Requested ${qty}, but only ${overallRemaining} remain.`
       );
     }
   }

@@ -125,6 +125,69 @@ export default function BookingView({
   const [isSuccess, setIsSuccess] = useState(false);
   const [bookingConfirmation, setBookingConfirmation] = useState(null);
 
+  // Restore draft checkout session on initial load across page refresh
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage && currentEvent.id) {
+        const raw = window.sessionStorage.getItem('gateapass_active_checkout');
+        if (raw) {
+          const draft = JSON.parse(raw);
+          if (draft && draft.eventId === currentEvent.id && (Date.now() - (draft.timestamp || 0) < 3600000)) {
+            if (draft.quantities && typeof draft.quantities === 'object' && Object.keys(draft.quantities).length > 0) {
+              setQuantities(draft.quantities);
+            }
+            if (draft.currentStep && draft.currentStep < 4) {
+              setCurrentStep(draft.currentStep);
+            }
+            if (draft.attendee) {
+              if (draft.attendee.name) setFullName(draft.attendee.name);
+              if (draft.attendee.email) setEmail(draft.attendee.email);
+              if (draft.attendee.phone) setPhone(draft.attendee.phone);
+              if (draft.attendee.institution) setInstitution(draft.attendee.institution);
+            }
+            if (draft.paymentMethod) setPaymentMethod(draft.paymentMethod);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[GateApass] Could not restore checkout draft:', err);
+    }
+  }, [currentEvent.id]);
+
+  // Persist active checkout draft to sessionStorage
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage && currentEvent.id) {
+        if (currentStep === 4 || isSuccess) {
+          window.sessionStorage.removeItem('gateapass_active_checkout');
+        } else {
+          window.sessionStorage.setItem('gateapass_active_checkout', JSON.stringify({
+            eventId: currentEvent.id,
+            currentStep,
+            quantities,
+            attendee: {
+              name: fullName,
+              email,
+              phone,
+              institution
+            },
+            paymentMethod,
+            timestamp: Date.now()
+          }));
+        }
+      }
+    } catch {}
+  }, [currentEvent.id, currentStep, quantities, fullName, email, phone, institution, paymentMethod, isSuccess]);
+
+  const handleBackAction = () => {
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        window.sessionStorage.removeItem('gateapass_active_checkout');
+      }
+    } catch {}
+    if (onBack) onBack();
+  };
+
   if (!event) {
     return (
       <div className="gateapass-booking-view" style={{ textAlign: 'left', padding: '64px 0' }}>
@@ -147,7 +210,7 @@ export default function BookingView({
             <p style={{ fontSize: '14px', color: 'var(--color-muted-text)', maxWidth: '400px', lineHeight: '22px' }}>
               Please choose an event from the catalogue to select pass tiers and proceed with registration.
             </p>
-            <Button variant="primary" onClick={onBack}>
+            <Button variant="primary" onClick={handleBackAction}>
               Return to Events
             </Button>
           </div>
@@ -167,7 +230,7 @@ export default function BookingView({
         <div className="container-desktop" style={{ maxWidth: '640px', margin: '0 auto' }}>
           <button
             type="button"
-            onClick={onBack}
+            onClick={handleBackAction}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -220,7 +283,7 @@ export default function BookingView({
             <p style={{ fontSize: '15px', color: '#64748B', maxWidth: '440px', lineHeight: '22px', margin: 0 }}>
               Ticket reservations for <strong>{currentEvent.title}</strong> are currently unavailable ({currentEvent.status || 'Unavailable'}).
             </p>
-            <Button variant="primary" onClick={onBack} style={{ marginTop: '8px' }}>
+            <Button variant="primary" onClick={handleBackAction} style={{ marginTop: '8px' }}>
               Explore Other Events
             </Button>
           </div>
@@ -236,7 +299,7 @@ export default function BookingView({
         <div className="container-desktop" style={{ maxWidth: '640px', margin: '0 auto' }}>
           <button
             type="button"
-            onClick={onBack}
+            onClick={handleBackAction}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -289,7 +352,7 @@ export default function BookingView({
             <p style={{ fontSize: '15px', color: '#64748B', maxWidth: '440px', lineHeight: '22px', margin: 0 }}>
               All tickets for <strong>{currentEvent.title}</strong> have been fully booked. Stay tuned for additional pass releases or check out other upcoming campus events.
             </p>
-            <Button variant="primary" onClick={onBack} style={{ marginTop: '8px' }}>
+            <Button variant="primary" onClick={handleBackAction} style={{ marginTop: '8px' }}>
               Explore Other Events
             </Button>
           </div>
@@ -496,7 +559,7 @@ export default function BookingView({
         <div className="container-desktop" style={{ maxWidth: '640px', margin: '0 auto' }}>
           <button
             type="button"
-            onClick={onBack}
+            onClick={handleBackAction}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -558,7 +621,7 @@ export default function BookingView({
               </p>
             </div>
 
-            <Button variant="outline" onClick={onBack} style={{ marginTop: '8px' }}>
+            <Button variant="outline" onClick={handleBackAction} style={{ marginTop: '8px' }}>
               Explore Other Events
             </Button>
           </div>

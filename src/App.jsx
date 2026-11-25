@@ -177,6 +177,9 @@ export default function App() {
       } else if (path === '/profile' || hash === 'profile' || viewParam === 'profile') {
         setPortalMode('participant');
         setActiveView('profile');
+      } else if (path === '/booking' || hash === 'booking' || viewParam === 'booking') {
+        setPortalMode('participant');
+        setActiveView('booking');
       } else if (path === '/events' || hash === 'events' || viewParam === 'events') {
         setPortalMode('participant');
         setActiveView('events');
@@ -184,6 +187,25 @@ export default function App() {
     };
 
     handleUrlRoute();
+
+    // Check for active checkout session across page refresh
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        const savedDraft = window.sessionStorage.getItem('gateapass_active_checkout');
+        if (savedDraft) {
+          const parsed = JSON.parse(savedDraft);
+          if (parsed && parsed.eventId && (Date.now() - (parsed.timestamp || 0) < 3600000)) {
+            const allEvs = getAllEvents();
+            const matchedEv = allEvs.find((e) => e.id === parsed.eventId);
+            if (matchedEv) {
+              setSelectedEvent(matchedEv);
+              setActiveView('booking');
+            }
+          }
+        }
+      }
+    } catch {}
+
     window.addEventListener('popstate', handleUrlRoute);
     window.addEventListener('hashchange', handleUrlRoute);
     return () => {
@@ -200,6 +222,7 @@ export default function App() {
     else if (portalMode === 'organizer-studio') target = '/organizer';
     else if (portalMode === 'verifier') target = '/verifier';
     else if (activeView === 'profile') target = '/profile';
+    else if (activeView === 'booking') target = '/booking';
     else if (activeView === 'events') target = '/events';
     else if (activeView === 'design-system' || activeView === 'ticket') target = '/ticket';
 
