@@ -56,6 +56,18 @@ export async function createDigitalPass({
 
   const resolvedPrice = Number(price !== undefined ? price : (unitPrice !== undefined ? unitPrice : 0));
 
+  const qrPayload = JSON.stringify({
+    passId,
+    bookingId,
+    eventId,
+    event: eventTitle,
+    attendee: attendeeName,
+    passType,
+    ticketIndex: Number(ticketIndex) || 1,
+    totalTickets: Number(totalTickets) || 1,
+    status: STATUS_ENUMS.PASS.ACTIVE
+  });
+
   const passPayload = {
     passId,
     id: passId,
@@ -67,6 +79,7 @@ export async function createDigitalPass({
     attendeeName,
     attendeeEmail,
     passType,
+    ticketCategory: passType,
     price: resolvedPrice,
     unitPrice: resolvedPrice,
     ticketIndex: Number(ticketIndex) || 1,
@@ -84,6 +97,7 @@ export async function createDigitalPass({
     templateVersion,
     templateSnapshot,
     qrSignature,
+    qrPayload,
     status: STATUS_ENUMS.PASS.ACTIVE,
     checkedIn: false,
     checkedInAt: null,

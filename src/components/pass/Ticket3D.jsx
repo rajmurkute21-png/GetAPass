@@ -109,6 +109,8 @@ export default function Ticket3D({
     unitPrice,
     amount,
     bookingId = '',
+    ticketIndex,
+    totalTickets,
     paymentMethod = 'UPI',
     permissions = ['General Area'],
     eventCover,
@@ -119,11 +121,18 @@ export default function Ticket3D({
   const resolvedTitle = title || eventTitle || 'GetAPass Event';
   const resolvedAttendee = participantName || attendeeName || 'Pass Holder';
   const resolvedBookingId = bookingId || `BK-${String(resolvedPassId).replace(/[^0-9]/g, '').slice(-6) || '849102'}`;
-  const resolvedPrice = (price !== undefined && price !== null)
-    ? price
-    : (unitPrice !== undefined && unitPrice !== null
-        ? unitPrice
-        : (amount !== undefined ? amount : 0));
+  
+  // Ensure individual pass price is shown, never the combined booking amount
+  const resolvedPrice = (unitPrice !== undefined && unitPrice !== null && !isNaN(Number(unitPrice)))
+    ? Number(unitPrice)
+    : (price !== undefined && price !== null && !isNaN(Number(price)))
+        ? (totalTickets && Number(totalTickets) > 1 && amount && Number(price) === Number(amount))
+            ? Math.round(Number(amount) / Number(totalTickets))
+            : Number(price)
+        : (amount !== undefined && totalTickets && Number(totalTickets) > 1)
+            ? Math.round(Number(amount) / Number(totalTickets))
+            : Number(amount || 0);
+
   const resolvedPassType = passType || authority || 'Standard Pass';
   const resolvedDate = date || 'Date TBA';
   const resolvedTime = time || 'Time TBA';
@@ -143,14 +152,19 @@ export default function Ticket3D({
   useEffect(() => {
     let isMounted = true;
 
-    const qrPayload = JSON.stringify({
-      passId: resolvedPassId,
-      bookingId: resolvedBookingId,
-      event: resolvedTitle,
-      attendee: resolvedAttendee,
-      authority: authority,
-      status: status
-    });
+    const qrPayload = (typeof pass?.qrPayload === 'string' && pass.qrPayload.trim())
+      ? pass.qrPayload
+      : JSON.stringify({
+          passId: resolvedPassId,
+          bookingId: resolvedBookingId,
+          event: resolvedTitle,
+          attendee: resolvedAttendee,
+          authority: authority,
+          passType: resolvedPassType,
+          ticketIndex: Number(ticketIndex || 1),
+          totalTickets: Number(totalTickets || 1),
+          status: status
+        });
 
     QRCode.toDataURL(qrPayload, {
       width: 260,
@@ -523,6 +537,13 @@ export default function Ticket3D({
                     ₹{resolvedPrice} ({paymentMethod || 'Paid'})
                   </span>
                 </div>
+
+                {totalTickets && Number(totalTickets) > 1 && (
+                  <div className="ticket-back-field">
+                    <span className="ticket-back-label">Ticket Index</span>
+                    <span className="ticket-back-val">Ticket {ticketIndex || 1} of {totalTickets}</span>
+                  </div>
+                )}
 
                 <div className="ticket-back-field">
                   <span className="ticket-back-label">Turnstile Check-In</span>

@@ -31,11 +31,18 @@ export default function PassCard({
 
   const resolvedId = passId || id;
   const resolvedTitle = title || eventTitle;
-  const resolvedPrice = (price !== undefined && price !== null)
-    ? price
-    : (unitPrice !== undefined && unitPrice !== null
-        ? unitPrice
-        : (amount !== undefined ? amount : 0));
+
+  // Ensure individual pass price is shown, never the combined booking amount
+  const resolvedPrice = (unitPrice !== undefined && unitPrice !== null && !isNaN(Number(unitPrice)))
+    ? Number(unitPrice)
+    : (price !== undefined && price !== null && !isNaN(Number(price)))
+        ? (totalTickets && Number(totalTickets) > 1 && amount && Number(price) === Number(amount))
+            ? Math.round(Number(amount) / Number(totalTickets))
+            : Number(price)
+        : (amount !== undefined && totalTickets && Number(totalTickets) > 1)
+            ? Math.round(Number(amount) / Number(totalTickets))
+            : Number(amount || 0);
+
   const theme = resolveTicketTheme(category, resolvedTitle);
   const passTierTheme = resolvePassTypeTheme(passType);
 

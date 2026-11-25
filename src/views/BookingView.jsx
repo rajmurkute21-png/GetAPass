@@ -497,19 +497,38 @@ export default function BookingView({
           releasePaymentLock(orderLockKey);
           setIsSuccess(true);
 
+          const unrollFallbackPasses = (list) => {
+            const unrolled = [];
+            let ticketNum = 1;
+            const totalCount = (list || []).reduce((acc, it) => acc + (it.qty || it.quantity || 1), 0);
+            (list || []).forEach((p) => {
+              const q = p.qty || p.quantity || 1;
+              for (let i = 0; i < q; i++) {
+                unrolled.push({
+                  id: `GP-2026-${ticketNum}`,
+                  passId: `GP-2026-${ticketNum}`,
+                  ticketIndex: ticketNum,
+                  totalTickets: totalCount,
+                  title: currentEvent.title,
+                  attendeeName: fullName,
+                  passType: p.name || p.passType || 'Standard Pass',
+                  ticketCategory: p.name || p.passType || 'Standard Pass',
+                  price: p.price,
+                  unitPrice: p.price,
+                  date: currentEvent.date,
+                  time: currentEvent.time,
+                  venue: currentEvent.venue,
+                  category: currentEvent.category
+                });
+                ticketNum++;
+              }
+            });
+            return unrolled;
+          };
+
           setBookingConfirmation({
             bookingReference: result?.bookingId || paymentRef,
-            issuedPasses: result?.passes || selectedPassesList.map((p, idx) => ({
-              id: `GP-2026-${idx + 1}`,
-              passId: `GP-2026-${idx + 1}`,
-              title: currentEvent.title,
-              attendeeName: fullName,
-              passType: p.name,
-              date: currentEvent.date,
-              time: currentEvent.time,
-              venue: currentEvent.venue,
-              category: currentEvent.category
-            }))
+            issuedPasses: (result?.passes && result.passes.length > 0) ? result.passes : unrollFallbackPasses(selectedPassesList)
           });
 
           // Smoothly advance to Confirmation screen after SVG checkmark plays
@@ -528,19 +547,38 @@ export default function BookingView({
         releasePaymentLock(orderLockKey);
         setIsSuccess(true);
 
+        const unrollFallbackPasses = (list) => {
+          const unrolled = [];
+          let ticketNum = 1;
+          const totalCount = (list || []).reduce((acc, it) => acc + (it.qty || it.quantity || 1), 0);
+          (list || []).forEach((p) => {
+            const q = p.qty || p.quantity || 1;
+            for (let i = 0; i < q; i++) {
+              unrolled.push({
+                id: `GP-2026-${ticketNum}`,
+                passId: `GP-2026-${ticketNum}`,
+                ticketIndex: ticketNum,
+                totalTickets: totalCount,
+                title: currentEvent.title,
+                attendeeName: fullName,
+                passType: p.name || p.passType || 'Standard Pass',
+                ticketCategory: p.name || p.passType || 'Standard Pass',
+                price: p.price,
+                unitPrice: p.price,
+                date: currentEvent.date,
+                time: currentEvent.time,
+                venue: currentEvent.venue,
+                category: currentEvent.category
+              });
+              ticketNum++;
+            }
+          });
+          return unrolled;
+        };
+
         setBookingConfirmation({
           bookingReference: paymentRef,
-          issuedPasses: selectedPassesList.map((p, idx) => ({
-            id: `GP-2026-${idx + 1}`,
-            passId: `GP-2026-${idx + 1}`,
-            title: currentEvent.title,
-            attendeeName: fullName,
-            passType: p.name,
-            date: currentEvent.date,
-            time: currentEvent.time,
-            venue: currentEvent.venue,
-            category: currentEvent.category
-          }))
+          issuedPasses: unrollFallbackPasses(selectedPassesList)
         });
 
         setTimeout(() => {

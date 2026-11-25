@@ -53,11 +53,19 @@ class TicketErrorBoundary extends React.Component {
 
 export default function DigitalPass({
   pass,
+  siblingPasses = [],
   showActions = true,
   _onClose = null
 }) {
+  const [activePass, setActivePass] = useState(pass);
   const [copied, setCopied] = useState(false);
   const [isFlipped, setIsFlipped] = useState(false);
+
+  useEffect(() => {
+    setActivePass(pass);
+  }, [pass]);
+
+  const currentPass = activePass || pass || {};
 
   const {
     id = '',
@@ -69,7 +77,7 @@ export default function DigitalPass({
     date = 'Sat, 24 May 2025',
     time = '7:00 PM',
     venue = 'Main Auditorium'
-  } = pass || {};
+  } = currentPass;
 
   const resolvedPassId = passId || id;
   const resolvedTitle = title || eventTitle;
@@ -210,6 +218,53 @@ export default function DigitalPass({
         margin: '0 auto'
       }}
     >
+      {/* Sibling Pass Switcher for Multi-Ticket Orders */}
+      {siblingPasses && siblingPasses.length > 1 && (
+        <div
+          className="no-print"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            overflowX: 'auto',
+            padding: '6px 10px',
+            backgroundColor: 'rgba(124, 58, 237, 0.08)',
+            border: '1px solid rgba(124, 58, 237, 0.25)',
+            borderRadius: '9999px',
+            maxWidth: '100%',
+            marginBottom: '4px'
+          }}
+        >
+          <span style={{ fontSize: '12px', fontWeight: 700, color: '#C084FC', whiteSpace: 'nowrap', paddingLeft: '4px' }}>
+            Tickets ({siblingPasses.length}):
+          </span>
+          {siblingPasses.map((sp, idx) => {
+            const isSelected = (currentPass.passId || currentPass.id) === (sp.passId || sp.id);
+            return (
+              <button
+                key={sp.passId || sp.id || idx}
+                type="button"
+                onClick={() => setActivePass(sp)}
+                style={{
+                  padding: '5px 14px',
+                  borderRadius: '9999px',
+                  fontSize: '12px',
+                  fontWeight: isSelected ? 700 : 500,
+                  backgroundColor: isSelected ? '#7C3AED' : 'rgba(255, 255, 255, 0.08)',
+                  color: isSelected ? '#FFFFFF' : '#CBD5E1',
+                  border: isSelected ? '1px solid #A855F7' : '1px solid rgba(255, 255, 255, 0.15)',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.18s ease'
+                }}
+              >
+                Ticket #{sp.ticketIndex || idx + 1} ({sp.passType || 'Pass'})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* ============================================================== */}
       {/* UNIVERSAL 3D DIGITAL EVENT TICKET STAGE                         */}
       {/* ============================================================== */}
@@ -235,7 +290,7 @@ export default function DigitalPass({
         {/* 3D Interactive Ticket wrapped in Error Boundary */}
         <TicketErrorBoundary>
           <Ticket3D
-            pass={pass}
+            pass={currentPass}
             isInteractive={true}
             onFlipToggle={(flipped) => setIsFlipped(flipped)}
           />

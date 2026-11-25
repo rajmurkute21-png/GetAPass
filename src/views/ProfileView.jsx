@@ -110,6 +110,7 @@ export default function ProfileView({
   const [historyCategoryFilter, setHistoryCategoryFilter] = useState('all'); // 'all' | 'used' | 'expired'
   const [isEditing, setIsEditing] = useState(false);
   const [selectedPassForModal, setSelectedPassForModal] = useState(null);
+  const [expandedBookingId, setExpandedBookingId] = useState(null);
   const [selectedReceiptForModal, setSelectedReceiptForModal] = useState(null);
   const [selectedPaymentForHelp, setSelectedPaymentForHelp] = useState(null);
   const [checkingVerification, setCheckingVerification] = useState(false);
@@ -163,6 +164,11 @@ export default function ProfileView({
     return passes.filter((p) => p.participantUid === activeUser.uid);
   }, [passes, activeUser]);
 
+  const selectedPassSiblings = React.useMemo(() => {
+    if (!selectedPassForModal?.bookingId) return [];
+    return userPasses.filter((p) => p.bookingId === selectedPassForModal.bookingId);
+  }, [selectedPassForModal, userPasses]);
+
   // Classify passes into Active vs History (Used, Expired) vs Terminated
   const { activePasses, usedPasses, expiredPasses, historyPasses } = React.useMemo(() => {
     const active = [];
@@ -181,14 +187,13 @@ export default function ProfileView({
                (p.event && e.title?.toLowerCase() === p.event?.toLowerCase())
       );
 
-      // 1. Check if event was terminated / cancelled by the organizer or deleted
+      // 1. Check if event was terminated / cancelled by the organizer
       const isTerminated = pStatus === 'cancelled' ||
         pStatus === 'terminated' ||
         (matchedEvent && (
           String(matchedEvent.status || '').toLowerCase() === 'cancelled' ||
           String(matchedEvent.status || '').toLowerCase() === 'terminated'
-        )) ||
-        (Boolean(events && events.length > 0 && p.eventId && !matchedEvent));
+        ));
 
       // 2. Check if event is expired (past date/time)
       const dateToCheck = p.date || matchedEvent?.date || matchedEvent?.startDate;
@@ -1678,10 +1683,39 @@ export default function ProfileView({
                             <div style={{ fontSize: '13px', color: 'var(--color-muted-text)', marginTop: '2px' }}>
                               {b.passType} · Booked on {b.date} · {b.bookingId}
                             </div>
+                            {/* Category-wise Breakdown */}
+                            {Array.isArray(b.items) && b.items.length > 0 && (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                                {b.items.map((it, idx) => (
+                                  <span
+                                    key={idx}
+                                    style={{
+                                      fontSize: '11px',
+                                      fontWeight: 600,
+                                      backgroundColor: '#F1F5F9',
+                                      color: '#334155',
+                                      padding: '2px 8px',
+                                      borderRadius: '6px'
+                                    }}
+                                  >
+                                    {it.quantity || it.qty || 1}× {it.name || it.passType} (₹{Number(it.unitPrice || it.price) * Number(it.quantity || it.qty || 1)})
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
 
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <span style={{ fontWeight: 700, fontSize: '16px' }}>₹{b.amount}</span>
+                            {totalTix > 1 && (
+                              <Button
+                                variant="ghost"
+                                size="compact"
+                                onClick={() => setExpandedBookingId(expandedBookingId === b.bookingId ? null : b.bookingId)}
+                              >
+                                {expandedBookingId === b.bookingId ? 'Hide Tickets' : `Show All (${totalTix})`}
+                              </Button>
+                            )}
                             <Button
                               variant="outline"
                               size="compact"
@@ -1690,9 +1724,61 @@ export default function ProfileView({
                                 if (foundPass) setSelectedPassForModal(foundPass);
                               }}
                             >
-                              {totalTix > 1 ? `View Passes (${totalTix})` : 'View Pass'}
+                              {totalTix > 1 ? `View 3D Passes (${totalTix})` : 'View Pass'}
                             </Button>
                           </div>
+
+                          {/* Expandable Individual Tickets Breakdown */}
+                          {expandedBookingId === b.bookingId && relatedPasses.length > 0 && (
+                            <div
+                              style={{
+                                marginTop: '12px',
+                                paddingTop: '12px',
+                                borderTop: '1px solid #E2E8F0',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '8px',
+                                width: '100%'
+                              }}
+                            >
+                              <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748B' }}>
+                                Individual Passes in this Order ({relatedPasses.length}):
+                              </div>
+                              {relatedPasses.map((p, idx) => (
+                                <div
+                                  key={p.passId || p.id || idx}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    backgroundColor: '#F8FAFC',
+                                    padding: '8px 12px',
+                                    borderRadius: '8px',
+                                    fontSize: '13px'
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                    <Ticket size={14} style={{ color: '#7C3AED' }} />
+                                    <span style={{ fontWeight: 600 }}>Ticket #{p.ticketIndex || idx + 1}: {p.passType || 'Pass'}</span>
+                                    <span style={{ color: '#64748B', fontFamily: 'monospace', fontSize: '11px' }}>({p.passId || p.id})</span>
+                                    <StatusBadge status={p.status || 'Active'} />
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span style={{ fontWeight: 700, color: '#0F172A' }}>
+                                      ₹{p.price !== undefined ? p.price : (p.unitPrice !== undefined ? p.unitPrice : 0)}
+                                    </span>
+                                    <Button
+                                      variant="outline"
+                                      size="compact"
+                                      onClick={() => setSelectedPassForModal(p)}
+                                    >
+                                      View 3D Pass & QR
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1928,6 +2014,7 @@ export default function ProfileView({
         {selectedPassForModal && (
           <DigitalPass
             pass={selectedPassForModal}
+            siblingPasses={selectedPassSiblings}
             onClose={() => setSelectedPassForModal(null)}
           />
         )}

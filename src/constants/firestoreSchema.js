@@ -165,9 +165,10 @@ export function validateBookingPayload({
       totalQty += itQty;
 
       // Match against event's defined pass tiers if available
+      const itemName = it.name || it.passType || it.tier || '';
       const eventTier = Array.isArray(eventData?.passTypes)
         ? eventData.passTypes.find((pt) =>
-            (pt.name && it.name && pt.name.toLowerCase() === it.name.toLowerCase()) ||
+            (pt.name && itemName && pt.name.toLowerCase() === itemName.toLowerCase()) ||
             (pt.id && it.id && pt.id === it.id)
           )
         : null;
@@ -180,7 +181,7 @@ export function validateBookingPayload({
             : Number(eventData?.startingPrice ?? 0));
 
       if (isNaN(unitPrice) || unitPrice < 0) {
-        errors.push(`Item "${it.name || index + 1}" has an invalid unit price configuration.`);
+        errors.push(`Item "${itemName || index + 1}" has an invalid unit price configuration.`);
         return;
       }
 
@@ -189,7 +190,7 @@ export function validateBookingPayload({
         const remaining = Math.max(0, Number(eventTier.capacity) - Number(eventTier.soldCount));
         if (itQty > remaining) {
           errors.push(
-            `Not enough tickets remaining for pass type "${it.name || eventTier.name}". Requested ${itQty}, but only ${remaining} remain.`
+            `Not enough tickets remaining for pass type "${itemName || eventTier.name}". Requested ${itQty}, but only ${remaining} remain.`
           );
           return;
         }
@@ -203,7 +204,7 @@ export function validateBookingPayload({
       if (clientSuppliedPrice !== null && !isNaN(clientSuppliedPrice)) {
         if (Math.abs(clientSuppliedPrice - unitPrice) > 0.01) {
           errors.push(
-            `Price manipulation detected for "${it.name || 'Pass'}": Official price is ₹${unitPrice}, but received ₹${clientSuppliedPrice}.`
+            `Price manipulation detected for "${itemName || 'Pass'}": Official price is ₹${unitPrice}, but received ₹${clientSuppliedPrice}.`
           );
           return;
         }
