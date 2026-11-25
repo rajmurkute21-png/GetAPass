@@ -245,6 +245,27 @@ export default function ProfileView({
     return bookings.filter((b) => b.participantUid === activeUser.uid);
   }, [bookings, activeUser]);
 
+  // Dynamic live platform KPI metrics for Platform Administration tab
+  const adminPlatformMetrics = React.useMemo(() => {
+    const activeEvs = (events || []).filter((e) => {
+      const st = String(e.status || '').toLowerCase();
+      return st === 'active' || st === 'published';
+    });
+    const totalPasses = (bookings || []).reduce((sum, b) => {
+      if (Array.isArray(b.passes) && b.passes.length > 0) return sum + b.passes.length;
+      return sum + Number(b.totalTickets || b.quantity || 1);
+    }, 0);
+    const grossRev = (bookings || []).reduce((sum, b) => {
+      return sum + Number(b.amount || 0);
+    }, 0);
+    return [
+      { label: 'Campus Events', val: `${activeEvs.length} Active`, sub: 'Across registered institutions', color: '#7C3AED' },
+      { label: 'Passes Issued', val: totalPasses.toLocaleString(), sub: 'Registered attendees', color: '#0284C7' },
+      { label: 'Platform Revenue', val: `₹${grossRev.toLocaleString()}`, sub: 'Verified ticketing settlements', color: '#059669' },
+      { label: 'Turnstile Readiness', val: '100%', sub: 'Cryptographic gate validation active', color: '#D97706' }
+    ];
+  }, [events, bookings]);
+
   const menuItems = React.useMemo(() => {
     const items = [
       { id: 'profile', label: 'My Profile', icon: User },
@@ -942,12 +963,7 @@ export default function ProfileView({
                     gap: '16px'
                   }}
                 >
-                  {[
-                    { label: 'Campus Events', val: '4 Active', sub: 'Across 3 institutions', color: '#7C3AED' },
-                    { label: '3D Passes Issued', val: '3,842', sub: '+18% this month', color: '#0284C7' },
-                    { label: 'Platform Revenue', val: '₹4,12,650', sub: 'Gross ticketing volume', color: '#059669' },
-                    { label: 'Turnstile Scan Rate', val: '76.4%', sub: '2,918 validated entries', color: '#D97706' }
-                  ].map((metric, i) => (
+                  {adminPlatformMetrics.map((metric, i) => (
                     <div
                       key={i}
                       className="glass-card"

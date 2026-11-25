@@ -316,8 +316,15 @@ export default function EventDetailsView({
               }}
             >
               <div>
-                <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-deep-violet)' }}>
-                  REGISTRATION OPEN
+                <span
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    color: isSoldOut ? '#DC2626' : isUnavailable ? '#9CA3AF' : 'var(--color-deep-violet)'
+                  }}
+                >
+                  {isSoldOut ? '● SOLD OUT' : isUnavailable ? '● REGISTRATION CLOSED' : '● REGISTRATION OPEN'}
                 </span>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '6px' }}>
                   <span style={{ fontSize: '32px', fontWeight: 700, color: 'var(--color-dark-text)' }}>

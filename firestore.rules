@@ -112,6 +112,17 @@ service cloud.firestore {
           isEventOwner(resource.data) &&
           request.resource.data.organizerUid == resource.data.organizerUid &&
           (isAdmin() || request.resource.data.status == resource.data.status || request.resource.data.status in ['Pending', 'Draft', 'Cancelled'])
+        ) ||
+        // Allow authenticated participants to update inventory upon confirmed booking
+        (
+          isAuthenticated() &&
+          resource.data.status in ['Active', 'Published'] &&
+          request.resource.data.organizerUid == resource.data.organizerUid &&
+          request.resource.data.title == resource.data.title &&
+          request.resource.data.startingPrice == resource.data.startingPrice &&
+          request.resource.data.date == resource.data.date &&
+          request.resource.data.venue == resource.data.venue &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalSoldCount', 'passTypes', 'isSoldOut', 'updatedAt'])
         )
       );
 

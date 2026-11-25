@@ -87,6 +87,7 @@ export default function App() {
 
   // Network connection state
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+  const [reconnectedToast, setReconnectedToast] = useState(false);
 
   // Responsive mobile detection
   const [isMobile, setIsMobile] = useState(false);
@@ -401,8 +402,17 @@ export default function App() {
   // 8. Graceful Network Connection (Online / Offline) Monitoring
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    let toastTimeout = null;
+    const handleOnline = () => {
+      setIsOnline(true);
+      setReconnectedToast(true);
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => setReconnectedToast(false), 3500);
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      setReconnectedToast(false);
+    };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -900,6 +910,32 @@ export default function App() {
         >
           <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#F59E0B' }} />
           <span>You are currently offline. Showing cached records. Real-time updates will resume once reconnected.</span>
+        </div>
+      )}
+
+      {/* Network Reconnection Confirmation Toast */}
+      {reconnectedToast && isOnline && (
+        <div
+          role="status"
+          style={{
+            backgroundColor: '#ECFDF5',
+            color: '#065F46',
+            padding: '10px 16px',
+            fontSize: '13px',
+            fontWeight: 600,
+            textAlign: 'center',
+            borderBottom: '1px solid #A7F3D0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            position: 'sticky',
+            top: 0,
+            zIndex: 9999
+          }}
+        >
+          <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10B981' }} />
+          <span>Connection restored. Real-time updates synchronized.</span>
         </div>
       )}
 

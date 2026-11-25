@@ -86,6 +86,25 @@ export default function BookingView({
     return initial;
   });
 
+  // Real-time synchronization guard: clamp selected quantities if inventory drops or tier sells out
+  useEffect(() => {
+    setQuantities((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      passes.forEach((p) => {
+        const currentQty = next[p.id] || 0;
+        if (p.isSoldOut && currentQty > 0) {
+          next[p.id] = 0;
+          changed = true;
+        } else if (p.remaining !== undefined && currentQty > p.remaining) {
+          next[p.id] = Math.max(0, p.remaining);
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [passes]);
+
   // Auth & attendee resolution: strictly tie booking to authenticated account
   const { user: authUser, openAuthModal } = useAuth();
   const effectiveAttendee = attendee?.uid ? attendee : (authUser?.uid ? {
