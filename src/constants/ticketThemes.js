@@ -259,7 +259,7 @@ export const PASS_TYPE_THEMES = [
   {
     id: 'student',
     label: 'Student Pass',
-    matchKeys: ['student', 'campus', 'scholar', 'academic', 'college'],
+    matchKeys: ['student', 'campus', 'scholar', 'academic', 'college', 'educational', 'education'],
     accent: '#6366F1', // Indigo / Violet
     primary: '#4F46E5',
     deep: '#312E81',
@@ -301,7 +301,7 @@ export const PASS_TYPE_THEMES = [
   {
     id: 'general',
     label: 'General Admission Pass',
-    matchKeys: ['general', 'ga', 'general admission', 'standard', 'entry', 'regular'],
+    matchKeys: ['general', 'general admission', 'standard', 'entry', 'regular', 'ga pass', 'ga ticket'],
     accent: '#A855F7', // Classic Electric Violet
     primary: '#7C3AED',
     deep: '#4C1D95',
@@ -315,7 +315,7 @@ export const PASS_TYPE_THEMES = [
   {
     id: 'participant',
     label: 'Participant Pass',
-    matchKeys: ['participant', 'attendee', 'delegate', 'guest', 'holder'],
+    matchKeys: ['participant', 'attendee', 'delegate', 'holder'],
     accent: '#8B5CF6', // Electric Violet
     primary: '#7C3AED',
     deep: '#4C1D95',
@@ -324,6 +324,62 @@ export const PASS_TYPE_THEMES = [
     badgeBg: 'rgba(124, 58, 237, 0.25)',
     badgeBorder: 'rgba(139, 92, 246, 0.55)',
     tag: 'PARTICIPANT PASS',
+    iconName: 'Sparkles'
+  },
+  {
+    id: 'volunteer',
+    label: 'Volunteer Pass',
+    matchKeys: ['volunteer', 'vol', 'helper'],
+    accent: '#06B6D4', // Cyan
+    primary: '#0891B2',
+    deep: '#164E63',
+    glow: 'rgba(6, 182, 212, 0.55)',
+    borderGlow: 'rgba(6, 182, 212, 0.85)',
+    badgeBg: 'rgba(8, 145, 178, 0.25)',
+    badgeBorder: 'rgba(6, 182, 212, 0.55)',
+    tag: 'VOLUNTEER PASS',
+    iconName: 'Shield'
+  },
+  {
+    id: 'organizer',
+    label: 'Organizer Pass',
+    matchKeys: ['organizer', 'admin', 'host', 'manager'],
+    accent: '#C084FC', // Purple
+    primary: '#9333EA',
+    deep: '#581C87',
+    glow: 'rgba(192, 132, 252, 0.55)',
+    borderGlow: 'rgba(192, 132, 252, 0.85)',
+    badgeBg: 'rgba(147, 51, 234, 0.25)',
+    badgeBorder: 'rgba(192, 132, 252, 0.55)',
+    tag: 'ORGANIZER PASS',
+    iconName: 'Crown'
+  },
+  {
+    id: 'speaker',
+    label: 'Speaker Pass',
+    matchKeys: ['speaker', 'presenter', 'panelist', 'lecturer'],
+    accent: '#FBBF24', // Amber
+    primary: '#D97706',
+    deep: '#78350F',
+    glow: 'rgba(251, 191, 36, 0.55)',
+    borderGlow: 'rgba(251, 191, 36, 0.85)',
+    badgeBg: 'rgba(217, 119, 6, 0.25)',
+    badgeBorder: 'rgba(251, 191, 36, 0.55)',
+    tag: 'SPEAKER PASS',
+    iconName: 'Mic'
+  },
+  {
+    id: 'guest',
+    label: 'Guest Pass',
+    matchKeys: ['guest', 'invitee', 'visitor'],
+    accent: '#EC4899', // Pink
+    primary: '#DB2777',
+    deep: '#831843',
+    glow: 'rgba(236, 72, 153, 0.55)',
+    borderGlow: 'rgba(236, 72, 153, 0.85)',
+    badgeBg: 'rgba(219, 39, 119, 0.25)',
+    badgeBorder: 'rgba(236, 72, 153, 0.55)',
+    tag: 'GUEST PASS',
     iconName: 'Sparkles'
   }
 ];

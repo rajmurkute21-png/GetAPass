@@ -859,10 +859,10 @@ export default function EventCreateWizard({
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
                   <h3 style={{ fontSize: '18px', fontWeight: 700, margin: 0 }}>
-                    4. Pass Configuration & Template Assignment
+                    4. Pass Configuration & Ticket Categories
                   </h3>
                   <p style={{ fontSize: '13px', color: 'var(--color-muted-text)', margin: '4px 0 0' }}>
-                    Select which passes you want to offer. Each pass type independently configures pricing, authority, clearance, and its own template from the Template Library.
+                    Configure pass tiers, individual ticket prices, and inventory limits. Passes automatically generate dynamic 3D tickets with custom category themes.
                   </p>
                 </div>
 
@@ -1460,19 +1460,25 @@ export default function EventCreateWizard({
 
               <div>
                 <label style={{ fontSize: '13px', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
-                  Assign Template
+                  Pass Visual Theme
                 </label>
-                <select
-                  value={customPassTemplate}
-                  onChange={(e) => setCustomPassTemplate(e.target.value)}
-                  style={{ width: '100%', height: '40px', border: '1px solid var(--color-gray)', borderRadius: 'var(--radius-control)', padding: '0 8px', fontSize: '13px' }}
+                <div
+                  style={{
+                    width: '100%',
+                    height: '40px',
+                    border: '1px solid var(--color-gray)',
+                    borderRadius: 'var(--radius-control)',
+                    padding: '0 10px',
+                    fontSize: '13px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    backgroundColor: '#F8FAFC',
+                    color: '#64748B',
+                    boxSizing: 'border-box'
+                  }}
                 >
-                  {templates.map((tpl) => (
-                    <option key={tpl.id} value={tpl.id}>
-                      {tpl.name} ({tpl.category})
-                    </option>
-                  ))}
-                </select>
+                  ✨ Classic 3D Digital Pass
+                </div>
               </div>
             </div>
 

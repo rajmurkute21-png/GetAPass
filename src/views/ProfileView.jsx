@@ -1724,7 +1724,7 @@ export default function ProfileView({
                                 if (foundPass) setSelectedPassForModal(foundPass);
                               }}
                             >
-                              {totalTix > 1 ? `View 3D Passes (${totalTix})` : 'View Pass'}
+                              {totalTix > 1 ? `View Passes (${totalTix})` : 'View Pass'}
                             </Button>
                           </div>
 
@@ -1772,7 +1772,7 @@ export default function ProfileView({
                                       size="compact"
                                       onClick={() => setSelectedPassForModal(p)}
                                     >
-                                      View 3D Pass & QR
+                                      View Pass
                                     </Button>
                                   </div>
                                 </div>

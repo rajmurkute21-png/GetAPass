@@ -24,7 +24,8 @@ import {
   Crown,
   Heart,
   Users,
-  Zap
+  Zap,
+  Shield
 } from 'lucide-react';
 import { resolveTicketTheme, resolvePassTypeTheme } from '../../constants/ticketThemes';
 import './Ticket3D.css';
@@ -54,7 +55,10 @@ const TIER_ICONS = {
   Zap,
   Cpu,
   Ticket,
-  Sparkles
+  Sparkles,
+  Shield,
+  Mic,
+  Trophy
 };
 
 export default function Ticket3D({
@@ -66,12 +70,40 @@ export default function Ticket3D({
   const [qrUrl, setQrUrl] = useState('');
   const [isFlipped, setIsFlipped] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [scale, setScale] = useState(1);
 
+  const stageRef = useRef(null);
   const cardRef = useRef(null);
   const rectRef = useRef(null);
   const rafRef = useRef(null);
   const isTouchRef = useRef(false);
   const prefersReducedMotion = useRef(false);
+
+  // Proportional Responsive Scaler (Guarantees Aspect Ratio across Mobile, Tablet, & Desktop)
+  useEffect(() => {
+    if (!stageRef.current || typeof ResizeObserver === 'undefined') return;
+
+    const updateScale = (width) => {
+      if (width > 0) {
+        const padding = width < 500 ? 12 : 24;
+        const targetW = 760;
+        const availW = width - padding;
+        const newScale = availW < targetW ? Math.max(0.38, Math.min(1, availW / targetW)) : 1;
+        setScale(Number(newScale.toFixed(3)));
+      }
+    };
+
+    updateScale(stageRef.current.clientWidth);
+
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        updateScale(entry.contentRect.width);
+      }
+    });
+
+    ro.observe(stageRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   // Check hardware capabilities & accessibility flags
   useEffect(() => {
@@ -268,7 +300,14 @@ export default function Ticket3D({
   const isRevokedStatus = normStatus === 'revoked' || normStatus === 'expired' || normStatus === 'cancelled';
 
   return (
-    <div className="getapass-3d-stage">
+    <div
+      ref={stageRef}
+      className="getapass-3d-stage"
+      style={{
+        '--ticket-scale': scale,
+        '--stage-dynamic-height': `${Math.round(320 * scale)}px`
+      }}
+    >
       {/* Ambient Radial Backlight Glow */}
       <div
         className="getapass-ambient-glow"
@@ -277,31 +316,33 @@ export default function Ticket3D({
         }}
       />
 
-      {/* 3D Ticket Container */}
-      <div
-        ref={cardRef}
-        id="getapass-printable-ticket"
-        className={`getapass-3d-ticket ${!isHovered && !isFlipped ? 'is-floating' : ''}`}
-        onMouseMove={handleMouseMove}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        onClick={handleCardClick}
-        title="Click to flip ticket details"
-        style={{
-          '--ticket-accent': theme.accent,
-          '--ticket-primary': theme.primary,
-          '--ticket-deep': theme.deep,
-          '--ticket-glow': theme.glow,
-          '--ticket-border-glow': theme.borderGlow,
-          '--badge-bg': theme.badgeBg,
-          '--badge-border': theme.badgeBorder
-        }}
-      >
-        <div className={`ticket-flip-inner ${isFlipped ? 'is-flipped' : ''}`}>
-          {/* ============================================================== */}
-          {/* FRONT FACE                                                     */}
-          {/* ============================================================== */}
-          <div className="ticket-face ticket-front">
+      {/* Responsive Proportional Scaler Wrapper */}
+      <div className="ticket-scaler-wrapper">
+        {/* 3D Ticket Container */}
+        <div
+          ref={cardRef}
+          id="getapass-printable-ticket"
+          className={`getapass-3d-ticket ${!isHovered && !isFlipped ? 'is-floating' : ''}`}
+          onMouseMove={handleMouseMove}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          onClick={handleCardClick}
+          title="Click to flip ticket details"
+          style={{
+            '--ticket-accent': theme.accent,
+            '--ticket-primary': theme.primary,
+            '--ticket-deep': theme.deep,
+            '--ticket-glow': theme.glow,
+            '--ticket-border-glow': theme.borderGlow,
+            '--badge-bg': theme.badgeBg,
+            '--badge-border': theme.badgeBorder
+          }}
+        >
+          <div className={`ticket-flip-inner ${isFlipped ? 'is-flipped' : ''}`}>
+            {/* ============================================================== */}
+            {/* FRONT FACE                                                     */}
+            {/* ============================================================== */}
+            <div className="ticket-face ticket-front">
             {/* Holographic Specular Glare Overlay */}
             <div className="ticket-specular-glare" />
             <div className="ticket-shimmer-sweep" />
@@ -469,23 +510,82 @@ export default function Ticket3D({
           {/* BACK FACE (REVEALED ON 3D FLIP)                                */}
           {/* ============================================================== */}
           <div className="ticket-face ticket-back">
-            {/* Cutout Notches matching divider and edges on back face */}
+            {/* Cutout Notches matching divider and edges on back face (mirrored at 32%) */}
             <div className="ticket-notch-top ticket-notch-back" />
             <div className="ticket-notch-bottom ticket-notch-back" />
             <div className="ticket-perforation-line ticket-perforation-back" />
             <div className="ticket-notch-outer-left" />
             <div className="ticket-notch-outer-right" />
 
-            <div>
+            {/* Left Compartment (~32% - Mirrored Stub) */}
+            <div className="ticket-back-stub">
+              <div
+                className="ticket-back-stub-emblem"
+                style={{
+                  background: `radial-gradient(circle, ${theme.accent}25 0%, transparent 70%)`,
+                  borderColor: theme.accent
+                }}
+              >
+                <TierIcon size={28} strokeWidth={2.2} style={{ color: theme.accent }} />
+              </div>
+
+              <span
+                className="ticket-tier-chip"
+                style={{
+                  background: theme.badgeBg,
+                  borderColor: theme.badgeBorder,
+                  color: theme.accent
+                }}
+              >
+                {passTierTheme.tag}
+              </span>
+
+              <div className="ticket-back-stub-meta">
+                <span className="ticket-back-label">Turnstile Pass ID</span>
+                <span className="ticket-back-stub-code">{resolvedPassId}</span>
+              </div>
+
+              <div className="ticket-back-stub-meta">
+                <span className="ticket-back-label">Auth Gate</span>
+                <span className="ticket-back-stub-gate">{gate}</span>
+              </div>
+
+              {isValidStatus && (
+                <div className="ticket-status-badge status-valid" style={{ marginTop: 'auto' }}>
+                  <CheckCircle2 size={12} strokeWidth={2.5} />
+                  <span>Verified Valid</span>
+                </div>
+              )}
+              {isUsedStatus && (
+                <div className="ticket-status-badge status-used" style={{ marginTop: 'auto' }}>
+                  <Clock size={12} strokeWidth={2.5} />
+                  <span>Used / Checked-in</span>
+                </div>
+              )}
+              {isRevokedStatus && (
+                <div className="ticket-status-badge status-revoked" style={{ marginTop: 'auto' }}>
+                  <XCircle size={12} strokeWidth={2.5} />
+                  <span>{status}</span>
+                </div>
+              )}
+
+              <div className="ticket-back-flip-action">
+                <RotateCw size={11} />
+                <span>Click to Flip</span>
+              </div>
+            </div>
+
+            {/* Right Compartment (~68% - Main Details) */}
+            <div className="ticket-back-main">
               {/* Top Security Ribbon */}
               <div className="ticket-hologram-strip" />
 
               <div className="ticket-back-header">
                 <div>
-                  <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#ffffff', margin: 0 }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#ffffff', margin: 0 }}>
                     {resolvedTitle} — Access Clearances
                   </h3>
-                  <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', margin: '2px 0 0' }}>
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '2px 0 0' }}>
                     Gate: {gate} · Admittance: {authority} · {passTierTheme.tag}
                   </p>
                 </div>
@@ -494,14 +594,14 @@ export default function Ticket3D({
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px',
+                    gap: '4px',
                     fontSize: '11px',
                     color: 'var(--ticket-accent, #c084fc)',
                     fontWeight: 600
                   }}
                 >
-                  <RotateCw size={13} />
-                  <span>Click to flip front</span>
+                  <RotateCw size={12} />
+                  <span>Flip Front</span>
                 </div>
               </div>
 
@@ -512,7 +612,7 @@ export default function Ticket3D({
                   <span className="ticket-back-val">
                     {resolvedAttendee}
                     {attendeeEmail && (
-                      <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', fontWeight: 400, marginLeft: '6px' }}>
+                      <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)', fontWeight: 400, marginLeft: '4px' }}>
                         ({attendeeEmail})
                       </span>
                     )}
@@ -552,14 +652,14 @@ export default function Ticket3D({
 
                 <div className="ticket-back-field">
                   <span className="ticket-back-label">Security Signature</span>
-                  <span className="ticket-back-val" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
+                  <span className="ticket-back-val" style={{ fontSize: '10px', fontFamily: 'monospace' }}>
                     GP-SHA256-{String(resolvedPassId).slice(-4)}
                   </span>
                 </div>
               </div>
 
               {/* Authorized Clearance Zones */}
-              <div style={{ marginTop: '8px' }}>
+              <div style={{ marginTop: '6px' }}>
                 <span className="ticket-back-label">Authorized Access Zones:</span>
                 <div className="ticket-clearances-wrap">
                   {(permissions && permissions.length > 0 ? permissions : ['General Area', 'Auditorium Floor']).map(
@@ -571,17 +671,18 @@ export default function Ticket3D({
                   )}
                 </div>
               </div>
-            </div>
 
-            {/* Admission Policy Terms */}
-            <div className="ticket-back-policy">
-              <strong>Official Admission Terms:</strong> This pass admits one individual. Please present your digital
-              QR code upon arrival at {gate}. Passes are verified cryptographically via GetAPass optical turnstiles and
-              are non-transferable once checked in. Valid photo or college ID is mandatory.
+              {/* Admission Policy Terms */}
+              <div className="ticket-back-policy">
+                <strong>Official Admission Terms:</strong> This pass admits one individual. Present digital QR at{' '}
+                {gate}. Passes are verified cryptographically via GetAPass optical turnstiles and are non-transferable
+                once checked in. Valid photo or college ID is mandatory.
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 }

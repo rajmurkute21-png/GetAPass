@@ -206,7 +206,7 @@ export default function PassTypeManager({
                         }}
                       >
                         <Eye size={13} />
-                        <span>Preview 3D Pass</span>
+                        <span>Preview Pass</span>
                       </button>
                     </td>
 
@@ -253,7 +253,7 @@ export default function PassTypeManager({
                           size="compact"
                           icon={Eye}
                           onClick={() => setPreview3DModalPass(pt)}
-                          title="Preview 3D Ticket"
+                          title="Preview Pass"
                         />
                         <Button
                           variant="outline"
@@ -379,26 +379,25 @@ export default function PassTypeManager({
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
                 <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-dark-text)', display: 'block', marginBottom: '6px' }}>
-                  Assigned Pass Template
+                  Pass Visual Theme
                 </label>
-                <select
-                  value={selectedTemplateId}
-                  onChange={(e) => setSelectedTemplateId(e.target.value)}
+                <div
                   style={{
                     width: '100%',
                     height: '40px',
-                    padding: '0 10px',
+                    padding: '0 12px',
                     borderRadius: 'var(--radius-control)',
                     border: '1px solid var(--color-gray)',
-                    fontSize: '13px'
+                    fontSize: '13px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    backgroundColor: '#F8FAFC',
+                    color: '#64748B',
+                    boxSizing: 'border-box'
                   }}
                 >
-                  {templates.map((tpl) => (
-                    <option key={tpl.id} value={tpl.id}>
-                      {tpl.name} ({tpl.isSystemTemplate ? 'System' : 'Custom'} · v{tpl.currentVersion || 1})
-                    </option>
-                  ))}
-                </select>
+                  ✨ Auto-Theme (Classic 3D Digital Pass)
+                </div>
               </div>
 
               <div>

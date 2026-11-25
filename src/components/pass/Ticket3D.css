@@ -11,8 +11,24 @@
   justify-content: center;
   align-items: center;
   position: relative;
-  padding: 24px 16px 28px;
+  padding: 16px 8px 20px;
   overflow: visible;
+  height: var(--stage-dynamic-height, 320px);
+  min-height: var(--stage-dynamic-height, 320px);
+  box-sizing: border-box;
+}
+
+/* Proportional Responsive Scaler Wrapper */
+.ticket-scaler-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 760px;
+  height: 310px;
+  transform-origin: center center;
+  transform: scale(var(--ticket-scale, 1));
+  transition: transform 0.15s ease-out;
+  will-change: transform;
 }
 
 /* Ambient Backlight Glow (Focused underneath ticket bottom rim) */
@@ -619,14 +635,119 @@
 }
 
 /* ==========================================================================
-   BACK FACE (DETAILS & CLEARANCES)
+   BACK FACE (SPLIT COMPARTMENT 32% STUB / 68% MAIN)
    ========================================================================== */
+.ticket-face.ticket-back {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+/* Back Left Stub (~32% - Mirrored Turnstile Section) */
+.ticket-back-stub {
+  position: relative;
+  width: 32%;
+  flex: 0 0 32%;
+  max-width: 32%;
+  min-width: 0;
+  height: 100%;
+  padding: 18px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  background: linear-gradient(180deg, #100d20 0%, #0d0a1a 100%);
+  z-index: 2;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.ticket-back-stub-emblem {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 16px var(--ticket-glow, rgba(168, 85, 247, 0.3));
+  flex-shrink: 0;
+}
+
+.ticket-tier-chip {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.ticket-back-stub-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+}
+
+.ticket-back-stub-code {
+  font-size: 10px;
+  font-weight: 700;
+  font-family: monospace;
+  color: #ffffff;
+  letter-spacing: 0.4px;
+  word-break: break-all;
+}
+
+.ticket-back-stub-gate {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ticket-accent, #c084fc);
+}
+
+.ticket-back-flip-action {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.ticket-back-flip-action:hover {
+  color: #ffffff;
+}
+
+/* Back Right Main Details (~68%) */
+.ticket-back-main {
+  position: relative;
+  width: 68%;
+  flex: 0 0 68%;
+  max-width: 68%;
+  min-width: 0;
+  height: 100%;
+  padding: 16px 20px 14px 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+  z-index: 2;
+}
+
 .ticket-back-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  padding-bottom: 12px;
+  padding-bottom: 8px;
 }
 
 .ticket-hologram-strip {
@@ -893,82 +1014,7 @@
   }
 
   .getapass-3d-stage {
-    padding: 12px 4px 18px;
-    perspective: 1000px;
-  }
-
-  .getapass-3d-ticket {
-    max-width: 100%;
-    height: auto;
-    min-height: 500px;
-  }
-
-  .ticket-face {
-    position: relative;
-    height: auto;
-  }
-
-  .ticket-face.ticket-front {
-    flex-direction: column;
-    min-height: auto;
-  }
-
-  .ticket-face.ticket-back {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-  }
-
-  .ticket-main-section {
-    width: 100%;
-    flex: none;
-    max-width: 100%;
-    min-height: 230px;
-    padding: 18px 18px 16px;
-  }
-
-  .ticket-stub-section {
-    width: 100%;
-    flex: none;
-    max-width: 100%;
-    min-height: auto;
-    padding: 16px 18px 18px;
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    border-top: 1px dashed rgba(255, 255, 255, 0.25);
-  }
-
-  .ticket-perforation-line,
-  .ticket-notch-top,
-  .ticket-notch-bottom {
-    display: none;
-  }
-
-  .ticket-event-title {
-    font-size: 22px;
-    line-height: 26px;
-  }
-
-  .ticket-qr-image {
-    width: 88px;
-    height: 88px;
-  }
-
-  .ticket-details-grid {
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-
-  .ticket-details-divider {
-    display: none;
-  }
-
-  .ticket-bottom-bar {
-    flex-wrap: wrap;
-    gap: 8px;
+    padding: 8px 0;
   }
 
   .ticket-category-bar {
@@ -994,115 +1040,7 @@
   }
 
   .getapass-3d-stage {
-    padding: 12px 4px 18px;
-    perspective: 1000px;
-  }
-
-  .getapass-3d-ticket {
-    max-width: 100%;
-    height: auto;
-    min-height: 500px;
-  }
-
-  .ticket-face {
-    position: relative;
-    height: auto;
-  }
-
-  .ticket-face.ticket-front {
-    flex-direction: column;
-    min-height: auto;
-  }
-
-  .ticket-face.ticket-back {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-  }
-
-  .ticket-main-section {
-    width: 100%;
-    flex: none;
-    max-width: 100%;
-    min-height: 230px;
-    padding: 18px 18px 16px;
-  }
-
-  .ticket-stub-section {
-    width: 100%;
-    flex: none;
-    max-width: 100%;
-    min-height: auto;
-    padding: 16px 18px 18px;
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    border-top: 1px dashed rgba(255, 255, 255, 0.25);
-  }
-
-  .ticket-perforation-line,
-  .ticket-notch-top,
-  .ticket-notch-bottom {
-    display: none;
-  }
-
-  .ticket-event-title {
-    font-size: 22px;
-    line-height: 26px;
-  }
-
-  .ticket-qr-image {
-    width: 88px;
-    height: 88px;
-  }
-
-  .ticket-details-grid {
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-
-  .ticket-details-divider {
-    display: none;
-  }
-
-  .ticket-bottom-bar {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .ticket-category-bar {
-    justify-content: flex-start;
-    padding-left: 8px;
-  }
-}
-
-@media (max-width: 440px) {
-  .ticket-stub-section {
-    flex-direction: column;
-    gap: 12px;
-    align-items: center;
-    padding: 14px 12px;
-  }
-
-  .ticket-detail-primary,
-  .ticket-detail-secondary {
-    max-width: 140px;
-  }
-}
-
-@media (max-width: 600px) {
-  .ticket-back-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 10px !important;
-  }
-}
-
-@media (max-width: 420px) {
-  .ticket-back-grid {
-    grid-template-columns: 1fr !important;
-    gap: 8px !important;
+    padding: 8px 0;
   }
 }
 
@@ -1138,6 +1076,20 @@
   #getapass-printable-ticket,
   #getapass-printable-ticket * {
     visibility: visible !important;
+  }
+
+  /* Specifically guarantee no user profile avatars, hero headers, or navigation leak into print */
+  .profile-avatar,
+  .profile-avatar-wrap,
+  .profile-avatar-card,
+  .gateapass-profile-hero,
+  .profile-hero-section,
+  .user-avatar,
+  header,
+  nav,
+  footer {
+    display: none !important;
+    visibility: hidden !important;
   }
 
   html, body {

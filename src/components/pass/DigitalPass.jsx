@@ -167,6 +167,11 @@ export default function DigitalPass({
             .ticket-notch-outer-left, .ticket-notch-outer-right {
               display: block !important;
             }
+            .profile-avatar, .user-avatar, .profile-avatar-wrap, .gateapass-profile-hero,
+            .profile-hero-section, .profile-avatar-card, header, nav, footer {
+              display: none !important;
+              visibility: hidden !important;
+            }
           </style>
         </head>
         <body>
@@ -185,7 +190,10 @@ export default function DigitalPass({
         iframe.contentWindow.print();
       } catch (err) {
         console.warn('[GetAPass Print] Iframe print fallback:', err);
+        const originalTitle = document.title;
+        document.title = `GetAPass Ticket - ${resolvedTitle} (${resolvedPassId})`;
         window.print();
+        document.title = originalTitle;
       } finally {
         setTimeout(() => {
           if (iframe.parentNode) {
