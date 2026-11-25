@@ -16,31 +16,31 @@ const SUPPORT_TICKETS_KEY = 'getapass_payment_support_tickets';
 export const PAYMENT_ISSUE_CATEGORIES = [
   {
     id: 'deducted-not-confirmed',
-    label: 'Payment deducted from bank, but booking not confirmed',
+    label: 'Payment deducted but booking missing',
     severity: 'high',
     instruction: 'If money was deducted from your bank/UPI account without an issued pass, payment reconciliation usually completes within 1–2 hours. If unconfirmed, the banking switch automatically reverses funds back to your original payment method in 3–5 working days.'
   },
   {
     id: 'payment-pending',
-    label: 'Payment is pending or awaiting bank authorization',
+    label: 'Payment pending',
     severity: 'medium',
     instruction: 'UPI and Net Banking transactions may occasionally experience network latency between banking gateways. Do not initiate a duplicate payment. You can track this status using your transaction reference.'
   },
   {
     id: 'payment-failed',
-    label: 'Payment failed or declined by gateway',
+    label: 'Payment failed',
     severity: 'low',
     instruction: 'Your transaction was declined by the issuing bank or payment gateway. No funds were captured. You can safely retry with an alternate UPI ID or card.'
   },
   {
     id: 'duplicate-payment',
-    label: 'Duplicate payment / debited more than once',
+    label: 'Duplicate payment',
     severity: 'high',
     instruction: 'If your account was debited multiple times for a single order, please submit both transaction references below. Duplicate debits are identified and queued for direct merchant refund reversal.'
   },
   {
     id: 'confirmation-not-received',
-    label: 'Booking confirmation or QR pass not received',
+    label: 'Confirmation missing',
     severity: 'medium',
     instruction: 'Digital passes are delivered immediately to your account profile under "My Passes". If your pass is missing, our verification desk can regenerate your pass using your booking ID.'
   }

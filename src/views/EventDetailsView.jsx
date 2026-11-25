@@ -123,13 +123,7 @@ export default function EventDetailsView({
         </div>
 
         {/* Two-Column Grid: Left Content, Right Sticky Booking CTA */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(0, 2fr) minmax(300px, 1fr)',
-            gap: '40px'
-          }}
-        >
+        <div className="gateapass-details-grid">
           {/* Left Column: Details */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '36px' }}>
             {/* Header info */}

@@ -901,70 +901,84 @@ export async function unpublishEvent(id, currentUser) {
   return updateEvent(id, { status: 'Draft' }, currentUser);
 }
 
+// Concurrency lock for in-flight authorizations to prevent race conditions or repeated clicks
+const inFlightAuthorizeLocks = new Set();
+
 /**
  * Authorizes / Approves an event for public discovery and booking.
  * Validates admin role, prevents double authorization, verifies required event fields.
  */
 export async function authorizeEvent(id, currentUser) {
   if (!id) throw new Error('Event ID is required for authorization.');
+
+  if (inFlightAuthorizeLocks.has(id)) {
+    throw new Error('Event authorization already in progress. Duplicate submission prevented.');
+  }
+
   if (!currentUser || (currentUser.role !== 'admin' && !currentUser.isAdmin)) {
     throw new Error('Unauthorized: Only administrators can authorize events.');
   }
 
-  const currentLocal = getStoredLocalEvents();
-  let event = currentLocal.find((e) => e.id === id);
+  inFlightAuthorizeLocks.add(id);
 
-  if (!event && db) {
-    try {
-      const snap = await getDoc(doc(db, EVENTS_COLLECTION, id));
-      if (snap.exists()) {
-        event = { ...snap.data(), id: snap.id };
-      }
-    } catch {}
+  try {
+    const currentLocal = getStoredLocalEvents();
+    let event = currentLocal.find((e) => e.id === id);
+
+    if (!event && db) {
+      try {
+        const snap = await getDoc(doc(db, EVENTS_COLLECTION, id));
+        if (snap.exists()) {
+          event = { ...snap.data(), id: snap.id };
+        }
+      } catch {}
+    }
+
+    if (!event) throw new Error('Event not found.');
+
+    const currentStatus = normalizeEventStatus(event.status);
+    if (currentStatus === 'Active' || currentStatus === 'Published') {
+      throw new Error('This event is already authorized and active.');
+    }
+    if (currentStatus !== 'Pending') {
+      throw new Error(`Only pending event submissions can be authorized. Current status is "${currentStatus}".`);
+    }
+
+    // Verify completeness of event
+    const title = (event.title || event.name || '').trim();
+    if (!title || title.length < 3) {
+      throw new Error('Event must have a valid title of at least 3 characters before authorization.');
+    }
+    if (!event.date?.trim() && !event.startDate?.trim()) {
+      throw new Error('Event must have a scheduled date before authorization.');
+    }
+    if (!event.venue?.trim()) {
+      throw new Error('Event must have a venue location before authorization.');
+    }
+    if (event.capacity !== undefined && (isNaN(Number(event.capacity)) || Number(event.capacity) <= 0)) {
+      throw new Error('Event ticket inventory capacity must be greater than zero.');
+    }
+
+    const updates = {
+      status: 'Active',
+      authorizedAt: Date.now(),
+      authorizedBy: currentUser.email || currentUser.uid
+    };
+
+    const updated = await updateEvent(id, updates, currentUser);
+
+    await logEventAudit({
+      eventId: id,
+      eventTitle: title,
+      action: 'AUTHORIZE_EVENT',
+      reason: 'Verified and authorized by platform administrator.',
+      performedBy: currentUser
+    });
+
+    return updated;
+  } finally {
+    inFlightAuthorizeLocks.delete(id);
   }
-
-  if (!event) throw new Error('Event not found.');
-
-  const currentStatus = normalizeEventStatus(event.status);
-  if (currentStatus === 'Active' || currentStatus === 'Published') {
-    throw new Error('This event is already authorized and active.');
-  }
-  if (currentStatus !== 'Pending') {
-    throw new Error(`Only pending event submissions can be authorized. Current status is "${currentStatus}".`);
-  }
-
-  // Verify completeness of event
-  const title = (event.title || event.name || '').trim();
-  if (!title || title.length < 3) {
-    throw new Error('Event must have a valid title of at least 3 characters before authorization.');
-  }
-  if (!event.date?.trim() && !event.startDate?.trim()) {
-    throw new Error('Event must have a scheduled date before authorization.');
-  }
-  if (!event.venue?.trim()) {
-    throw new Error('Event must have a venue location before authorization.');
-  }
-  if (event.capacity !== undefined && (isNaN(Number(event.capacity)) || Number(event.capacity) <= 0)) {
-    throw new Error('Event ticket inventory capacity must be greater than zero.');
-  }
-
-  const updates = {
-    status: 'Active',
-    authorizedAt: Date.now(),
-    authorizedBy: currentUser.email || currentUser.uid
-  };
-
-  const updated = await updateEvent(id, updates, currentUser);
-
-  await logEventAudit({
-    eventId: id,
-    eventTitle: title,
-    action: 'AUTHORIZE_EVENT',
-    reason: 'Verified and authorized by platform administrator.',
-    performedBy: currentUser
-  });
-
-  return updated;
 }
 
 /**
@@ -1008,13 +1022,13 @@ export async function rejectEvent(id, reason, currentUser) {
  */
 export async function disableEvent(id, reason, currentUser) {
   if (!id) throw new Error('Event ID is required.');
+  if (!currentUser || (currentUser.role !== 'admin' && !currentUser.isAdmin)) {
+    throw new Error('Unauthorized: Only administrators can disable unauthorized events.');
+  }
+
   const currentLocal = getStoredLocalEvents();
   const event = currentLocal.find((e) => e.id === id);
   if (!event) throw new Error('Event not found.');
-
-  if (currentUser && !canManageEvent(currentUser, event)) {
-    throw new Error('Permission denied: You do not have permission to disable this event.');
-  }
 
   const updates = {
     status: 'Disabled',
@@ -1103,8 +1117,8 @@ export async function removeUnauthorizedEvent(
   const event = currentLocal.find((e) => e.id === id);
   if (!event) throw new Error('Event not found.');
 
-  if (currentUser && !canManageEvent(currentUser, event)) {
-    throw new Error('Permission denied: You do not have permission to remove this event.');
+  if (!currentUser || (currentUser.role !== 'admin' && !currentUser.isAdmin)) {
+    throw new Error('Unauthorized: Only administrators can remove unauthorized events.');
   }
 
   await logEventAudit({

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Plus,
   CheckCircle,
@@ -83,6 +83,7 @@ export default function AdminView({
   // Event Management and Authorization State
   const [eventStatusFilter, setEventStatusFilter] = useState('all');
   const [processingEventId, setProcessingEventId] = useState(null);
+  const inFlightAuthorizeRef = useRef(new Set());
   const [eventActionFeedback, setEventActionFeedback] = useState(null);
   const [removalModal, setRemovalModal] = useState({
     isOpen: false,
@@ -163,70 +164,44 @@ export default function AdminView({
 
   // Event Action Handlers (Authorization, Removal, Disabling, Rejection, Re-enabling)
   const handleAuthorizeAction = async (ev) => {
-    if (!ev) return;
-    if (processingEventId) return; // Prevent duplicate clicks (Requirement 7)
+    if (!ev || !ev.id) return;
+    if (processingEventId || inFlightAuthorizeRef.current.has(ev.id)) return; // Prevent duplicate / rapid multi-clicks
 
-    if (!isAdmin) {
-      setEventActionFeedback({
-        type: 'error',
-        message: 'Unauthorized: Only platform administrators can authorize events.'
-      });
-      return;
-    }
-
-    const canonicalStatus = normalizeEventStatus(ev.status);
-    if (canonicalStatus === 'Active' || canonicalStatus === 'Published') {
-      setEventActionFeedback({
-        type: 'error',
-        message: `Event "${ev.title || ev.name}" is already authorized and active.`
-      });
-      return;
-    }
-
-    if (canonicalStatus !== 'Pending') {
-      setEventActionFeedback({
-        type: 'error',
-        message: `Cannot authorize event with status "${canonicalStatus}". Only pending submissions can be authorized.`
-      });
-      return;
-    }
-
-    const title = (ev.title || ev.name || '').trim();
-    if (!title || title.length < 3) {
-      setEventActionFeedback({
-        type: 'error',
-        message: 'Event title must be at least 3 characters before authorization.'
-      });
-      return;
-    }
-
-    if (!ev.date?.trim() && !ev.startDate?.trim()) {
-      setEventActionFeedback({
-        type: 'error',
-        message: 'Event must have a scheduled date before authorization.'
-      });
-      return;
-    }
-
-    if (!ev.venue?.trim()) {
-      setEventActionFeedback({
-        type: 'error',
-        message: 'Event must have a venue location before authorization.'
-      });
-      return;
-    }
-
-    if (ev.capacity !== undefined && (isNaN(Number(ev.capacity)) || Number(ev.capacity) <= 0)) {
-      setEventActionFeedback({
-        type: 'error',
-        message: 'Event ticket inventory capacity must be greater than zero.'
-      });
-      return;
-    }
-
+    inFlightAuthorizeRef.current.add(ev.id);
     setProcessingEventId(ev.id);
     setEventActionFeedback(null);
+
     try {
+      if (!isAdmin) {
+        throw new Error('Unauthorized: Only platform administrators can authorize events.');
+      }
+
+      const canonicalStatus = normalizeEventStatus(ev.status);
+      if (canonicalStatus === 'Active' || canonicalStatus === 'Published') {
+        throw new Error(`Event "${ev.title || ev.name}" is already authorized and active.`);
+      }
+
+      if (canonicalStatus !== 'Pending') {
+        throw new Error(`Cannot authorize event with status "${canonicalStatus}". Only pending submissions can be authorized.`);
+      }
+
+      const title = (ev.title || ev.name || '').trim();
+      if (!title || title.length < 3) {
+        throw new Error('Event title must be at least 3 characters before authorization.');
+      }
+
+      if (!ev.date?.trim() && !ev.startDate?.trim()) {
+        throw new Error('Event must have a scheduled date before authorization.');
+      }
+
+      if (!ev.venue?.trim()) {
+        throw new Error('Event must have a venue location before authorization.');
+      }
+
+      if (ev.capacity !== undefined && (isNaN(Number(ev.capacity)) || Number(ev.capacity) <= 0)) {
+        throw new Error('Event ticket inventory capacity must be greater than zero.');
+      }
+
       if (onAuthorizeEvent) {
         await onAuthorizeEvent(ev.id);
       } else {
@@ -242,6 +217,7 @@ export default function AdminView({
         message: err?.message || 'Failed to authorize event.'
       });
     } finally {
+      inFlightAuthorizeRef.current.delete(ev.id);
       setProcessingEventId(null);
     }
   };
@@ -1023,7 +999,7 @@ export default function AdminView({
                       })
                       .map((ev) => {
                         const canonicalStatus = normalizeEventStatus(ev.status);
-                        const isProcessing = processingEventId === ev.id;
+                        const isProcessing = processingEventId === ev.id || inFlightAuthorizeRef.current?.has(ev.id);
                         const isPending = canonicalStatus === 'Pending';
                         const hasValidTitle = Boolean((ev.title || ev.name)?.trim()?.length >= 3);
                         const hasValidDate = Boolean(ev.date?.trim() || ev.startDate?.trim());
@@ -1031,7 +1007,7 @@ export default function AdminView({
                         const hasValidInventory = Boolean(!ev.capacity || Number(ev.capacity) > 0);
                         const isEligiblePendingEvent = isPending && hasValidTitle && hasValidDate && hasValidVenue && hasValidInventory;
                         const canAuthorize = isAdmin && isPending;
-                        const isActionDisabled = !isAdmin || !isEligiblePendingEvent || Boolean(processingEventId);
+                        const isActionDisabled = !isAdmin || !isEligiblePendingEvent || Boolean(processingEventId) || isProcessing;
 
                         return (
                           <tr key={ev.id} style={{ borderBottom: '1px solid var(--color-gray)' }}>

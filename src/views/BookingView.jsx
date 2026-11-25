@@ -785,14 +785,7 @@ export default function BookingView({
 
         {/* STEP 1: Select Tickets */}
         {currentStep === 1 && (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(0, 1.2fr) minmax(320px, 0.8fr)',
-              gap: '36px',
-              alignItems: 'start'
-            }}
-          >
+          <div className="gateapass-checkout-grid">
             {/* Left: Interactive Category Selector */}
             <TicketCategorySelector
               passes={passes}
@@ -908,14 +901,7 @@ export default function BookingView({
               </p>
             </div>
 
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'minmax(0, 1.2fr) minmax(320px, 0.8fr)',
-                gap: '32px',
-                alignItems: 'start'
-              }}
-            >
+            <div className="gateapass-checkout-grid">
               {/* Payment Methods Selection */}
               <div
                 style={{

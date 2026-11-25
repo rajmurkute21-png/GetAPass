@@ -319,14 +319,7 @@ export default function ProfileView({
     <div className="gateapass-profile-view" style={{ textAlign: 'left', padding: '40px 0 64px' }}>
       <div className="container-desktop">
         {/* Profile Layout: Left Sidebar Menu, Right Content Area */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(240px, 280px) minmax(0, 1fr)',
-            gap: '36px',
-            alignItems: 'start'
-          }}
-        >
+        <div className="gateapass-profile-grid">
           {/* Left Column: Profile Card & Menu */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {/* User Mini Card */}
