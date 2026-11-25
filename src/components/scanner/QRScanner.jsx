@@ -566,16 +566,36 @@ export default function QRScanner({
         img.onerror = () => reject(new Error('Failed to load image file.'));
       });
 
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      ctx.drawImage(img, 0, 0, img.width, img.height);
+      let w = img.width;
+      let h = img.height;
+      const maxDim = 1280;
+      if (w > maxDim || h > maxDim) {
+        const scale = Math.min(maxDim / w, maxDim / h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
 
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height, {
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0, w, h);
+
+      let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let code = jsQR(imageData.data, imageData.width, imageData.height, {
         inversionAttempts: 'attemptBoth'
       });
+
+      // If scaled-down attempt didn't detect code and original was larger, try original resolution
+      if (!code && (w !== img.width || h !== img.height)) {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0, img.width, img.height);
+        imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'attemptBoth'
+        });
+      }
 
       URL.revokeObjectURL(img.src);
 
@@ -1287,19 +1307,22 @@ export default function QRScanner({
                     fontWeight: 800,
                     letterSpacing: '1px',
                     textTransform: 'uppercase',
-                    color: '#059669',
-                    backgroundColor: '#ECFDF5',
+                    color: verificationResult.offline ? '#0D9488' : '#059669',
+                    backgroundColor: verificationResult.offline ? '#F0FDFA' : '#ECFDF5',
+                    border: `1px solid ${verificationResult.offline ? '#99F6E4' : '#A7F3D0'}`,
                     padding: '3px 10px',
                     borderRadius: '12px'
                   }}
                 >
-                  ENTRY APPROVED
+                  {verificationResult.offline ? 'ENTRY APPROVED — OFFLINE VERIFIED' : 'ENTRY APPROVED — LIVE CLOUD VERIFIED'}
                 </span>
                 <h3 style={{ fontSize: '22px', fontWeight: 800, color: '#0F172A', margin: '8px 0 2px' }}>
                   VALID PASS
                 </h3>
-                <p style={{ fontSize: '13px', color: '#059669', fontWeight: 600, margin: 0 }}>
-                  PASS VERIFIED SUCCESSFULLY
+                <p style={{ fontSize: '13px', color: verificationResult.offline ? '#0F766E' : '#059669', fontWeight: 600, margin: 0 }}>
+                  {verificationResult.offline
+                    ? 'Verified against local encrypted manifest'
+                    : 'Pass Verified Successfully in Cloud Ledger'}
                 </p>
               </div>
 
@@ -1317,6 +1340,24 @@ export default function QRScanner({
                   fontSize: '13px'
                 }}
               >
+                {verificationResult.offline && (
+                  <div
+                    style={{
+                      padding: '6px 10px',
+                      backgroundColor: '#F0FDFA',
+                      border: '1px solid #CCFBF1',
+                      borderRadius: '8px',
+                      fontSize: '11px',
+                      color: '#0F766E',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <span>⚡ Offline Gate Mode: Check-in queued for cloud sync upon reconnection</span>
+                  </div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <User size={14} /> Attendee

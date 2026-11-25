@@ -189,13 +189,15 @@ export default function Ticket3D({
       : JSON.stringify({
           passId: resolvedPassId,
           bookingId: resolvedBookingId,
+          eventId: pass?.eventId || eventId || null,
           event: resolvedTitle,
           attendee: resolvedAttendee,
           authority: authority,
           passType: resolvedPassType,
           ticketIndex: Number(ticketIndex || 1),
           totalTickets: Number(totalTickets || 1),
-          status: status
+          status: status,
+          sig: pass?.signature || null
         });
 
     QRCode.toDataURL(qrPayload, {

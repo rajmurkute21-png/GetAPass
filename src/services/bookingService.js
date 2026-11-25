@@ -40,7 +40,7 @@ import { fetchPaginatedCollection, getServerTimestamp } from './firestoreService
 import { createDigitalPass } from './passService.js';
 import { createTransaction } from './transactionService.js';
 import { createNotification } from './notificationService.js';
-import { recordCheckInAuditLog } from './verifierService.js';
+import { recordCheckInAuditLog, generatePassChecksum } from './verifierService.js';
 import { verifyAndConfirmPayment } from './paymentVerificationService.js';
 import { verifyAndCheckInPassAuthoritative } from './passVerificationEngine.js';
 import { getStoredLocalEvents, saveStoredLocalEvents } from './eventService.js';
@@ -278,6 +278,8 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
           ? (it.passId || it.id)
           : `GP-${rawPrefix}26-${Date.now().toString(36).toUpperCase().slice(-4)}${Math.random().toString(36).substring(2, 5).toUpperCase()}-${ticketNum}`;
 
+        const signature = it.signature || generatePassChecksum(passId, eventId, bookingId, currentUser.uid);
+
         const deterministicQrPayload = JSON.stringify({
           passId,
           bookingId,
@@ -288,7 +290,8 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
           ticketIndex: ticketNum,
           totalTickets: totalTicketCount,
           status: passStatus,
-          issuedAt: it.createdAt || now
+          issuedAt: it.createdAt || now,
+          sig: signature
         });
 
         passList.push({
@@ -328,6 +331,7 @@ export async function createBooking(bookingData, currentUser, eventData = null) 
           templateId: it.templateId || bookingData.templateId || 'tpl-classic-violet',
           templateVersion: it.templateVersion || 1,
           templateSnapshot: it.templateSnapshot || bookingData.templateSnapshot || null,
+          signature,
           qrPayload: it.qrPayload || deterministicQrPayload,
           createdAt: it.createdAt || now,
           updatedAt: it.updatedAt || now
