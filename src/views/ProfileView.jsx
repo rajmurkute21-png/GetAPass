@@ -465,29 +465,30 @@ export default function ProfileView({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      borderRadius: 'var(--radius-control)',
-                      backgroundColor: isActive ? 'var(--color-light-violet)' : 'transparent',
-                      color: isActive ? 'var(--color-deep-violet)' : 'var(--color-dark-text)',
-                      fontWeight: isActive ? 600 : 500,
+                      borderRadius: '12px',
+                      backgroundColor: isActive ? 'rgba(124, 58, 237, 0.1)' : 'transparent',
+                      color: isActive ? '#7C3AED' : '#181526',
+                      border: isActive ? '1px solid rgba(124, 58, 237, 0.25)' : '1px solid transparent',
+                      fontWeight: isActive ? 700 : 500,
                       fontSize: '14px',
-                      border: 'none',
                       cursor: 'pointer',
-                      textAlign: 'left'
+                      textAlign: 'left',
+                      transition: 'all 0.18s ease'
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <IconComp size={18} strokeWidth={isActive ? 2 : 1.7} />
+                      <IconComp size={18} strokeWidth={isActive ? 2.2 : 1.7} style={{ color: isActive ? '#7C3AED' : '#777487' }} />
                       <span>{item.label}</span>
                     </div>
                     {item.count !== undefined && item.count > 0 && (
                       <span
                         style={{
                           fontSize: '11px',
-                          fontWeight: 600,
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          backgroundColor: isActive ? 'var(--color-white)' : 'var(--color-off-white)',
-                          color: isActive ? 'var(--color-deep-violet)' : 'var(--color-muted-text)'
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '9999px',
+                          backgroundColor: isActive ? '#7C3AED' : 'rgba(124, 58, 237, 0.12)',
+                          color: isActive ? '#FFFFFF' : '#7C3AED'
                         }}
                       >
                         {item.count}

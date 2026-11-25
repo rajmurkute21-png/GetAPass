@@ -142,12 +142,15 @@ export default function OrganizerStudioView({
   };
 
   return (
-    <div className="gateapass-organizer-studio" style={{ textAlign: 'left', minHeight: '100vh', backgroundColor: 'var(--color-white)' }}>
+    <div className="gateapass-organizer-studio" style={{ textAlign: 'left', minHeight: '100vh', backgroundColor: '#F8F7FC' }}>
       {/* Organizer Studio Top Bar */}
       <header
         style={{
-          borderBottom: '1px solid var(--color-gray)',
-          backgroundColor: 'var(--color-white)',
+          borderBottom: '1px solid #E9E5F0',
+          backgroundColor: 'rgba(255, 255, 255, 0.92)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          boxShadow: '0 4px 20px rgba(24, 21, 38, 0.04)',
           padding: '16px 32px',
           display: 'flex',
           flexWrap: 'wrap',
@@ -169,40 +172,42 @@ export default function OrganizerStudioView({
               gap: '6px',
               fontSize: '13px',
               fontWeight: 600,
-              color: 'var(--color-dark-text)',
-              backgroundColor: 'var(--color-off-white)',
-              border: '1px solid var(--color-gray)',
-              padding: '6px 12px',
-              borderRadius: 'var(--radius-control)',
-              cursor: 'pointer'
+              color: '#181526',
+              backgroundColor: 'rgba(255, 255, 255, 0.9)',
+              border: '1px solid #E9E5F0',
+              padding: '6px 14px',
+              borderRadius: '9999px',
+              cursor: 'pointer',
+              transition: 'all 0.18s ease'
             }}
           >
             <ArrowLeft size={14} />
             Back to Attendee Portal
           </button>
 
-          <div style={{ height: '24px', width: '1px', backgroundColor: 'var(--color-gray)' }} />
+          <div style={{ height: '24px', width: '1px', backgroundColor: '#E9E5F0' }} />
 
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--color-dark-text)' }}>
+              <span style={{ fontSize: '16px', fontWeight: 700, color: '#181526' }}>
                 Event Organizer Studio
               </span>
               <span
                 style={{
                   fontSize: '11px',
-                  fontWeight: 600,
-                  backgroundColor: 'var(--color-light-violet)',
-                  color: 'var(--color-deep-violet)',
+                  fontWeight: 700,
+                  backgroundColor: 'rgba(124, 58, 237, 0.12)',
+                  color: '#7C3AED',
+                  border: '1px solid rgba(124, 58, 237, 0.25)',
                   padding: '2px 8px',
-                  borderRadius: '4px',
+                  borderRadius: '9999px',
                   textTransform: 'capitalize'
                 }}
               >
                 {currentUser?.role ? `${currentUser.role} Mode` : 'Organizer Studio'} · {organizerEvents.length} Events Managed
               </span>
             </div>
-            <p style={{ fontSize: '12px', color: 'var(--color-muted-text)', marginTop: '2px' }}>
+            <p style={{ fontSize: '12px', color: '#777487', marginTop: '2px' }}>
               Automatic administrator for all your campus events and turnstiles.
             </p>
           </div>
@@ -238,7 +243,7 @@ export default function OrganizerStudioView({
           ) : null}
 
           <Button
-            variant="primary"
+            variant="liquid-glass"
             size="compact"
             icon={Plus}
             onClick={() => setActiveTab('create-event')}
@@ -251,8 +256,10 @@ export default function OrganizerStudioView({
       {/* Organizer Studio Navigation Tabs */}
       <div
         style={{
-          borderBottom: '1px solid var(--color-gray)',
-          backgroundColor: 'var(--color-off-white)',
+          borderBottom: '1px solid #E9E5F0',
+          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
           padding: '0 32px',
           display: 'flex',
           gap: '8px',
@@ -278,20 +285,21 @@ export default function OrganizerStudioView({
               style={{
                 padding: '12px 16px',
                 fontSize: '14px',
-                fontWeight: isActive ? 600 : 500,
-                color: isActive ? 'var(--color-deep-violet)' : 'var(--color-dark-text)',
+                fontWeight: isActive ? 700 : 500,
+                color: isActive ? '#7C3AED' : '#181526',
                 backgroundColor: 'transparent',
                 border: 'none',
-                borderBottom: isActive ? '2px solid var(--color-violet)' : '2px solid transparent',
+                borderBottom: isActive ? '2px solid #7C3AED' : '2px solid transparent',
                 marginBottom: '-1px',
                 cursor: 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '8px',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                transition: 'all 0.18s ease'
               }}
             >
-              <IconComp size={16} strokeWidth={isActive ? 2.2 : 1.7} />
+              <IconComp size={16} strokeWidth={isActive ? 2.2 : 1.7} style={{ color: isActive ? '#7C3AED' : '#777487' }} />
               <span>{tab.label}</span>
               {tab.badge && (
                 <span

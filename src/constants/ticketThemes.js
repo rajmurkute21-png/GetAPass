@@ -20,7 +20,8 @@ export const TICKET_CATEGORIES = [
     badgeBorder: 'rgba(168, 85, 247, 0.5)',
     iconName: 'Music',
     artworkUrl: 'https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?w=1200&auto=format&fit=crop&q=80', // concert stage crowd
-    ambientGradient: 'radial-gradient(circle at 20% 40%, rgba(124, 58, 237, 0.45) 0%, rgba(192, 38, 211, 0.2) 50%, transparent 75%)'
+    ambientColor: 'rgba(124, 58, 237, 0.45)',
+    ambientGradient: 'rgba(124, 58, 237, 0.45)'
   },
   {
     id: 'carnivals',
@@ -36,7 +37,8 @@ export const TICKET_CATEGORIES = [
     badgeBorder: 'rgba(244, 63, 94, 0.5)',
     iconName: 'PartyPopper',
     artworkUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=1200&auto=format&fit=crop&q=80', // party lights
-    ambientGradient: 'radial-gradient(circle at 20% 40%, rgba(225, 29, 72, 0.45) 0%, rgba(244, 63, 94, 0.2) 50%, transparent 75%)'
+    ambientColor: 'rgba(225, 29, 72, 0.45)',
+    ambientGradient: 'rgba(225, 29, 72, 0.45)'
   },
   {
     id: 'educational',
@@ -52,7 +54,8 @@ export const TICKET_CATEGORIES = [
     badgeBorder: 'rgba(99, 102, 241, 0.5)',
     iconName: 'GraduationCap',
     artworkUrl: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=1200&auto=format&fit=crop&q=80', // students campus
-    ambientGradient: 'radial-gradient(circle at 20% 40%, rgba(79, 70, 229, 0.45) 0%, rgba(99, 102, 241, 0.2) 50%, transparent 75%)'
+    ambientColor: 'rgba(79, 70, 229, 0.45)',
+    ambientGradient: 'rgba(79, 70, 229, 0.45)'
   },
   {
     id: 'workshop',
@@ -68,7 +71,8 @@ export const TICKET_CATEGORIES = [
     badgeBorder: 'rgba(245, 158, 11, 0.5)',
     iconName: 'Cpu',
     artworkUrl: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?w=1200&auto=format&fit=crop&q=80', // modern workshop
-    ambientGradient: 'radial-gradient(circle at 20% 40%, rgba(217, 119, 6, 0.45) 0%, rgba(245, 158, 11, 0.2) 50%, transparent 75%)'
+    ambientColor: 'rgba(217, 119, 6, 0.45)',
+    ambientGradient: 'rgba(217, 119, 6, 0.45)'
   },
   {
     id: 'hackathon',
@@ -84,7 +88,8 @@ export const TICKET_CATEGORIES = [
     badgeBorder: 'rgba(6, 182, 212, 0.5)',
     iconName: 'Code',
     artworkUrl: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=1200&auto=format&fit=crop&q=80', // coding hackers
-    ambientGradient: 'radial-gradient(circle at 20% 40%, rgba(8, 145, 178, 0.45) 0%, rgba(6, 182, 212, 0.2) 50%, transparent 75%)'
+    ambientColor: 'rgba(8, 145, 178, 0.45)',
+    ambientGradient: 'rgba(8, 145, 178, 0.45)'
   },
   {
     id: 'sports',
@@ -100,7 +105,8 @@ export const TICKET_CATEGORIES = [
     badgeBorder: 'rgba(16, 185, 129, 0.5)',
     iconName: 'Trophy',
     artworkUrl: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=1200&auto=format&fit=crop&q=80', // stadium stadium lights
-    ambientGradient: 'radial-gradient(circle at 20% 40%, rgba(5, 150, 105, 0.45) 0%, rgba(16, 185, 129, 0.2) 50%, transparent 75%)'
+    ambientColor: 'rgba(5, 150, 105, 0.45)',
+    ambientGradient: 'rgba(5, 150, 105, 0.45)'
   },
   {
     id: 'theatre',
@@ -116,7 +122,8 @@ export const TICKET_CATEGORIES = [
     badgeBorder: 'rgba(236, 72, 153, 0.5)',
     iconName: 'Drama',
     artworkUrl: 'https://images.unsplash.com/photo-1460723237483-7a6dc9d0b212?w=1200&auto=format&fit=crop&q=80', // stage theatre
-    ambientGradient: 'radial-gradient(circle at 20% 40%, rgba(219, 39, 119, 0.45) 0%, rgba(236, 72, 153, 0.2) 50%, transparent 75%)'
+    ambientColor: 'rgba(236, 72, 153, 0.45)',
+    ambientGradient: 'rgba(236, 72, 153, 0.45)'
   },
   {
     id: 'festivals',
@@ -132,7 +139,8 @@ export const TICKET_CATEGORIES = [
     badgeBorder: 'rgba(192, 132, 252, 0.5)',
     iconName: 'Sparkles',
     artworkUrl: 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=1200&auto=format&fit=crop&q=80', // fest lights
-    ambientGradient: 'radial-gradient(circle at 20% 40%, rgba(147, 51, 234, 0.45) 0%, rgba(192, 132, 252, 0.2) 50%, transparent 75%)'
+    ambientColor: 'rgba(147, 51, 234, 0.45)',
+    ambientGradient: 'rgba(147, 51, 234, 0.45)'
   },
   {
     id: 'conferences',
@@ -148,7 +156,8 @@ export const TICKET_CATEGORIES = [
     badgeBorder: 'rgba(56, 189, 248, 0.5)',
     iconName: 'Mic',
     artworkUrl: 'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=1200&auto=format&fit=crop&q=80', // conference auditorium
-    ambientGradient: 'radial-gradient(circle at 20% 40%, rgba(2, 132, 199, 0.45) 0%, rgba(56, 189, 248, 0.2) 50%, transparent 75%)'
+    ambientColor: 'rgba(2, 132, 199, 0.45)',
+    ambientGradient: 'rgba(2, 132, 199, 0.45)'
   },
   {
     id: 'exhibitions',
@@ -164,7 +173,8 @@ export const TICKET_CATEGORIES = [
     badgeBorder: 'rgba(240, 171, 252, 0.5)',
     iconName: 'Palette',
     artworkUrl: 'https://images.unsplash.com/photo-1536924940846-227afb31e2a5?w=1200&auto=format&fit=crop&q=80', // art gallery exhibition
-    ambientGradient: 'radial-gradient(circle at 20% 40%, rgba(217, 70, 239, 0.45) 0%, rgba(240, 171, 252, 0.2) 50%, transparent 75%)'
+    ambientColor: 'rgba(217, 70, 239, 0.45)',
+    ambientGradient: 'rgba(217, 70, 239, 0.45)'
   },
   {
     id: 'seminars',
@@ -180,7 +190,8 @@ export const TICKET_CATEGORIES = [
     badgeBorder: 'rgba(96, 165, 250, 0.5)',
     iconName: 'BookOpen',
     artworkUrl: 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=1200&auto=format&fit=crop&q=80', // keynote stage
-    ambientGradient: 'radial-gradient(circle at 20% 40%, rgba(37, 99, 235, 0.45) 0%, rgba(96, 165, 250, 0.2) 50%, transparent 75%)'
+    ambientColor: 'rgba(37, 99, 235, 0.45)',
+    ambientGradient: 'rgba(37, 99, 235, 0.45)'
   }
 ];
 

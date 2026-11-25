@@ -87,6 +87,8 @@ export default function Input({
           onChange={onChange}
           placeholder={placeholder}
           disabled={disabled}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? `${inputId}-error` : helperText ? `${inputId}-helper` : undefined}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           style={{
@@ -150,6 +152,8 @@ export default function Input({
 
       {(error || helperText) && (
         <span
+          id={error ? `${inputId}-error` : `${inputId}-helper`}
+          role={error ? 'alert' : undefined}
           style={{
             fontSize: '12px',
             lineHeight: '16px',

@@ -57,18 +57,21 @@ export default function DesktopHeader({
         <Logo onClick={() => onNavigate('landing')} />
 
         {/* Attendee Navigation Links (CRITICAL RULE: NEVER show "My Passes" here) */}
-        <nav style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <nav style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
             type="button"
             onClick={() => onNavigate('events')}
             style={{
-              padding: '8px 16px',
+              padding: '8px 18px',
               fontSize: '14px',
-              fontWeight: 500,
-              color: activeView === 'events' ? 'var(--color-deep-violet)' : 'var(--color-dark-text)',
-              backgroundColor: activeView === 'events' ? 'var(--color-light-violet)' : 'transparent',
-              borderRadius: 'var(--radius-control)',
-              cursor: 'pointer'
+              fontWeight: activeView === 'events' ? 700 : 500,
+              color: activeView === 'events' ? '#7C3AED' : '#181526',
+              backgroundColor: activeView === 'events' ? 'rgba(124, 58, 237, 0.1)' : 'transparent',
+              border: activeView === 'events' ? '1px solid rgba(124, 58, 237, 0.25)' : '1px solid transparent',
+              borderRadius: '9999px',
+              cursor: 'pointer',
+              transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+              boxShadow: activeView === 'events' ? '0 2px 8px rgba(124, 58, 237, 0.12)' : 'none'
             }}
           >
             Explore Events
@@ -77,13 +80,16 @@ export default function DesktopHeader({
             type="button"
             onClick={() => onNavigate('how-it-works')}
             style={{
-              padding: '8px 16px',
+              padding: '8px 18px',
               fontSize: '14px',
-              fontWeight: 500,
-              color: activeView === 'how-it-works' ? 'var(--color-deep-violet)' : 'var(--color-dark-text)',
-              backgroundColor: activeView === 'how-it-works' ? 'var(--color-light-violet)' : 'transparent',
-              borderRadius: 'var(--radius-control)',
-              cursor: 'pointer'
+              fontWeight: activeView === 'how-it-works' ? 700 : 500,
+              color: activeView === 'how-it-works' ? '#7C3AED' : '#181526',
+              backgroundColor: activeView === 'how-it-works' ? 'rgba(124, 58, 237, 0.1)' : 'transparent',
+              border: activeView === 'how-it-works' ? '1px solid rgba(124, 58, 237, 0.25)' : '1px solid transparent',
+              borderRadius: '9999px',
+              cursor: 'pointer',
+              transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+              boxShadow: activeView === 'how-it-works' ? '0 2px 8px rgba(124, 58, 237, 0.12)' : 'none'
             }}
           >
             How It Works

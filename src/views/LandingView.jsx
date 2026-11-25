@@ -21,13 +21,15 @@ export default function LandingView({
 
   return (
     <div className="gateapass-landing-page" style={{ textAlign: 'left' }}>
-      {/* Editorial Top Ribbon matching Screenshot 18 */}
+      {/* Editorial Top Ribbon with Premium Liquid Glass Aesthetics */}
       <section
         style={{
-          backgroundColor: 'var(--color-near-black)',
-          color: 'var(--color-white)',
+          backgroundColor: '#0F0B1E',
+          color: '#FFFFFF',
           padding: '64px 0 56px',
-          borderBottom: '1px solid #222'
+          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+          position: 'relative',
+          overflow: 'hidden'
         }}
       >
         <div className="container-desktop">
@@ -41,22 +43,32 @@ export default function LandingView({
           >
             <div
               style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 14px',
+                borderRadius: '9999px',
+                backgroundColor: 'rgba(124, 58, 237, 0.16)',
+                border: '1px solid rgba(168, 85, 247, 0.35)',
+                color: '#C4B5FD',
                 fontSize: '12px',
                 fontWeight: 700,
-                letterSpacing: '1.5px',
-                color: 'var(--color-violet)',
-                textTransform: 'uppercase'
+                letterSpacing: '1.2px',
+                textTransform: 'uppercase',
+                width: 'fit-content'
               }}
             >
-              PRECISE. TRUSTED. EVENT-READY.
+              <Sparkles size={14} style={{ color: '#EC4899' }} />
+              <span>PRECISE. TRUSTED. EVENT-READY.</span>
             </div>
 
             <h1
               className="text-display"
               style={{
-                color: 'var(--color-white)',
+                color: '#FFFFFF',
                 lineHeight: '1.1',
-                textTransform: 'uppercase'
+                textTransform: 'uppercase',
+                margin: 0
               }}
             >
               YOUR EVENTS.<br />
@@ -68,8 +80,9 @@ export default function LandingView({
               style={{
                 fontSize: '18px',
                 lineHeight: '28px',
-                color: '#AAA',
-                maxWidth: '680px'
+                color: '#C4B5FD',
+                maxWidth: '680px',
+                margin: 0
               }}
             >
               GetApass provides rapid collegiate booking, verified payments, real-time digital passes, and instant gate QR validation. A complete interface language for organisers, attendees, and entry teams.
@@ -92,8 +105,8 @@ export default function LandingView({
                 onClick={onHowItWorks}
                 style={{
                   backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                  color: 'var(--color-white)',
-                  borderColor: 'rgba(255, 255, 255, 0.2)'
+                  color: '#FFFFFF',
+                  borderColor: 'rgba(255, 255, 255, 0.22)'
                 }}
               >
                 How It Works
@@ -170,7 +183,7 @@ export default function LandingView({
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-              gap: '12px'
+              gap: '14px'
             }}
           >
             {CATEGORIES.map((cat) => (
@@ -178,32 +191,27 @@ export default function LandingView({
                 key={cat}
                 type="button"
                 onClick={() => onSelectCategory(cat)}
+                className="gateapass-card"
                 style={{
-                  padding: '16px',
-                  backgroundColor: 'var(--color-white)',
-                  border: '1px solid var(--color-gray)',
-                  borderRadius: 'var(--radius-control)',
+                  padding: '16px 20px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.92)',
+                  backdropFilter: 'blur(16px)',
+                  WebkitBackdropFilter: 'blur(16px)',
+                  border: '1px solid #E9E5F0',
+                  borderRadius: '16px',
                   textAlign: 'left',
                   fontSize: '14px',
                   fontWeight: 600,
-                  color: 'var(--color-dark-text)',
+                  color: '#181526',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   cursor: 'pointer',
-                  transition: 'border-color 0.15s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--color-violet)';
-                  e.currentTarget.style.backgroundColor = 'var(--color-off-white)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--color-gray)';
-                  e.currentTarget.style.backgroundColor = 'var(--color-white)';
+                  transition: 'all 0.22s cubic-bezier(0.16, 1, 0.3, 1)'
                 }}
               >
                 <span>{cat}</span>
-                <span style={{ color: 'var(--color-muted-text)' }}>›</span>
+                <span style={{ color: '#7C3AED', fontWeight: 700 }}>›</span>
               </button>
             ))}
           </div>
@@ -294,13 +302,14 @@ export default function LandingView({
         </div>
       </section>
 
-      {/* "One Coherent Event Journey" Section matching Screenshot 29 */}
+      {/* "One Coherent Event Journey" Section with Frosted Glass Panels */}
       <section
         id="how-it-works-section"
         style={{
-          backgroundColor: 'var(--color-near-black)',
-          color: 'var(--color-white)',
-          padding: '64px 0 72px'
+          backgroundColor: '#0F0B1E',
+          color: '#FFFFFF',
+          padding: '64px 0 72px',
+          borderTop: '1px solid rgba(255, 255, 255, 0.08)'
         }}
       >
         <div className="container-desktop">
@@ -310,22 +319,23 @@ export default function LandingView({
               flexWrap: 'wrap',
               alignItems: 'center',
               justifyContent: 'space-between',
-              marginBottom: '48px',
-              borderBottom: '1px solid #222',
+              marginBottom: '40px',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
               paddingBottom: '20px'
             }}
           >
             <div>
-              <h2 className="text-h2" style={{ color: 'var(--color-white)' }}>
+              <h2 className="text-h2" style={{ color: '#FFFFFF', margin: 0 }}>
                 One coherent event journey.
               </h2>
             </div>
             <div
               style={{
                 fontSize: '12px',
-                fontWeight: 600,
-                color: 'var(--color-violet)',
-                letterSpacing: '1px'
+                fontWeight: 700,
+                color: '#EC4899',
+                letterSpacing: '1px',
+                textTransform: 'uppercase'
               }}
             >
               BOOK → PAY → GENERATE → VERIFY
@@ -336,57 +346,153 @@ export default function LandingView({
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: '32px'
+              gap: '20px'
             }}
           >
             {/* Step 1 */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ color: 'var(--color-violet)' }}>
-                <Calendar size={24} strokeWidth={2} />
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                padding: '24px 20px',
+                backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '20px',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.25)'
+              }}
+            >
+              <div
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '12px',
+                  backgroundColor: 'rgba(124, 58, 237, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#C4B5FD'
+                }}
+              >
+                <Calendar size={22} strokeWidth={2} />
               </div>
-              <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-white)' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#FFFFFF', margin: 0 }}>
                 01 / Book
               </h3>
-              <p style={{ fontSize: '14px', lineHeight: '22px', color: '#888' }}>
+              <p style={{ fontSize: '14px', lineHeight: '22px', color: '#C4B5FD', margin: 0 }}>
                 Choose an event and confirm attendee details.
               </p>
             </div>
 
             {/* Step 2 */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ color: 'var(--color-violet)' }}>
-                <CreditCard size={24} strokeWidth={2} />
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                padding: '24px 20px',
+                backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '20px',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.25)'
+              }}
+            >
+              <div
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '12px',
+                  backgroundColor: 'rgba(236, 72, 153, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#F472B6'
+                }}
+              >
+                <CreditCard size={22} strokeWidth={2} />
               </div>
-              <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-white)' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#FFFFFF', margin: 0 }}>
                 02 / Pay
               </h3>
-              <p style={{ fontSize: '14px', lineHeight: '22px', color: '#888' }}>
+              <p style={{ fontSize: '14px', lineHeight: '22px', color: '#C4B5FD', margin: 0 }}>
                 Confirm payment before issuing an event pass.
               </p>
             </div>
 
             {/* Step 3 */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ color: 'var(--color-violet)' }}>
-                <Ticket size={24} strokeWidth={2} />
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                padding: '24px 20px',
+                backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '20px',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.25)'
+              }}
+            >
+              <div
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '12px',
+                  backgroundColor: 'rgba(124, 58, 237, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#C4B5FD'
+                }}
+              >
+                <Ticket size={22} strokeWidth={2} />
               </div>
-              <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-white)' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#FFFFFF', margin: 0 }}>
                 03 / Generate
               </h3>
-              <p style={{ fontSize: '14px', lineHeight: '22px', color: '#888' }}>
+              <p style={{ fontSize: '14px', lineHeight: '22px', color: '#C4B5FD', margin: 0 }}>
                 Deliver a unique digital pass to the attendee.
               </p>
             </div>
 
             {/* Step 4 */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ color: 'var(--color-violet)' }}>
-                <QrCode size={24} strokeWidth={2} />
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                padding: '24px 20px',
+                backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '20px',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.25)'
+              }}
+            >
+              <div
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '12px',
+                  backgroundColor: 'rgba(147, 51, 234, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#D8B4FE'
+                }}
+              >
+                <QrCode size={22} strokeWidth={2} />
               </div>
-              <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-white)' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#FFFFFF', margin: 0 }}>
                 04 / Verify
               </h3>
-              <p style={{ fontSize: '14px', lineHeight: '22px', color: '#888' }}>
+              <p style={{ fontSize: '14px', lineHeight: '22px', color: '#C4B5FD', margin: 0 }}>
                 Validate at the gate and record a single entry.
               </p>
             </div>

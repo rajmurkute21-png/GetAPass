@@ -568,7 +568,7 @@ export default function AdminView({
   };
 
   return (
-    <div className="gateapass-admin-layout" style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--color-white)' }}>
+    <div className="gateapass-admin-layout" style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#F8F7FC' }}>
       {/* 264px Persistent Sidebar */}
       <AdminSidebar
         activeTab={activeTab}
@@ -585,7 +585,7 @@ export default function AdminView({
           padding: '40px 48px 64px',
           overflowY: 'auto',
           textAlign: 'left',
-          backgroundColor: 'var(--color-white)'
+          backgroundColor: '#F8F7FC'
         }}
       >
         {/* ==============================================================

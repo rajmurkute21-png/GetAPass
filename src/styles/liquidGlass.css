@@ -713,22 +713,106 @@
 }
 
 /* ==========================================================================
-   G. ACCESSIBILITY & PREFERS-REDUCED-MOTION
+   G. ACCESSIBILITY, FORM VALIDATION & PREFERS-REDUCED-MOTION
    ========================================================================== */
+
+/* Universal Smooth Button & Interactive Control Press Feedback */
+button:not(:disabled):active,
+.gateapass-btn:not(:disabled):active,
+.gateapass-btn-liquid-glass:not(:disabled):active,
+.gateapass-btn-liquid-secondary:not(:disabled):active,
+.gateapass-btn-primary:not(:disabled):active,
+.gateapass-btn-outline:not(:disabled):active,
+.liquid-glass-chip:active,
+.liquid-glass-nav-item:active,
+.liquid-glass-nav-fab:active {
+  transform: scale(0.97) !important;
+  transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* Accessible Form Validation & High-Contrast Focus Ring (No gradients) */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible {
+  outline: none !important;
+  border-color: var(--liquid-glass-primary) !important;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.22) !important;
+}
+
+input[aria-invalid="true"],
+select[aria-invalid="true"],
+textarea[aria-invalid="true"],
+.is-invalid {
+  border-color: #D92D20 !important;
+  background-color: #FFFBFB !important;
+}
+
+input[aria-invalid="true"]:focus-visible,
+select[aria-invalid="true"]:focus-visible,
+textarea[aria-invalid="true"]:focus-visible {
+  box-shadow: 0 0 0 3px rgba(217, 45, 32, 0.2) !important;
+}
+
+/* Accessible Error and Success Feedback Surface Banners */
+.gateapass-feedback-banner {
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+}
+
+.gateapass-feedback-success {
+  background-color: #ECFDF5;
+  color: #065F46;
+  border: 1px solid #A7F3D0;
+}
+
+.gateapass-feedback-error {
+  background-color: #FEF2F2;
+  color: #991B1B;
+  border: 1px solid #F87171;
+}
+
+.gateapass-feedback-warning {
+  background-color: #FFFBEB;
+  color: #92400E;
+  border: 1px solid #FDE68A;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .liquid-glass-nav-fab-pulse {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .liquid-glass-nav-fab-pulse,
+  .ticket-shimmer-sweep,
+  .getapass-3d-ticket.is-floating,
+  .gateapass-shimmer {
     animation: none !important;
   }
   .gateapass-btn-liquid-glass,
   .gateapass-btn-liquid-secondary,
   .liquid-glass-nav-item,
   .liquid-glass-chip,
-  .gateapass-card {
+  .gateapass-card,
+  .getapass-3d-ticket,
+  .ticket-flip-inner {
     transition: none !important;
     transform: none !important;
   }
-  .gateapass-modal {
+  .gateapass-modal,
+  .gateapass-modal-overlay {
     animation: none !important;
+    transition: none !important;
   }
   .liquid-glass-sticky-cta-bar {
     animation: none !important;

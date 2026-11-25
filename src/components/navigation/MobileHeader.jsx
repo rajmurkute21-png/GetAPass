@@ -24,8 +24,11 @@ export default function MobileHeader({
       style={{
         height: 'var(--header-mobile-height)',
         padding: '0 var(--space-16)',
-        backgroundColor: 'var(--color-white)',
-        borderBottom: '1px solid var(--color-gray)',
+        backgroundColor: 'rgba(255, 255, 255, 0.92)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderBottom: '1px solid #E9E5F0',
+        boxShadow: '0 4px 20px rgba(24, 21, 38, 0.04)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',

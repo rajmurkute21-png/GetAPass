@@ -310,11 +310,11 @@ export default function Ticket3D({
         '--stage-dynamic-height': `${Math.round(320 * scale)}px`
       }}
     >
-      {/* Ambient Radial Backlight Glow */}
+      {/* Ambient Solid Backlight Glow */}
       <div
         className="getapass-ambient-glow"
         style={{
-          '--ticket-ambient-gradient': theme.ambientGradient
+          '--ticket-ambient-color': theme.ambientColor || theme.glow || 'rgba(124, 58, 237, 0.4)'
         }}
       />
 
@@ -362,7 +362,7 @@ export default function Ticket3D({
             {/* MAIN TICKET SECTION (LEFT ~68%)                              */}
             {/* ------------------------------------------------------------ */}
             <div className="ticket-main-section">
-              {/* Event Cover Artwork with Gradient Dissolve */}
+              {/* Event Cover Artwork with Translucent Glass Overlay */}
               <div
                 className="ticket-artwork-bg"
                 style={{
@@ -524,7 +524,7 @@ export default function Ticket3D({
               <div
                 className="ticket-back-stub-emblem"
                 style={{
-                  background: `radial-gradient(circle, ${theme.accent}25 0%, transparent 70%)`,
+                  backgroundColor: 'rgba(124, 58, 237, 0.15)',
                   borderColor: theme.accent
                 }}
               >

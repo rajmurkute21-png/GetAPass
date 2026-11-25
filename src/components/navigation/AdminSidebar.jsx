@@ -39,8 +39,10 @@ export default function AdminSidebar({
       style={{
         width: 'var(--sidebar-admin-width)',
         height: '100vh',
-        backgroundColor: 'var(--color-white)',
-        borderRight: '1px solid var(--color-gray)',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderRight: '1px solid #E9E5F0',
         display: 'flex',
         flexDirection: 'column',
         position: 'sticky',
@@ -120,18 +122,18 @@ export default function AdminSidebar({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '12px',
-                borderRadius: 'var(--radius-control)',
-                backgroundColor: isActive ? 'var(--color-light-violet)' : 'transparent',
-                color: isActive ? 'var(--color-deep-violet)' : 'var(--color-dark-text)',
-                fontWeight: isActive ? 600 : 500,
+                borderRadius: '12px',
+                backgroundColor: isActive ? 'rgba(124, 58, 237, 0.1)' : 'transparent',
+                color: isActive ? '#7C3AED' : '#181526',
+                border: isActive ? '1px solid rgba(124, 58, 237, 0.25)' : '1px solid transparent',
+                fontWeight: isActive ? 700 : 500,
                 fontSize: '14px',
-                border: 'none',
                 cursor: 'pointer',
                 textAlign: 'left',
-                transition: 'background-color 0.15s ease'
+                transition: 'all 0.18s ease'
               }}
             >
-              <IconComp size={18} strokeWidth={isActive ? 2 : 1.7} />
+              <IconComp size={18} strokeWidth={isActive ? 2.2 : 1.7} style={{ color: isActive ? '#7C3AED' : '#777487' }} />
               <span>{item.label}</span>
             </button>
           );
