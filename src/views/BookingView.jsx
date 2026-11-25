@@ -256,7 +256,9 @@ export default function BookingView({
     }
     // Strict authentication requirement before proceeding to attendee details
     if (!effectiveAttendee?.uid) {
-      openAuthModal('login');
+      openAuthModal('login', () => {
+        setCurrentStep(2);
+      }, `Please sign in to provide attendee details for ${currentEvent.title || 'this event'}.`);
       return;
     }
     setCurrentStep(2);
@@ -266,7 +268,9 @@ export default function BookingView({
   const handleProceedToPaymentStep = () => {
     // Re-verify authentication
     if (!effectiveAttendee?.uid) {
-      openAuthModal('login');
+      openAuthModal('login', () => {
+        setCurrentStep(3);
+      }, 'Please sign in to proceed to checkout.');
       return;
     }
 
@@ -299,8 +303,7 @@ export default function BookingView({
   // Step 3: Confirm & Pay execution with atomic overselling protection & verified auth
   const handleExecutePayment = async () => {
     if (!effectiveAttendee?.uid) {
-      alert('Authentication required: You must be signed in with a valid account to purchase tickets.');
-      openAuthModal('login');
+      openAuthModal('login', null, 'Authentication required: You must be signed in with a valid account to purchase tickets.');
       return;
     }
 

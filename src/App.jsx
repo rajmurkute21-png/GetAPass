@@ -431,13 +431,14 @@ export default function App() {
   };
 
   const handleBookEvent = (ev) => {
+    const eventTitle = ev?.title || ev?.name || 'this event';
     // 1. Requirement: Every user must have a valid authenticated Firebase account before booking tickets
     if (!currentUser) {
       if (openAuthModal) {
         openAuthModal('login', () => {
           setSelectedEvent(ev);
           setActiveView('booking');
-        });
+        }, `Please sign in to book your pass for ${eventTitle}.`);
       }
       return;
     }
@@ -446,7 +447,7 @@ export default function App() {
     if (!currentUser.isEmailVerified && !currentUser.isGoogle) {
       if (setAuthModalView && openAuthModal) {
         setAuthModalView('verify');
-        openAuthModal('verify');
+        openAuthModal('verify', null, 'Please verify your email address to continue booking.');
       }
       return;
     }
@@ -470,7 +471,7 @@ export default function App() {
             setActiveView('profile');
             setProfileSubTab('list-event');
           }
-        });
+        }, 'Please sign in to create and manage campus events.');
       }
       return;
     }
@@ -1070,27 +1071,35 @@ export default function App() {
             )}
 
             {activeView === 'booking' && (
-              <BookingView
-                key={currentUser?.name || 'booking'}
-                event={selectedEvent}
-                attendee={currentUser}
-                onBack={() => setActiveView('event-details')}
-                onProceedToPayment={handleProceedToPayment}
-                onPaymentSuccess={handlePaymentSuccess}
-                onViewMyPasses={() => {
-                  setActiveView('profile');
-                  setProfileSubTab('my-passes');
-                }}
-                onExploreMore={() => setActiveView('events')}
-              />
+              <ProtectedRoute
+                onNavigateHome={() => setActiveView('events')}
+              >
+                <BookingView
+                  key={currentUser?.name || 'booking'}
+                  event={selectedEvent}
+                  attendee={currentUser}
+                  onBack={() => setActiveView('event-details')}
+                  onProceedToPayment={handleProceedToPayment}
+                  onPaymentSuccess={handlePaymentSuccess}
+                  onViewMyPasses={() => {
+                    setActiveView('profile');
+                    setProfileSubTab('my-passes');
+                  }}
+                  onExploreMore={() => setActiveView('events')}
+                />
+              </ProtectedRoute>
             )}
 
             {activeView === 'payment' && (
-              <PaymentView
-                bookingData={bookingData}
-                onBack={() => setActiveView('booking')}
-                onPaymentSuccess={handlePaymentSuccess}
-              />
+              <ProtectedRoute
+                onNavigateHome={() => setActiveView('events')}
+              >
+                <PaymentView
+                  bookingData={bookingData}
+                  onBack={() => setActiveView('booking')}
+                  onPaymentSuccess={handlePaymentSuccess}
+                />
+              </ProtectedRoute>
             )}
 
             {activeView === 'profile' && (

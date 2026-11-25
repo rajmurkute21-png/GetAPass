@@ -203,14 +203,19 @@ export default function EventCreateWizard({
 
   // Final Publish Event Action
   const handlePublishEvent = async () => {
+    if (isSubmitting) return;
+
     if (!currentUser || !currentUser.uid) {
-      alert('Authentication required: You must be signed in with an authorized account to create events.');
-      if (openAuthModal) openAuthModal('login');
+      if (openAuthModal) {
+        openAuthModal('login', null, 'Authentication required: You must be signed in with an authorized account to create events.');
+      } else {
+        alert('Authentication required: You must be signed in with an authorized account to create events.');
+      }
       return;
     }
 
     if (!isOrganizer) {
-      alert('Unauthorized: Only registered Event Organizers and Administrators can create events.');
+      setPublishError('Unauthorized: Only registered Event Organizers and Administrators can create events.');
       return;
     }
 

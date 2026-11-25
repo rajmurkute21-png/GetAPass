@@ -82,7 +82,8 @@ export function AuthProvider({ children }) {
   const [authModal, setAuthModal] = useState({
     isOpen: false,
     view: 'login', // 'login' | 'signup' | 'forgot' | 'verify'
-    postLoginCallback: null
+    postLoginCallback: null,
+    message: ''
   });
 
   // Listen to Firebase auth state changes with real-time profile & role sync
@@ -208,18 +209,21 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const openAuthModal = useCallback((view = 'login', callback = null) => {
+  const openAuthModal = useCallback((view = 'login', callback = null, message = '') => {
     setAuthModal({
       isOpen: true,
       view,
-      postLoginCallback: callback
+      postLoginCallback: callback,
+      message: typeof message === 'string' ? message : ''
     });
   }, []);
 
   const closeAuthModal = useCallback(() => {
     setAuthModal((prev) => ({
       ...prev,
-      isOpen: false
+      isOpen: false,
+      postLoginCallback: null,
+      message: ''
     }));
   }, []);
 

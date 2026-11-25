@@ -143,7 +143,8 @@ service cloud.firestore {
       allow create: if isAuthenticated() && (
         'participantUid' in request.resource.data &&
         request.resource.data.participantUid == request.auth.uid &&
-        (!('status' in request.resource.data) || request.resource.data.status in ['Pending', 'Confirmed', 'Active'])
+        (!('status' in request.resource.data) || request.resource.data.status in ['Pending', 'Confirmed', 'Active']) &&
+        (!('paymentStatus' in request.resource.data) || request.resource.data.paymentStatus in ['Pending', 'SUCCESS', 'FAILED', 'Completed', 'Processing'])
       );
 
       allow update: if isAuthenticated() && (
@@ -158,7 +159,8 @@ service cloud.firestore {
           request.resource.data.participantUid == resource.data.participantUid &&
           request.resource.data.organizerUid == resource.data.organizerUid &&
           request.resource.data.amount == resource.data.amount &&
-          request.resource.data.status == resource.data.status
+          request.resource.data.status == resource.data.status &&
+          (!('paymentStatus' in resource.data) || !('paymentStatus' in request.resource.data) || request.resource.data.paymentStatus == resource.data.paymentStatus)
         ) ||
         (
           isVerifier() &&

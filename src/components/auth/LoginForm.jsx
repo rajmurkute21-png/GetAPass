@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Lock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { mapAuthError } from '../../services/authService';
 import Input from '../common/Input';
@@ -8,7 +9,7 @@ import GoogleButton from './GoogleButton';
 import AuthError from './AuthError';
 
 export default function LoginForm({ onSwitchToSignup, onSwitchToForgot }) {
-  const { loginWithEmail, loginWithGoogle, isFirebaseConfigured, configStatus } = useAuth();
+  const { loginWithEmail, loginWithGoogle, isFirebaseConfigured, configStatus, authModal } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -71,6 +72,28 @@ export default function LoginForm({ onSwitchToSignup, onSwitchToForgot }) {
           Access your events, passes and account.
         </p>
       </div>
+
+      {authModal?.message && (
+        <div
+          role="status"
+          style={{
+            padding: '10px 14px',
+            backgroundColor: 'rgba(172, 88, 233, 0.08)',
+            border: '1px solid var(--color-deep-violet)',
+            borderRadius: 'var(--radius-control)',
+            fontSize: '13px',
+            color: 'var(--color-deep-violet)',
+            lineHeight: '18px',
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <Lock size={15} style={{ flexShrink: 0 }} />
+          <span>{authModal.message}</span>
+        </div>
+      )}
 
       {!isFirebaseConfigured && (
         <div
